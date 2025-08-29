@@ -1,4 +1,4 @@
-# PACMAN
+# PACMAN (Parallel Application Coupling for Multiphysics And Numerical simulation)
 
 
 
