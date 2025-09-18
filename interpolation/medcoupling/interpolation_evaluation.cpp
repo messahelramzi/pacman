@@ -1,3 +1,4 @@
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -63,7 +64,7 @@ static TypeOfField get_type_of_field(const std::string &interpolation_mode, bool
     throw new std::invalid_argument("Invalid interpolation mode!");
 }
 
-static MEDCouplingFieldDouble *eval_interp(const std::string &source_mesh_path, const std::string &target_mesh_path, const std::string &interp_mode, const NatureOfField nature, const std::string &output_file)
+static std::pair<MEDCouplingFieldDouble *, std::chrono::duration<double, std::nano>> eval_interp(const std::string &source_mesh_path, const std::string &target_mesh_path, const std::string &interp_mode, const NatureOfField nature, const std::string &output_file)
 {
     const std::string franke_function = "0.75*exp(-(((9.*x-2.)*(9.*x-2.))+((9.*y-2.)*(9.*y-2.))+((9.*z-2.)*(9.*z-2.)))/4.)+0.75*exp(-(((9.*x+1.)*(9.*x+1.))/49.+(9.*y+1.)/10.+(9.*z+1.)/10.))+0.5*exp(-(((9.*x-7.)*(9.*x-7.))+((9.*y-3.)*(9.*y-3.))+((9.*z-5.)*(9.*z-5.))/4.))-0.2*exp(-(((9.*x-4.)*(9.*x-4.))+((9.*y-7.)*(9.*y-7.))+((9.*z-5.)*(9.*z-5.))))";
 
@@ -73,10 +74,14 @@ static MEDCouplingFieldDouble *eval_interp(const std::string &source_mesh_path, 
 
     MCAuto<MEDCouplingMesh> target_mesh = get_mesh(target_mesh_path);
     MEDCouplingRemapper remapper = MEDCouplingRemapper();
+    auto t1 = std::chrono::high_resolution_clock::now().time_since_epoch();
     remapper.prepare(source_mesh, target_mesh, interp_mode);
+    auto t2 = std::chrono::high_resolution_clock::now().time_since_epoch();
 
     MCAuto<MEDCouplingFieldDouble> target_data_field = remapper.transferField(source_data_field, 1e300);
     set_field_info(target_data_field, target_mesh, "InterpolatedData", nature);
+
+    // std::cout << "Interpolation Matrix Computation Time: " << ((t2 - t1) / 1000000.0).count() << "ms" << std::endl;
 
     MCAuto<MEDCouplingFieldDouble> ref_data_field = target_mesh->fillFromAnalytic(get_type_of_field(interp_mode, false), 1, franke_function);
     set_field_info(ref_data_field, target_mesh, "RefFrankeData", nature);
@@ -87,7 +92,18 @@ static MEDCouplingFieldDouble *eval_interp(const std::string &source_mesh_path, 
     const std::string output_path = output_file + '_' + interp_mode;
     error_data_field->writeVTK(output_path);
 
-    return error_data_field->deepCopy();
+    return std::pair<MEDCouplingFieldDouble *, std::chrono::duration<double, std::nano>>(error_data_field->deepCopy(), (t2 - t1) / 1000000.0);
+}
+
+static double get_average_time(double times[], int n, int k)
+{
+    k = k % n;
+    double sum = 0.0;
+    for (k; k < n * 10; k += n)
+    {
+        sum += times[k];
+    }
+    return sum / 10.0;
 }
 
 int main(void)
@@ -114,11 +130,26 @@ int main(void)
 
     int n = sizeof(interpolation_modes) / sizeof(interpolation_modes[0]);
     MEDCouplingFieldDouble *fields[n];
+    double time_ms[n * 10];
     unsigned short i = 0;
+    unsigned short t_i = 0;
 
     for (auto interp_mode : interpolation_modes)
     {
-        fields[i++] = eval_interp(source_mesh_path, target_mesh_path, interp_mode, nature, output_path);
+        auto ret_pair = eval_interp(source_mesh_path, target_mesh_path, interp_mode, nature, output_path);
+        auto f = ret_pair.first;
+        auto t = ret_pair.second;
+        fields[i++] = f;
+        time_ms[t_i++] = t.count();
+    }
+    for (int m = 0; m < 9; m++)
+    {
+        for (auto interp_mode : interpolation_modes)
+        {
+            auto ret_pair = eval_interp(source_mesh_path, target_mesh_path, interp_mode, nature, output_path);
+            auto t = ret_pair.second;
+            time_ms[t_i++] = t.count();
+        }
     }
 
     for (int o = 0; o < i; o++)
@@ -195,6 +226,7 @@ int main(void)
         report_file << "    p90: " << p90 << std::endl;
         report_file << "    p95: " << p95 << std::endl;
         report_file << "    p99: " << p99 << std::endl;
+        report_file << "    time-ms: " << get_average_time(time_ms, n, o) << std::endl;
         report_file << "    invalid-values: " << std::boolalpha << (bool)(k != len) << std::endl;
         report_file.flush();
         report_file.close();

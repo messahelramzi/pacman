@@ -1,9 +1,11 @@
-from pathlib import Path
 import os
+import time
+from pathlib import Path
+
 import numpy as np
+from Muscat.FE.Fields.FEField import FEField
 from Muscat.IO.UniversalReader import InitAllReaders, ReadMesh
 from Muscat.IO.XdmfWriter import WriteMeshToXdmf
-from Muscat.FE.Fields.FEField import FEField
 from Muscat.MeshTools.MeshFieldOperations import GetFieldTransferOpCpp
 from Muscat.MeshTools.MeshMappingTools import PrepareFEComputation
 
@@ -54,12 +56,15 @@ def eval_interp(source_mesh_path, target_mesh_path, interp_mode, output_path):
     input_field = FEField("FrankeData", input_mesh, None, None, franke_data)
 
     target_mesh = ReadMesh(target_mesh_path)
+    t1 = time.perf_counter_ns()
     P, _, _ = GetFieldTransferOpCpp(input_field, target_mesh.nodes, method=interp_mode)
+    t2 = time.perf_counter_ns()
     interpolated_data = P.dot(franke_data)
     target_space, target_numberings, _, _ = PrepareFEComputation(
         target_mesh, numberOfComponents=1
     )
-    inerpolated_field = FEField(
+    # print(f"Interpolation Matrix Computation Time: {(t2 - t1)/1000000.0}ms")
+    interpolated_field = FEField(
         "interpolated_data",
         target_mesh,
         target_space,
@@ -79,7 +84,7 @@ def eval_interp(source_mesh_path, target_mesh_path, interp_mode, output_path):
         PointFieldsNames=["FrankeData", "InterpolatedData", "ErrorData"],
     )
 
-    return error_data
+    return error_data, (t2 - t1) / 1000000.0
 
 
 def main():
@@ -106,12 +111,20 @@ def main():
     output_path = f"{output_folder}/{output_file}"
 
     error_fields = []
+    times = []
 
     for it in interpolation_modes:
-        error_fields.append(
-            eval_interp(source_mesh_path, target_mesh_path, it, output_path)
-        )
+        f, t = eval_interp(source_mesh_path, target_mesh_path, it, output_path)
+        error_fields.append(f)
+        times.append(t)
+    # We compute time spent to compute the interpolation matrix over 10 iterations
+    for _ in range(9):
+        for it in interpolation_modes:
+            _, t = eval_interp(source_mesh_path, target_mesh_path, it, output_path)
+            times.append(t)
 
+    print(len(times))
+    times = np.array(times)
     for i, field in enumerate(error_fields):
         sorted_abs_data = np.sort(np.abs(field))
 
@@ -123,6 +136,7 @@ def main():
         report += f"    p90: {sorted_abs_data[int(sorted_abs_data.shape[0] * 0.90)]}\n"
         report += f"    p95: {sorted_abs_data[int(sorted_abs_data.shape[0] * 0.95)]}\n"
         report += f"    p99: {sorted_abs_data[int(sorted_abs_data.shape[0] * 0.99)]}\n"
+        report += f"    time-ms: {np.mean(times[i::5])}\n"
         report += "    invalid-values: false\n"
 
         output_file = open(
