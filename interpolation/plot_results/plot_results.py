@@ -73,20 +73,30 @@ def main():
         bar_colors.append(colors[method])
 
     # bar graphs
+    min_width = 600
+    min_height = 400
+    dpi = 100
+
+    subplot_width = (min_width * 4) / dpi
+    subplot_height = (min_height * 2) / dpi
+
+    fig, axes = plt.subplots(2, 4, figsize=(subplot_width, subplot_height), dpi=dpi)
+    i = 0
     for name, value in stats.items():
         y = value
         x = np.arange(len(methods_names)) * 1.5
-        plt.figure()
-        bars = plt.bar(x, y, width=1, color=bar_colors)
-        plt.xticks(x, methods_names, rotation=45, ha="right")
-        plt.yscale("log")
-        plt.tight_layout(rect=[0, 0, 1, 0.95])
+        curr = axes.flat[i]
+        i += 1
+        bars = curr.bar(x, y, width=1, color=bar_colors)
+        curr.set_xticks(x, methods_names, rotation=45, ha="right")
+        curr.set_yscale("log")
         if name == "time-ms":
-            plt.bar_label(bars, labels=[f"{int(v)}" for v in y], padding=0.1)
-            plt.title("Interpolation Matrix Computation Time (ms)")
+            curr.bar_label(bars, labels=[f"{int(v)}" for v in y], padding=0.1)
+            curr.set_title("Interpolation Matrix Computation Time (ms)")
         else:
-            plt.title(f"{name} errors")
-        plt.savefig(f"{output_dir}/{name}.svg", format="svg")
+            curr.set_title(f"{name} errors")
+    plt.tight_layout()
+    plt.savefig(f"{output_dir}/stats.svg", format="svg")
 
 
 if __name__ == "__main__":
