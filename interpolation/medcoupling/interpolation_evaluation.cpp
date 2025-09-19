@@ -108,10 +108,15 @@ static double get_average_time(double times[], int n, int k)
 
 int main(void)
 {
-    const std::string source_mesh_path = "0.01.med";
-    const std::string target_mesh_path = "0.006.med";
+    const std::pair<std::string, std::string> meshes_pairs[4] = {
+        std::pair<std::string, std::string>("0.03", "0.003"),
+        std::pair<std::string, std::string>("0.02", "0.002"),
+        std::pair<std::string, std::string>("0.01", "0.001"),
+        std::pair<std::string, std::string>("0.004", "0.0005"),
+    };
+
     const std::string interpolation_modes[] = {"P0P0", "P0P1", "P1P0", "P1P1"};
-    const std::string output_file = "result";
+    const std::string output_file = "../plot_results/data";
     const NatureOfField nature = IntensiveMaximum;
 
     const std::string output_folder = "output_files";
@@ -128,111 +133,117 @@ int main(void)
 
     const std::string output_path = output_folder + '/' + output_file;
 
-    int n = sizeof(interpolation_modes) / sizeof(interpolation_modes[0]);
-    MEDCouplingFieldDouble *fields[n];
-    double time_ms[n * 10];
-    unsigned short i = 0;
-    unsigned short t_i = 0;
+    for (unsigned short a = 0; a < 4; a++)
+    {
+        const std::string source_mesh_path = "meshes/" + meshes_pairs[a].first + ".med";
+        const std::string target_mesh_path = "meshes/" + meshes_pairs[a].second + ".med";
 
-    for (auto interp_mode : interpolation_modes)
-    {
-        auto ret_pair = eval_interp(source_mesh_path, target_mesh_path, interp_mode, nature, output_path);
-        auto f = ret_pair.first;
-        auto t = ret_pair.second;
-        fields[i++] = f;
-        time_ms[t_i++] = t.count();
-    }
-    for (int m = 0; m < 9; m++)
-    {
+        int n = sizeof(interpolation_modes) / sizeof(interpolation_modes[0]);
+        MEDCouplingFieldDouble *fields[n];
+        double time_ms[n * 10];
+        unsigned short i = 0;
+        unsigned short t_i = 0;
+
         for (auto interp_mode : interpolation_modes)
         {
             auto ret_pair = eval_interp(source_mesh_path, target_mesh_path, interp_mode, nature, output_path);
+            auto f = ret_pair.first;
             auto t = ret_pair.second;
+            fields[i++] = f;
             time_ms[t_i++] = t.count();
         }
-    }
-
-    for (int o = 0; o < i; o++)
-    {
-        auto field = fields[o];
-        DataArrayDouble *data = field->getArray()->deepCopy();
-        double *data_ptr = data->getPointer();
-
-        size_t len = data->getNbOfElems();
-        size_t new_len = len;
-        std::multiset<double> abs_sorted_data;
-
-        for (size_t i = 0; i < len; i++)
+        for (int m = 0; m < 9; m++)
         {
-            if (data_ptr[i] == -1e300)
+            for (auto interp_mode : interpolation_modes)
             {
-                /* Some cells of the target field cannot be matched to a cell or a node in source field by medcoupling
-                ** In this case, I chose to not consider these values when it comes to statistics
-                */
-                new_len--;
-            }
-            else
-            {
-                abs_sorted_data.emplace(std::abs(data_ptr[i]));
+                auto ret_pair = eval_interp(source_mesh_path, target_mesh_path, interp_mode, nature, output_path);
+                auto t = ret_pair.second;
+                time_ms[t_i++] = t.count();
             }
         }
 
-        long k = 0;
-        double sum = 0;
-        double med, p90, p95, p99;
-        double min, max;
-        min = *(abs_sorted_data.begin());
-        max = *(--(abs_sorted_data.end()));
-        for (auto p = abs_sorted_data.begin(); p != abs_sorted_data.end(); p++, k++)
+        for (int o = 0; o < i; o++)
         {
-            sum += *p;
-            if (k == (long)std::floor(new_len * 0.50))
+            auto field = fields[o];
+            DataArrayDouble *data = field->getArray()->deepCopy();
+            double *data_ptr = data->getPointer();
+
+            size_t len = data->getNbOfElems();
+            size_t new_len = len;
+            std::multiset<double> abs_sorted_data;
+
+            for (size_t i = 0; i < len; i++)
             {
-                med = *p;
+                if (data_ptr[i] == -1e300)
+                {
+                    /* Some cells of the target field cannot be matched to a cell or a node in source field by medcoupling
+                    ** In this case, I chose to not consider these values when it comes to statistics
+                    */
+                    new_len--;
+                }
+                else
+                {
+                    abs_sorted_data.emplace(std::abs(data_ptr[i]));
+                }
             }
-            if (k == (long)std::floor(new_len * 0.90))
+
+            long k = 0;
+            double sum = 0;
+            double med, p90, p95, p99;
+            double min, max;
+            min = *(abs_sorted_data.begin());
+            max = *(--(abs_sorted_data.end()));
+            for (auto p = abs_sorted_data.begin(); p != abs_sorted_data.end(); p++, k++)
             {
-                p90 = *p;
+                sum += *p;
+                if (k == (long)std::floor(new_len * 0.50))
+                {
+                    med = *p;
+                }
+                if (k == (long)std::floor(new_len * 0.90))
+                {
+                    p90 = *p;
+                }
+                if (k == (long)std::floor(new_len * 0.95))
+                {
+                    p95 = *p;
+                }
+                if (k == (long)std::floor(new_len * 0.99))
+                {
+                    p99 = *p;
+                }
             }
-            if (k == (long)std::floor(new_len * 0.95))
+            double avg = sum / k;
+
+            const std::string report_path = "result_" + interpolation_modes[o] + "_pair" + (char)(a + '0') + ".yaml";
+            std::fstream report_file;
+            report_file.open(output_folder + '/' + report_path, std::ios::out);
+            if (!report_file.is_open())
             {
-                p95 = *p;
+                std::string err = strerror(errno);
+                std::cerr << "File failed to be opened (or created)" << std::endl;
+                std::cerr << err << std::endl;
+                exit(1);
             }
-            if (k == (long)std::floor(new_len * 0.99))
-            {
-                p99 = *p;
-            }
+            report_file << std::setprecision(18);
+            report_file << std::fixed;
+
+            report_file << "values:" << std::endl;
+            report_file << "    avg: " << avg << std::endl;
+            report_file << "    min: " << min << std::endl;
+            report_file << "    max: " << max << std::endl;
+            report_file << "    med: " << med << std::endl;
+            report_file << "    p90: " << p90 << std::endl;
+            report_file << "    p95: " << p95 << std::endl;
+            report_file << "    p99: " << p99 << std::endl;
+            report_file << "    time-ms: " << get_average_time(time_ms, n, o) << std::endl;
+            report_file << "    invalid-values: " << std::boolalpha << (bool)(k != len) << std::endl;
+            report_file.flush();
+            report_file.close();
+
+            field->decrRef();
+            data->decrRef();
         }
-        double avg = sum / k;
-
-        const std::string report_path = "result_" + interpolation_modes[o] + ".yaml";
-        std::fstream report_file;
-        report_file.open(output_folder + '/' + report_path, std::ios::out);
-        if (!report_file.is_open())
-        {
-            std::string err = strerror(errno);
-            std::cerr << "File failed to be opened (or created)" << std::endl;
-            std::cerr << err << std::endl;
-            exit(1);
-        }
-        report_file << std::setprecision(18);
-        report_file << std::fixed;
-
-        report_file << "values:" << std::endl;
-        report_file << "    avg: " << avg << std::endl;
-        report_file << "    min: " << min << std::endl;
-        report_file << "    max: " << max << std::endl;
-        report_file << "    med: " << med << std::endl;
-        report_file << "    p90: " << p90 << std::endl;
-        report_file << "    p95: " << p95 << std::endl;
-        report_file << "    p99: " << p99 << std::endl;
-        report_file << "    time-ms: " << get_average_time(time_ms, n, o) << std::endl;
-        report_file << "    invalid-values: " << std::boolalpha << (bool)(k != len) << std::endl;
-        report_file.flush();
-        report_file.close();
-
-        field->decrRef();
-        data->decrRef();
     }
 
     return 0;
