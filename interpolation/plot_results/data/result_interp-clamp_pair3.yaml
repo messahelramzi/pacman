@@ -7,4 +7,5 @@ values:
     p95: 4.516718516911489e-05
     p99: 9.944662779559632e-05
     time-ms: 10473.445978200001
+    peak-memory-mb: 458
     invalid-values: false

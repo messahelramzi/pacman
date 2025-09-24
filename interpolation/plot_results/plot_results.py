@@ -64,24 +64,26 @@ def transform_to_methods_names(reports):
     )
 
 
-def get_avg_error_from_files(files):
+def get_value_from_files(files, value):
     ret = []
     for file in files:
         f = open(file, "r", encoding="UTF-8")
         node = yaml.safe_load(f)
-        ret.append(node["values"]["avg"])
+        ret.append(node["values"][value])
         f.close()
     return ret
+
+
+def get_avg_error_from_files(files):
+    return get_value_from_files(files, "avg")
 
 
 def get_time_from_files(files):
-    ret = []
-    for file in files:
-        f = open(file, "r", encoding="UTF-8")
-        node = yaml.safe_load(f)
-        ret.append(node["values"]["time-ms"])
-        f.close()
-    return ret
+    return get_value_from_files(files, "time-ms")
+
+
+def get_memory_from_files(files):
+    return get_value_from_files(files, "peak-memory-mb")
 
 
 def init_figure(cols, rows):
@@ -179,40 +181,55 @@ def plot_avg_accuracy_per_pair():
 def plot_diff_avg_time_precice_muscat():
     output_dir = "output_graphs"
 
-    fig, axes = init_figure(2, 1)
+    fig, axes = init_figure(3, 1)
     pairs_names = ["0.03 -> 0.003", "0.02 -> 0.002", "0.01 -> 0.001", "0.004 -> 0.0005"]
 
-    precice_files = get_precice_reports(method="rbf-pum-direct")
+    precice_global_rbf_files = get_precice_reports(method="rbf-global-direct")
+    precice_pum_rbf_files = get_precice_reports(method="rbf-pum-direct")
     muscat_files = get_muscat_reports(method="interp-clamp")
 
-    precice_avg_err = get_avg_error_from_files(precice_files)
+    precice_global_rbf_avg_err = get_avg_error_from_files(precice_global_rbf_files)
+    precice_pum_rbf_avg_err = get_avg_error_from_files(precice_pum_rbf_files)
     muscat_avg_err = get_avg_error_from_files(muscat_files)
 
-    precice_avg_time = get_time_from_files(precice_files)
+    precice_global_rbf_avg_time = get_time_from_files(precice_global_rbf_files)
+    precice_pum_rbf_avg_time = get_time_from_files(precice_pum_rbf_files)
     muscat_avg_time = get_time_from_files(muscat_files)
 
     err_subplot = axes.flat[0]
-    time_subplot = axes.flat[1]
+    time_subplot = axes.flat[2]
 
-    precice_avg_err_y = np.array(precice_avg_err)
+    precice_global_rbf_avg_err_y = np.array(precice_global_rbf_avg_err)
+    precice_pum_rbf_avg_err_y = np.array(precice_pum_rbf_avg_err)
     muscat_avg_err_y = np.array(muscat_avg_err)
     avg_err_x = (
-        np.arange(max(precice_avg_err_y.shape[0], muscat_avg_err_y.shape[0])) * 1.5
+        np.arange(max(precice_global_rbf_avg_err_y.shape[0], muscat_avg_err_y.shape[0]))
+        * 1.5
     )
 
     err_subplot.plot(
         avg_err_x,
-        precice_avg_err_y,
+        precice_global_rbf_avg_err_y,
         color="tab:blue",
-        label="preCICE",
+        label="preCICE's rbf-global-direct",
         marker="o",
         markersize=4.0,
     )
+
+    err_subplot.plot(
+        avg_err_x,
+        precice_pum_rbf_avg_err_y,
+        color="tab:orange",
+        label="preCICE's rbf-pum-direct",
+        marker="o",
+        markersize=4.0,
+    )
+
     err_subplot.plot(
         avg_err_x,
         muscat_avg_err_y,
         color="tab:purple",
-        label="Muscat",
+        label="Muscat's Interp/Clamp",
         marker="o",
         markersize=4.0,
     )
@@ -221,43 +238,108 @@ def plot_diff_avg_time_precice_muscat():
 
     err_subplot.set_yscale("log")
 
-    precice_time_y = np.array(precice_avg_time)
+    precice_global_rbf_time_y = np.array(precice_global_rbf_avg_time)
+    precice_pum_rbf_avg_time_y = np.array(precice_pum_rbf_avg_time)
     muscat_time_y = np.array(muscat_avg_time)
-    time_x = np.arange(max(precice_time_y.shape[0], muscat_time_y.shape[0])) * 1.5
+    time_x = (
+        np.arange(max(precice_global_rbf_time_y.shape[0], muscat_time_y.shape[0])) * 1.5
+    )
 
     time_subplot.plot(
         time_x,
-        precice_time_y,
+        precice_global_rbf_time_y,
         color="tab:blue",
-        label="preCICE",
+        label="preCICE's rbf-global-direct",
         marker="o",
         markersize=4.0,
     )
+
+    time_subplot.plot(
+        time_x,
+        precice_pum_rbf_avg_time_y,
+        color="tab:orange",
+        label="preCICE's rbf-pum-direct",
+        marker="o",
+        markersize=4.0,
+    )
+
     time_subplot.plot(
         time_x,
         muscat_time_y,
         color="tab:purple",
-        label="Muscat",
+        label="Muscat's Interp/Clamp",
         marker="o",
         markersize=4.0,
     )
 
     time_subplot.legend()
 
-    # time_subplot.set_yscale("log")
+    time_subplot.set_yscale("log")
 
     err_subplot.set_xticks(avg_err_x, pairs_names, rotation=45, ha="right")
     time_subplot.set_xticks(time_x, pairs_names, rotation=45, ha="right")
 
     err_subplot.set_title("1. Average Error Over Mesh Refinement Level")
-    time_subplot.set_title("2. Interpolation Matrix Average Computation Time (ms)")
+    time_subplot.set_title("3. Interpolation Matrix Average Computation Time (ms)")
+
+    memory_subplot = axes.flat[1]
+    rbf_global_direct_files = get_precice_reports(method="rbf-global-direct")
+    rbf_global_direct_y = np.array(get_memory_from_files(rbf_global_direct_files))
+
+    rbf_pum_direct_files = get_precice_reports(method="rbf-pum-direct")
+    rbf_pum_direct_y = np.array(get_memory_from_files(rbf_pum_direct_files))
+
+    interp_clamp_files = get_muscat_reports(method="interp-clamp")
+    interp_clamp_y = np.array(get_memory_from_files(interp_clamp_files))
+
+    memory_x = (
+        np.arange(
+            max(
+                rbf_global_direct_y.shape[0],
+                rbf_pum_direct_y.shape[0],
+                interp_clamp_y.shape[0],
+            )
+        )
+        * 1.5
+    )
+
+    memory_subplot.plot(
+        memory_x,
+        rbf_global_direct_y,
+        color="tab:blue",
+        label="preCICE's rbf-global-direct",
+        marker="o",
+        markersize=4.0,
+    )
+    memory_subplot.plot(
+        memory_x,
+        rbf_pum_direct_y,
+        color="tab:orange",
+        label="preCICE's rbf-pum-direct",
+        marker="o",
+        markersize=4.0,
+    )
+    memory_subplot.plot(
+        memory_x,
+        interp_clamp_y,
+        color="tab:purple",
+        label="Muscat's Interp/Clamp",
+        marker="o",
+        markersize=4.0,
+    )
+
+    memory_subplot.legend()
+    memory_subplot.set_yscale("log")
+    memory_subplot.set_xticks(memory_x, pairs_names, rotation=45, ha="right")
+
+    memory_subplot.set_title("2. Peak Heap Memory Usage per Case (MB)")
 
     plt.tight_layout()
-    plt.savefig(f"{output_dir}/line_charts.svg", format="svg")
+    plt.savefig(f"{output_dir}/line_charts.png", format="png")
 
 
 def main():
-    plot_avg_accuracy_per_pair()
+    # plot_avg_accuracy_per_pair()
     plot_diff_avg_time_precice_muscat()
     return
 
