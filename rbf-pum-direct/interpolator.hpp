@@ -43,7 +43,7 @@ RbfPumInterpolator<ExecSpace, Dim, Coordinates>::RbfPumInterpolator(
     _radius = 0;
 
     find_radius();
-    // create_centers();
+    create_centers();
 }
 
 template <typename ExecSpace, int Dim, class Coordinates>
@@ -64,7 +64,7 @@ void RbfPumInterpolator<ExecSpace, Dim, Coordinates>::find_radius()
         Kokkos::create_mirror_view_and_copy(execspace, _target);
 
     Kokkos::parallel_for(
-        "fill-cloud", Kokkos::RangePolicy(execspace, 0, N + M),
+        "fill cloud", Kokkos::RangePolicy(execspace, 0, N + M),
         KOKKOS_LAMBDA(const size_t i) {
             cloud(i) = (i < N) ? source_mirror(i) : target_mirror(i);
         });
@@ -136,6 +136,70 @@ void RbfPumInterpolator<ExecSpace, Dim, Coordinates>::find_radius()
     }
 
     this->_radius = std::sqrt(max_radius_sum / _clustering_rd_samples);
+}
+
+template <typename ExecSpace, int Dim, class Coordinates>
+void RbfPumInterpolator<ExecSpace, Dim, Coordinates>::create_centers()
+{
+    assert(this->_radius > 0);
+    assert(this->_relative_overlap > 0 && this->_relative_overlap < 1);
+    ExecSpace execspace{};
+
+    const Coordinates spacing =
+        (1.0 - this->_relative_overlap) * (2.0 * this->_radius);
+    const Point lower = _bd.minCorner();
+    const Point upper = _bd.maxCorner();
+
+    size_t nb_elements[Dim];
+    size_t nb_centers = 1;
+    for (size_t i = 0; i < Dim; ++i)
+    {
+        nb_elements[i] = (size_t)((upper[i] - lower[i]) / spacing);
+        nb_centers *= nb_elements[i];
+    }
+
+    PointsView centers_candidates(
+        Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
+                           "centers_candidates"),
+        nb_centers);
+    switch (Dim)
+    {
+    case 1:
+        Kokkos::parallel_for(
+            "fill centers candidates 1d",
+            Kokkos::RangePolicy(execspace, 0, nb_elements[0]),
+            KOKKOS_LAMBDA(const size_t i) {
+                centers_candidates(i) = Point({ lower[0] + i * spacing });
+            });
+        break;
+    case 2:
+        Kokkos::parallel_for(
+            "fill centers candidates 2d",
+            Kokkos::MDRangePolicy(execspace, { 0, 0 },
+                                  { nb_elements[0], nb_elements[1] }),
+            KOKKOS_LAMBDA(const size_t i, const size_t j) {
+                centers_candidates(i + j * nb_elements[0]) =
+                    Point({ lower[0] + i * spacing, lower[1] + j * spacing });
+            });
+        break;
+    case 3:
+        Kokkos::parallel_for(
+            "fill centers candidates 3d",
+            Kokkos::MDRangePolicy(
+                execspace, { 0, 0, 0 },
+                { nb_elements[0], nb_elements[1], nb_elements[2] }),
+            KOKKOS_LAMBDA(const size_t i, const size_t j, const size_t k) {
+                centers_candidates(i + j * nb_elements[0]
+                                   + k * nb_elements[0] * nb_elements[1]) =
+                    Point({ lower[0] + i * spacing, lower[1] + j * spacing,
+                            lower[2] + k * spacing });
+            });
+        break;
+    default:
+        Kokkos::abort("RbfPumIntepolator::create_centers: Dim > 3 is not "
+                      "implemented yet!");
+    }
+    Kokkos::fence();
 }
 
 #endif /* ! INTERPOLATOR_HPP */
