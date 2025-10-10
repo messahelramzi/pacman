@@ -20,6 +20,7 @@ public:
     RbfPumInterpolator(PointsView source, PointsView target);
     void create_centers();
     void find_radius();
+    Coordinates get_radius() const;
 
 private:
     double _radius;
@@ -43,7 +44,7 @@ RbfPumInterpolator<ExecSpace, Dim, Coordinates>::RbfPumInterpolator(
     _radius = 0;
 
     find_radius();
-    create_centers();
+    // create_centers();
 }
 
 template <typename ExecSpace, int Dim, class Coordinates>
@@ -93,49 +94,42 @@ void RbfPumInterpolator<ExecSpace, Dim, Coordinates>::find_radius()
             coordinates[i], coordinates[Dim + i]);
     }
 
-    Coordinates max_radius_sum = 0.;
-    for (size_t i = 0; i < _clustering_rd_samples; i++)
+    PointsView random_points(Kokkos::view_alloc(execspace,
+                                                Kokkos::WithoutInitializing,
+                                                "random_points"),
+                             this->_clustering_rd_samples);
+    auto random_points_mirror =
+        Kokkos::create_mirror_view(Kokkos::HostSpace{}, random_points);
+    for (size_t i = 0; i < this->_clustering_rd_samples; ++i)
     {
         Point random_point{};
         for (int d = 0; d < Dim; d++)
         {
             random_point[d] = unif_array[d](re_array[d]);
         }
-
-        Kokkos::View<Coordinates*, ExecSpace> values(
-            Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
-                               "values"),
-            0);
-        Kokkos::View<int*, ExecSpace> offsets(
-            Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
-                               "offsets"),
-            0);
-
-        KNearest<Dim, Coordinates> predicate{ this->_nodes_per_cluster,
-                                              random_point };
-        KNearestCallback<Dim, Coordinates> callback{ random_point };
-
-        // TODO: combine into one query only
-        ArborX::query(bvh, execspace, predicate, callback, values, offsets);
-
-        const auto offsets_mirror =
-            Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{}, offsets);
-
-        Coordinates local_max_radius = 0.;
-        Kokkos::Max<Coordinates> max_reducer(local_max_radius);
-        Kokkos::parallel_reduce(
-            "reduce local max radius",
-            Kokkos::RangePolicy(execspace, offsets_mirror(0),
-                                offsets_mirror(1)),
-            KOKKOS_LAMBDA(const size_t i, Coordinates& lmax) {
-                max_reducer.join(lmax, values(i));
-            },
-            max_reducer);
-        // Kokkos::fence();
-        max_radius_sum += local_max_radius;
+        random_points_mirror(i) = random_point;
     }
+    Kokkos::deep_copy(random_points, random_points_mirror);
 
-    this->_radius = std::sqrt(max_radius_sum / _clustering_rd_samples);
+    KNearest<Dim, Coordinates> predicate{ _nodes_per_cluster, random_points };
+    KNearestCallback<Dim, Coordinates> callback{ random_points };
+    Kokkos::View<Coordinates*, ExecSpace> values(
+        Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing, "values"),
+        0);
+    Kokkos::View<int*, ExecSpace> offsets(
+        Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing, "offsets"),
+        0);
+    ArborX::query(bvh, execspace, predicate, callback, values, offsets);
+
+    Kokkos::sort(values);
+    Coordinates max_radius_sum = 0.;
+    Kokkos::parallel_reduce(
+        "sum max radius",
+        Kokkos::RangePolicy(execspace, (size_t)(values.extent(0) * 0.90),
+                            values.extent(0)),
+        KOKKOS_LAMBDA(const size_t i, Coordinates& lsum) { lsum += values(i); },
+        max_radius_sum);
+    this->_radius = std::sqrt(max_radius_sum / this->_clustering_rd_samples);
 }
 
 template <typename ExecSpace, int Dim, class Coordinates>
@@ -200,6 +194,12 @@ void RbfPumInterpolator<ExecSpace, Dim, Coordinates>::create_centers()
                       "implemented yet!");
     }
     Kokkos::fence();
+}
+
+template <typename ExecSpace, int Dim, class Coordinates>
+Coordinates RbfPumInterpolator<ExecSpace, Dim, Coordinates>::get_radius() const
+{
+    return this->_radius;
 }
 
 #endif /* ! INTERPOLATOR_HPP */

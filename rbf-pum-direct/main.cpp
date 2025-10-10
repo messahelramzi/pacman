@@ -39,6 +39,7 @@ int main(void)
         auto t2 = std::chrono::high_resolution_clock::now().time_since_epoch();
         std::cout << "t2 - t1: " << (t2.count() - t1.count()) / 1000000.0
                   << "ms" << std::endl;
+        std::cout << "found radius: " << r.get_radius() << std::endl;
     }
 
     return 0;
