@@ -51,4 +51,23 @@ _NDdistance_without_sqrt(const ArborX::Point<Dim, Coordinates>& lhs,
     return s;
 }
 
+template <typename ExecSpace, int Dim, class Coordinates>
+void print_clusters_view(
+    Kokkos::View<ArborX::Point<Dim, Coordinates>**, ExecSpace>& clusters)
+{
+    auto clusters_h =
+        Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{}, clusters);
+    for (size_t i = 0; i < clusters_h.extent(0); ++i)
+    {
+        std::cout << i << ". center: " << point_to_str(clusters_h(i, 0))
+                  << std::endl;
+        std::cout << i << ". points:" << std::endl;
+        for (size_t j = 1; j < clusters_h.extent(1); ++j)
+        {
+            std::cout << "    - " << point_to_str(clusters_h(i, j))
+                      << std::endl;
+        }
+    }
+}
+
 #endif /* ! UTILS_HPP */

@@ -3,12 +3,11 @@
 
 #include <ArborX_Box.hpp>
 #include <Kokkos_Core.hpp>
+#include <iostream>
+#include <sstream>
+#include <string>
 
 #include "utils.hpp"
-
-#include <iostream>
-#include <string>
-#include <sstream>
 
 template <typename ExecSpace, int Dim, class Coordinates>
 struct Cluster
@@ -18,14 +17,16 @@ struct Cluster
     std::string to_string(void) const;
 };
 
-template<typename ExecSpace, int Dim, class Coordinates>
+template <typename ExecSpace, int Dim, class Coordinates>
 inline std::string Cluster<ExecSpace, Dim, Coordinates>::to_string(void) const
 {
     std::ostringstream strs;
     strs << "center: " << point_to_str(this->center) << std::endl;
-    auto points_h = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{}, points);
+    auto points_h =
+        Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{}, points);
     strs << "points:\n";
-    for (size_t i = 0; i < points_h.extent(0); ++i) {
+    for (size_t i = 0; i < points_h.extent(0); ++i)
+    {
         strs << "    - " << point_to_str(points_h(i)) << "\n";
     }
     std::string s = strs.str();
@@ -33,8 +34,9 @@ inline std::string Cluster<ExecSpace, Dim, Coordinates>::to_string(void) const
     return s;
 }
 
-template<typename ExecSpace, int Dim, class Coordinates>
-std::ostream& operator<<(std::ostream& os, Cluster<ExecSpace, Dim, Coordinates> const& cluster)
+template <typename ExecSpace, int Dim, class Coordinates>
+std::ostream& operator<<(std::ostream& os,
+                         Cluster<ExecSpace, Dim, Coordinates> const& cluster)
 {
     return os << cluster.to_string();
 }

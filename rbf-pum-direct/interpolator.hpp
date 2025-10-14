@@ -16,14 +16,14 @@ class RbfPumInterpolator
     using Point = ArborX::Point<Dim, Coordinates>;
     using Box = ArborX::Box<Dim, Coordinates>;
     using PointsView = Kokkos::View<Point*, ExecSpace>;
-    using ClustersView = Kokkos::View<Cluster<ExecSpace, Dim, Coordinates>*, ExecSpace>;
+    using ClustersView =
+        Kokkos::View<Cluster<ExecSpace, Dim, Coordinates>*, ExecSpace>;
 
 public:
     RbfPumInterpolator(PointsView source, PointsView target);
     void create_clusters();
     void find_radius();
     Coordinates get_radius() const;
-    ClustersView _clusters;
 
 private:
     double _radius;
@@ -33,6 +33,7 @@ private:
     Box _bd;
     PointsView _source;
     PointsView _target;
+    Kokkos::View<Point**, ExecSpace> _clusters;
 };
 
 template <typename ExecSpace, int Dim, class Coordinates>
@@ -69,7 +70,7 @@ void RbfPumInterpolator<ExecSpace, Dim, Coordinates>::find_radius()
     Kokkos::parallel_for(
         "fill cloud", Kokkos::RangePolicy(execspace, 0, N + M),
         KOKKOS_LAMBDA(const size_t i) {
-            cloud(i) = (i < N) ? source_mirror(i) : target_mirror(i);
+            cloud(i) = (i < N) ? source_mirror(i) : target_mirror(i - N);
         });
     Kokkos::fence();
 
@@ -210,76 +211,51 @@ void RbfPumInterpolator<ExecSpace, Dim, Coordinates>::create_clusters()
     ArborX::BoundingVolumeHierarchy bvh{ execspace, this->_source };
     ArborX::query(bvh, execspace, predicate, callback, values, offsets);
 
-    // auto hostspace = Kokkos::HostSpace{};
-    // auto values_mirror =
-    //     Kokkos::create_mirror_view_and_copy(hostspace, values);
-    // auto offsets_mirror =
-    //     Kokkos::create_mirror_view_and_copy(hostspace, offsets);
-
-    // for (size_t i = 0; i < nb_centers; ++i)
-    // {
-    //     for (size_t j = offsets_mirror(i); j < offsets_mirror(i + 1); ++j)
-    //     {
-    //         std::cout << i << ": " << point_to_str(values_mirror(j))
-    //                   << std::endl;
-    //     }
-    // }
-    // std::cout << "nb_centers:" << nb_centers << std::endl;
-
     Kokkos::View<int*, ExecSpace> nb_nodes_per_cluster(
         Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
                            "nb_nodes_per_cluster"),
         nb_centers);
     size_t nb_non_empty_clusters = 0;
+    size_t max_nodes = 0;
     Kokkos::parallel_reduce(
         "count non empty clusters",
         Kokkos::RangePolicy(execspace, 0, nb_centers),
-        KOKKOS_LAMBDA(const size_t i, size_t &lval) {
+        KOKKOS_LAMBDA(const size_t i, size_t& lval, size_t& lmax) {
             nb_nodes_per_cluster(i) = 0;
-            if (offsets(i) != offsets(i+1)) { lval++; }
-            for (size_t j = offsets(i); j < offsets(i + 1); ++j)
+            if (offsets(i) != offsets(i + 1))
             {
-                Kokkos::atomic_inc(&(nb_nodes_per_cluster(i)));
+                lval++;
+                size_t v = Kokkos::atomic_add_fetch(
+                    &(nb_nodes_per_cluster(i)), offsets(i + 1) - offsets(i));
+                lmax = max(lmax, v);
             }
-        }, nb_non_empty_clusters);
+        },
+        nb_non_empty_clusters, Kokkos::Max<size_t>(max_nodes));
 
-    ClustersView clusters(Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing, "clusters"), nb_centers);
-    auto clusters_h = Kokkos::create_mirror_view(Kokkos::HostSpace{}, clusters);
-    auto nb_nodes_per_cluster_h = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{}, nb_nodes_per_cluster);
-    for (size_t it = 0; it < clusters_h.extent(0); ++it) {
-        if (nb_nodes_per_cluster_h(it) > 0) {
-            Kokkos::resize(clusters_h(it).points, nb_nodes_per_cluster_h(it));
-        }
-    }
-    Kokkos::deep_copy(clusters, clusters_h);
+    Kokkos::View<Point**, ExecSpace> clusters(
+        Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing, "clusters"),
+        nb_non_empty_clusters, max_nodes + 1);
+    // Declare a scalar on device (global line index for clusters view)
+    Kokkos::View<size_t, ExecSpace> id("id");
 
-    Kokkos::parallel_for("fill clusters", Kokkos::RangePolicy(execspace, 0, nb_centers), KOKKOS_LAMBDA(const size_t i) {
-        if (nb_nodes_per_cluster(i) != 0) {
-            clusters(i).center= centers_candidates(i);
-            for (size_t ii = offsets(i); ii < offsets(i+1); ++ii) {
-                clusters(i).points(ii - offsets(i)) = Point(values(ii));
+    Kokkos::parallel_for(
+        "fill clusters", Kokkos::RangePolicy(execspace, 0, nb_centers),
+        KOKKOS_LAMBDA(const size_t i) {
+            if (nb_nodes_per_cluster(i) > 0)
+            {
+                size_t iid = Kokkos::atomic_fetch_inc(&(id()));
+                clusters(iid, 0) = centers_candidates(i);
+                for (size_t ii = offsets(i); ii < offsets(i + 1); ++ii)
+                {
+                    clusters(iid, 1 + ii - offsets(i)) = values(ii);
+                }
             }
-        }
-    });
-    Kokkos::fence();
+        });
 
-    clusters_h = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{}, clusters);
-    size_t reindex_i = 0;
-    for (size_t i = 0; i < clusters_h.extent(0); ++i) {
-        while (reindex_i < clusters_h.extent(0) && clusters_h(reindex_i).points.extent(0) == 0) {
-            reindex_i++;
-        }
-        if (clusters_h(i).points.extent(0) == 0) {
-            std::swap(clusters_h(i), clusters_h(reindex_i));
-        }
-    }
-
-    for (size_t i = 0;  i < clusters_h.extent(0); ++i) {
-        std::cout << clusters_h(i) << std::endl;
-    }
-
-    _clusters = ClustersView(Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing, "_clusters"), nb_non_empty_clusters);
-    Kokkos::deep_copy(_clusters, clusters_h);
+    _clusters = Kokkos::View<Point**, ExecSpace>(
+        Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing, "_clusters"),
+        clusters.extent(0), clusters.extent(1));
+    Kokkos::deep_copy(_clusters, clusters);
 }
 
 template <typename ExecSpace, int Dim, class Coordinates>

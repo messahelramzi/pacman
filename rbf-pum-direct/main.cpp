@@ -12,8 +12,8 @@ int main(void)
         using HostSpace = Kokkos::HostSpace;
         using fp_type = double;
         ExecSpace execspace{};
-        const int N = 2500;
-        const int M = 2500;
+        const size_t N = 2500;
+        const size_t M = 2500;
         Kokkos::View<ArborX::Point<3, fp_type>*, ExecSpace> source(
             Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
                                "source points"),
@@ -24,13 +24,18 @@ int main(void)
             M);
         Kokkos::parallel_for(
             "fill source and target",
-            Kokkos::RangePolicy<ExecSpace>(execspace, 0, N),
+            Kokkos::RangePolicy<ExecSpace>(execspace, 0, N + M),
             KOKKOS_LAMBDA(const int i) {
-                source(i) = ArborX::Point<3, fp_type>(
-                    { (fp_type)i, (fp_type)i, (fp_type)i });
-
-                target(i) = ArborX::Point<3, fp_type>(
-                    { -(fp_type)i, -(fp_type)i, -(fp_type)i });
+                if (i < N)
+                {
+                    source(i) = ArborX::Point<3, fp_type>(
+                        { (fp_type)i, (fp_type)i, (fp_type)i });
+                }
+                if (i < M)
+                {
+                    target(i) = ArborX::Point<3, fp_type>(
+                        { -(fp_type)i, -(fp_type)i, -(fp_type)i });
+                }
             });
         Kokkos::fence();
 
@@ -38,12 +43,7 @@ int main(void)
         auto r = RbfPumInterpolator<ExecSpace, 3, fp_type>(source, target);
         auto t2 = std::chrono::high_resolution_clock::now().time_since_epoch();
 
-        HostSpace hostspace{};
-        auto m = Kokkos::create_mirror_view_and_copy(hostspace, r._clusters);
-        for (size_t i = 0; i < m.extent(0); ++i) {
-            auto cluster = m(i);
-            std::cout << cluster << std::endl;
-        }
+        // print_clusters_view(r._clusters);
 
         std::cout << "t2 - t1: " << (t2.count() - t1.count()) / 1000000.0
                   << "ms" << std::endl;
