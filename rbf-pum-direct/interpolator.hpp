@@ -8,7 +8,6 @@
 #include <random>
 
 #include "callbacks.hpp"
-#include "cluster.hpp"
 
 template <typename ExecSpace, int Dim = 3, class Coordinates = double>
 class RbfPumInterpolator
@@ -16,24 +15,22 @@ class RbfPumInterpolator
     using Point = ArborX::Point<Dim, Coordinates>;
     using Box = ArborX::Box<Dim, Coordinates>;
     using PointsView = Kokkos::View<Point*, ExecSpace>;
-    using ClustersView =
-        Kokkos::View<Cluster<ExecSpace, Dim, Coordinates>*, ExecSpace>;
 
 public:
     RbfPumInterpolator(PointsView source, PointsView target);
-    void create_clusters();
-    void find_radius();
+    void create_clusters(void);
+    void find_radius(void);
     Coordinates get_radius() const;
+    Kokkos::View<Point**, ExecSpace> _clusters;
 
 private:
     double _radius;
-    const int _nodes_per_cluster = 25;
+    const int _nodes_per_cluster = 50;
     const double _relative_overlap = 0.15;
     const size_t _clustering_rd_samples = 100;
     Box _bd;
     PointsView _source;
     PointsView _target;
-    Kokkos::View<Point**, ExecSpace> _clusters;
 };
 
 template <typename ExecSpace, int Dim, class Coordinates>
@@ -51,7 +48,7 @@ RbfPumInterpolator<ExecSpace, Dim, Coordinates>::RbfPumInterpolator(
 }
 
 template <typename ExecSpace, int Dim, class Coordinates>
-void RbfPumInterpolator<ExecSpace, Dim, Coordinates>::find_radius()
+void RbfPumInterpolator<ExecSpace, Dim, Coordinates>::find_radius(void)
 {
     assert(this->_nodes_per_cluster > 0);
     const ExecSpace execspace{};
@@ -136,7 +133,7 @@ void RbfPumInterpolator<ExecSpace, Dim, Coordinates>::find_radius()
 }
 
 template <typename ExecSpace, int Dim, class Coordinates>
-void RbfPumInterpolator<ExecSpace, Dim, Coordinates>::create_clusters()
+void RbfPumInterpolator<ExecSpace, Dim, Coordinates>::create_clusters(void)
 {
     assert(this->_radius > 0);
     assert(this->_relative_overlap > 0 && this->_relative_overlap < 1);
@@ -251,6 +248,7 @@ void RbfPumInterpolator<ExecSpace, Dim, Coordinates>::create_clusters()
                 }
             }
         });
+    Kokkos::fence();
 
     _clusters = Kokkos::View<Point**, ExecSpace>(
         Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing, "_clusters"),

@@ -4,6 +4,8 @@
 #include <ArborX_Box.hpp>
 #include <ArborX_Sphere.hpp>
 #include <Kokkos_Core.hpp>
+#include <cuda.h>
+#include <cuda_runtime_api.h>
 #include <iostream>
 #include <sstream>
 
@@ -68,6 +70,14 @@ void print_clusters_view(
                       << std::endl;
         }
     }
+}
+
+void print_cuda_memory_usage()
+{
+    size_t cuda_free, cuda_total;
+    cudaMemGetInfo(&cuda_free, &cuda_total);
+    std::cout << "used: " << (cuda_total - cuda_free) / 1000000 << "/"
+              << (cuda_total) / 1000000 << "MB" << std::endl;
 }
 
 #endif /* ! UTILS_HPP */

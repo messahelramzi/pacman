@@ -4,7 +4,6 @@
 #include <ArborX_Box.hpp>
 #include <ArborX_LinearBVH.hpp>
 
-#include "cluster.hpp"
 #include "utils.hpp"
 
 template <int Dim, class Coordinates>
