@@ -4,6 +4,7 @@
 #include <ArborX_Box.hpp>
 #include <ArborX_LinearBVH.hpp>
 
+#include "cluster.hpp"
 #include "utils.hpp"
 
 template <int Dim, class Coordinates>
@@ -42,4 +43,39 @@ struct KNearestCallback
     }
 };
 
+template <typename ExecSpace, int Dim, class Coordinates>
+struct RemoveEmptyClusters
+{
+    Coordinates radius;
+    Kokkos::View<ArborX::Point<Dim, Coordinates>*, ExecSpace> centers;
+};
+
+template <typename ExecSpace, int Dim, class Coordinates>
+struct ArborX::AccessTraits<RemoveEmptyClusters<ExecSpace, Dim, Coordinates>>
+{
+    using memory_space = ExecSpace::memory_space;
+    static KOKKOS_FUNCTION std::size_t
+    size(const RemoveEmptyClusters<ExecSpace, Dim, Coordinates>& rec)
+    {
+        return rec.centers.extent(0);
+    }
+    static KOKKOS_FUNCTION auto
+    get(const RemoveEmptyClusters<ExecSpace, Dim, Coordinates>& rec,
+        std::size_t i)
+    {
+        return ArborX::intersects(
+            ArborX::Sphere<Dim, Coordinates>(rec.centers(i), rec.radius));
+    }
+};
+
+template <typename ExecSpace, int Dim, class Coordinates>
+struct RemoveEmptyClustersCallback
+{
+    template <typename Predicate, typename Value, typename OutputFunctor>
+    KOKKOS_FUNCTION void operator()(Predicate predicate, Value const& value,
+                                    OutputFunctor const& out) const
+    {
+        out(value);
+    }
+};
 #endif /* ! CALLBACKS_HPP */

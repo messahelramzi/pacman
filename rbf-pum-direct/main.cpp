@@ -37,6 +37,14 @@ int main(void)
         auto t1 = std::chrono::high_resolution_clock::now().time_since_epoch();
         auto r = RbfPumInterpolator<ExecSpace, 3, fp_type>(source, target);
         auto t2 = std::chrono::high_resolution_clock::now().time_since_epoch();
+
+        HostSpace hostspace{};
+        auto m = Kokkos::create_mirror_view_and_copy(hostspace, r._clusters);
+        for (size_t i = 0; i < m.extent(0); ++i) {
+            auto cluster = m(i);
+            std::cout << cluster << std::endl;
+        }
+
         std::cout << "t2 - t1: " << (t2.count() - t1.count()) / 1000000.0
                   << "ms" << std::endl;
         std::cout << "found radius: " << r.get_radius() << std::endl;
