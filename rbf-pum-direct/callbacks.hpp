@@ -3,6 +3,7 @@
 
 #include <ArborX_Box.hpp>
 #include <ArborX_LinearBVH.hpp>
+#include <ArborX_Sphere.hpp>
 
 #include "utils.hpp"
 
@@ -43,32 +44,63 @@ struct KNearestCallback
 };
 
 template <typename ExecSpace, int Dim, class Coordinates>
-struct RemoveEmptyClusters
+struct FindClustersCenters
 {
-    Coordinates radius;
-    Kokkos::View<ArborX::Point<Dim, Coordinates>*, ExecSpace> centers;
+    const Coordinates spacing;
+    const Coordinates radius;
+    const ArborX::Point<Dim, Coordinates> lower;
+    size_t shape[Dim];
+
+    FindClustersCenters(Coordinates s, Coordinates r,
+                        ArborX::Point<Dim, Coordinates> l, size_t d[Dim])
+        : spacing(s)
+        , radius(r)
+        , lower(l)
+    {
+        for (size_t i = 0; i < Dim; ++i)
+        {
+            shape[i] = d[i];
+        }
+    }
 };
 
 template <typename ExecSpace, int Dim, class Coordinates>
-struct ArborX::AccessTraits<RemoveEmptyClusters<ExecSpace, Dim, Coordinates>>
+struct ArborX::AccessTraits<FindClustersCenters<ExecSpace, Dim, Coordinates>>
 {
-    using memory_space = ExecSpace::memory_space;
     static KOKKOS_FUNCTION std::size_t
-    size(const RemoveEmptyClusters<ExecSpace, Dim, Coordinates>& rec)
+    size(const FindClustersCenters<ExecSpace, Dim, Coordinates>& fcc)
     {
-        return rec.centers.extent(0);
+        size_t prod = 1;
+        for (size_t i = 0; i < Dim; ++i)
+        {
+            prod *= fcc.shape[i];
+        }
+        return prod;
     }
+
     static KOKKOS_FUNCTION auto
-    get(const RemoveEmptyClusters<ExecSpace, Dim, Coordinates>& rec,
+    get(const FindClustersCenters<ExecSpace, Dim, Coordinates>& fcc,
         std::size_t i)
     {
+        ArborX::Point<Dim, Coordinates> center;
+        for (size_t axis = 0; axis < Dim; ++axis)
+        {
+            size_t prod = 1;
+            for (size_t tt = axis + 1; tt < Dim; ++tt)
+            {
+                prod *= fcc.shape[tt];
+            }
+            center[axis] = fcc.lower[axis] + i / prod * fcc.spacing;
+            i = i % prod;
+        }
         return ArborX::intersects(
-            ArborX::Sphere<Dim, Coordinates>(rec.centers(i), rec.radius));
+            ArborX::Sphere<Dim, Coordinates>(center, fcc.radius));
     }
+    using memory_space = ExecSpace::memory_space;
 };
 
 template <typename ExecSpace, int Dim, class Coordinates>
-struct RemoveEmptyClustersCallback
+struct FindClustersCentersCallback
 {
     template <typename Predicate, typename Value, typename OutputFunctor>
     KOKKOS_FUNCTION void operator()(Predicate predicate, Value const& value,
@@ -77,4 +109,5 @@ struct RemoveEmptyClustersCallback
         out(value);
     }
 };
+
 #endif /* ! CALLBACKS_HPP */

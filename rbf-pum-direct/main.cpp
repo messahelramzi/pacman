@@ -15,8 +15,8 @@ int main(void)
         // 0.01 -> 0.001 (precice aste turbine)
         // const size_t N = 3458;
         // const size_t M = 338992;
-        const size_t N = 33899;
-        const size_t M = 3458;
+        const size_t N = 3458;
+        const size_t M = 33899;
         Kokkos::View<ArborX::Point<3, fp_type>*, ExecSpace> source(
             Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
                                "source points"),
@@ -47,7 +47,7 @@ int main(void)
             RbfPumInterpolator<ExecSpace, 3, fp_type>(source, target);
         auto t2 = std::chrono::high_resolution_clock::now().time_since_epoch();
 
-        // print_clusters_view(r._clusters);
+        print_2d_view(r._clusters);
         std::cout << "t2 - t1: " << (t2.count() - t1.count()) / 1000000.0
                   << "ms" << std::endl;
         std::cout << "found radius: " << r.get_radius() << std::endl;

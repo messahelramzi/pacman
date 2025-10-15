@@ -6,22 +6,27 @@
 #include "utils.hpp"
 
 template <class ftype>
-class RbfFunctionBasis {
-    public:
-        virtual ftype operator()(const ftype r) = 0;
-    private:
-        Kokkos::View<ftype*> _params;
+class RbfFunctionBasis
+{
+public:
+    virtual ftype operator()(const ftype r) = 0;
+
+private:
+    Kokkos::View<ftype*> _params;
 };
 
 template <class ftype>
-class GaussianRbf : public RbfFunctionBasis<ftype> {
-    public:
-    ftype operator()(const ftype r) {
-        return Kokkos::exp(-((r / this->_epsilon) * (r / this->_epsilon)));
+class WendlandC0 : public RbfFunctionBasis
+{
+public:
+    ftype operator()(const ftype r)
+    {
+        // TODO: fill the evaluation formula
+        return 0.;
     }
 
-    private:
-        ftype _epsilon = 1.0;
+private:
+    ftype _r_inv;
 };
 
 #endif /* ! RBF_FUNCTIONS_HPP */
