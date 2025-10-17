@@ -7,33 +7,33 @@
 
 #include "utils.hpp"
 
-template <int Dim, class Coordinates>
+template <typename ExecSpace, int Dim, class Coordinates>
 struct KNearest
 {
-    int k;
-    Kokkos::View<ArborX::Point<Dim, Coordinates>*> random_points;
+    const int k;
+    Kokkos::View<ArborX::Point<Dim, Coordinates>*, ExecSpace> random_points;
 };
 
-template <int Dim, class Coordinates>
-struct ArborX::AccessTraits<KNearest<Dim, Coordinates>>
+template <typename ExecSpace, int Dim, class Coordinates>
+struct ArborX::AccessTraits<KNearest<ExecSpace, Dim, Coordinates>>
 {
-    using memory_space = Kokkos::DefaultExecutionSpace::memory_space;
+    using memory_space = ExecSpace::memory_space;
     static KOKKOS_FUNCTION std::size_t
-    size(const KNearest<Dim, Coordinates>& kn)
+    size(const KNearest<ExecSpace, Dim, Coordinates>& kn)
     {
         return kn.random_points.extent(0);
     }
-    static KOKKOS_FUNCTION auto get(const KNearest<Dim, Coordinates>& kn,
-                                    std::size_t i)
+    static KOKKOS_FUNCTION auto
+    get(const KNearest<ExecSpace, Dim, Coordinates>& kn, std::size_t i)
     {
         return ArborX::attach(ArborX::nearest(kn.random_points(i), kn.k), i);
     }
 };
 
-template <int Dim, class Coordinates>
+template <typename ExecSpace, int Dim, class Coordinates>
 struct KNearestCallback
 {
-    Kokkos::View<ArborX::Point<Dim, Coordinates>*> centers;
+    Kokkos::View<ArborX::Point<Dim, Coordinates>*, ExecSpace> centers;
     template <typename Predicate, typename Value, typename OutputFunctor>
     KOKKOS_FUNCTION void operator()(Predicate predicate, Value const& value,
                                     OutputFunctor const& out) const
@@ -57,7 +57,7 @@ struct FindClustersCenters
         , radius(r)
         , lower(l)
     {
-        for (size_t i = 0; i < Dim; ++i)
+        for (int i = 0; i < Dim; ++i)
         {
             shape[i] = d[i];
         }
@@ -71,7 +71,7 @@ struct ArborX::AccessTraits<FindClustersCenters<ExecSpace, Dim, Coordinates>>
     size(const FindClustersCenters<ExecSpace, Dim, Coordinates>& fcc)
     {
         size_t prod = 1;
-        for (size_t i = 0; i < Dim; ++i)
+        for (int i = 0; i < Dim; ++i)
         {
             prod *= fcc.shape[i];
         }
@@ -83,18 +83,20 @@ struct ArborX::AccessTraits<FindClustersCenters<ExecSpace, Dim, Coordinates>>
         std::size_t i)
     {
         ArborX::Point<Dim, Coordinates> center;
-        for (size_t axis = 0; axis < Dim; ++axis)
+        for (int axis = 0; axis < Dim; ++axis)
         {
             size_t prod = 1;
-            for (size_t tt = axis + 1; tt < Dim; ++tt)
+            for (int tt = axis + 1; tt < Dim; ++tt)
             {
                 prod *= fcc.shape[tt];
             }
             center[axis] = fcc.lower[axis] + i / prod * fcc.spacing;
             i = i % prod;
         }
-        return ArborX::intersects(
-            ArborX::Sphere<Dim, Coordinates>(center, fcc.radius));
+        return ArborX::attach(
+            ArborX::intersects(
+                ArborX::Sphere<Dim, Coordinates>(center, fcc.radius)),
+            center);
     }
     using memory_space = ExecSpace::memory_space;
 };
@@ -106,7 +108,9 @@ struct FindClustersCentersCallback
     KOKKOS_FUNCTION void operator()(Predicate predicate, Value const& value,
                                     OutputFunctor const& out) const
     {
-        out(value);
+        out(Kokkos::make_pair<ArborX::Point<Dim, Coordinates>,
+                              ArborX::Point<Dim, Coordinates>>(
+            ArborX::getData(predicate), value));
     }
 };
 

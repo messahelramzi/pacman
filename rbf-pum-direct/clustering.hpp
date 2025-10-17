@@ -3,9 +3,10 @@
 
 #include "callbacks.hpp"
 #include "interpolator.hxx"
+#include "utils.hpp"
 
-template <typename ExecSpace, int Dim, class Coordinates>
-void RbfPumInterpolator<ExecSpace, Dim, Coordinates>::create_clusters(void)
+FULL_TEMPLATE
+void TEMPLATED_CLASSNAME::create_clusters(void)
 {
     assert(this->_radius > 0);
     assert(this->_relative_overlap > 0 && this->_relative_overlap < 1);
@@ -17,7 +18,7 @@ void RbfPumInterpolator<ExecSpace, Dim, Coordinates>::create_clusters(void)
     const Point upper = _bd.maxCorner();
 
     size_t nb_elements[Dim];
-    for (size_t i = 0; i < Dim; ++i)
+    for (int i = 0; i < Dim; ++i)
     {
         nb_elements[i] = (size_t)((upper[i] - lower[i]) / spacing);
     }
@@ -25,7 +26,8 @@ void RbfPumInterpolator<ExecSpace, Dim, Coordinates>::create_clusters(void)
     FindClustersCenters<ExecSpace, Dim, Coordinates> predicate(
         spacing, this->_radius, lower, nb_elements);
     FindClustersCentersCallback<ExecSpace, Dim, Coordinates> callback;
-    Kokkos::View<Point*, ExecSpace> values(
+    using CallbackRetType = Kokkos::pair<Point, Point>; // <center, value>
+    Kokkos::View<CallbackRetType*, ExecSpace> values(
         Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing, "values"),
         0);
 
@@ -35,7 +37,7 @@ void RbfPumInterpolator<ExecSpace, Dim, Coordinates>::create_clusters(void)
     ArborX::BoundingVolumeHierarchy bvh{ execspace, this->_source };
     ArborX::query(bvh, execspace, predicate, callback, values, offsets);
 
-    size_t N = values.extent(0);
+    const size_t N = values.extent(0);
     size_t ext0 = 0;
     size_t ext1 = 0;
     Point no_data = Point{ this->no_data };
@@ -51,10 +53,15 @@ void RbfPumInterpolator<ExecSpace, Dim, Coordinates>::create_clusters(void)
             lmax = (l > lmax) ? (l) : (lmax);
         },
         Kokkos::Max<size_t>(ext1), ext0);
+    ext1++; // room for the center
     Kokkos::View<size_t, ExecSpace> id("id");
     ClustersView clusters(
         Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing, "clusters"),
         ext0, ext1);
+    Kokkos::View<size_t*, ExecSpace> nb_values_per_cluster(
+        Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
+                           "nb_values_per_cluster"),
+        ext0);
     Kokkos::parallel_for(
         "fill clusters view",
         Kokkos::RangePolicy(execspace, 0, offsets.size() - 1),
@@ -62,10 +69,12 @@ void RbfPumInterpolator<ExecSpace, Dim, Coordinates>::create_clusters(void)
             if (offsets(i + 1) - offsets(i) > 0)
             {
                 const size_t iid = Kokkos::atomic_fetch_inc(&(id()));
+                clusters(iid, 0) = values(offsets(i)).first;
                 for (size_t ii = offsets(i); ii < offsets(i + 1); ++ii)
                 {
-                    clusters(iid, ii - offsets(i)) = values(ii);
+                    clusters(iid, 1 + ii - offsets(i)) = values(ii).second;
                 }
+                nb_values_per_cluster(iid) = offsets(i + 1) - offsets(i);
                 for (size_t ii = offsets(i + 1) - offsets(i); ii < ext1; ++ii)
                 {
                     clusters(iid, ii) = no_data;
@@ -77,6 +86,11 @@ void RbfPumInterpolator<ExecSpace, Dim, Coordinates>::create_clusters(void)
         Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing, "_clusters"),
         clusters.extent(0), clusters.extent(1));
     Kokkos::deep_copy(this->_clusters, clusters);
+    _nb_values_per_cluster = Kokkos::View<size_t*, ExecSpace>(
+        Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
+                           "_nb_values_per_cluster"),
+        ext0);
+    Kokkos::deep_copy(_nb_values_per_cluster, nb_values_per_cluster);
 }
 
 #endif /* ! CLUSTERING_HPP */

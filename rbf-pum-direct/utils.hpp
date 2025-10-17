@@ -33,14 +33,6 @@ std::string sphere_to_str(const ArborX::Sphere<Dim, Coordinates>& sphere)
 }
 
 template <int Dim, class Coordinates>
-KOKKOS_INLINE_FUNCTION Coordinates
-NDdistance(const ArborX::Point<Dim, Coordinates>& lhs,
-           const ArborX::Point<Dim, Coordinates>& rhs)
-{
-    return std::sqrt(_NDdistance_without_sqrt<Dim, Coordinates>(lhs, rhs));
-}
-
-template <int Dim, class Coordinates>
 KOKKOS_INLINE_FUNCTION size_t
 _NDdistance_without_sqrt(const ArborX::Point<Dim, Coordinates>& lhs,
                          const ArborX::Point<Dim, Coordinates>& rhs)
@@ -51,6 +43,14 @@ _NDdistance_without_sqrt(const ArborX::Point<Dim, Coordinates>& lhs,
         s += (rhs[i] - lhs[i]) * (rhs[i] - lhs[i]);
     }
     return s;
+}
+
+template <int Dim, class Coordinates>
+KOKKOS_INLINE_FUNCTION Coordinates
+NDdistance(const ArborX::Point<Dim, Coordinates>& lhs,
+           const ArborX::Point<Dim, Coordinates>& rhs)
+{
+    return Kokkos::sqrt(_NDdistance_without_sqrt<Dim, Coordinates>(lhs, rhs));
 }
 
 template <typename ExecSpace, int Dim, class Coordinates>

@@ -2,33 +2,45 @@
 #define INTERPOLATOR_HPP
 
 #include <ArborX_LinearBVH.hpp>
+#include <KokkosBatched_LU_Decl.hpp>
+#include <KokkosBatched_LU_Serial_Impl.hpp>
+#include <KokkosBatched_SolveLU_Decl.hpp>
+#include <iomanip>
 #include <random>
 
 #include "callbacks.hpp"
 #include "clustering.hpp"
 #include "interpolator.hxx"
+#include "polynomial.hpp"
+#include "rbf_functions.hpp"
+#include "utils.hpp"
 
-template <typename ExecSpace, int Dim, class Coordinates>
-RbfPumInterpolator<ExecSpace, Dim, Coordinates>::RbfPumInterpolator(
-    PointsView source, PointsView target)
+FULL_TEMPLATE
+TEMPLATED_CLASSNAME::RbfPumInterpolator(PointsView source, PointsView target,
+                                        PolynomialType polynomial,
+                                        RbfFunctionBasisType rbf_function)
 {
-    _source = PointsView("_source", source.extent(0));
+    this->_source = PointsView("_source", source.extent(0));
     Kokkos::deep_copy(_source, source);
-    _target = PointsView("_target", target.extent(0));
+    this->_target = PointsView("_target", target.extent(0));
     Kokkos::deep_copy(_target, target);
-    _radius = 0;
+    this->_radius = 0;
+    this->_polynomial = polynomial;
+    this->_rbf_function = rbf_function;
 
-    for (size_t d = 0; d < Dim; ++d)
+    for (int d = 0; d < Dim; ++d)
     {
-        no_data[d] = NAN;
+        this->no_data[d] = NAN;
     }
 
     find_radius();
+    this->_rbf_function.set_r_inv(1.0 / this->_radius);
     create_clusters();
+    prepare_interpolation();
 }
 
-template <typename ExecSpace, int Dim, class Coordinates>
-void RbfPumInterpolator<ExecSpace, Dim, Coordinates>::find_radius(void)
+FULL_TEMPLATE
+void TEMPLATED_CLASSNAME::find_radius(void)
 {
     assert(this->_nodes_per_cluster > 0);
     const ExecSpace execspace{};
@@ -39,14 +51,14 @@ void RbfPumInterpolator<ExecSpace, Dim, Coordinates>::find_radius(void)
         Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing, "cloud"),
         N + M);
 
-    auto source_mirror =
+    const auto source_mirror =
         Kokkos::create_mirror_view_and_copy(execspace, _source);
-    auto target_mirror =
+    const auto target_mirror =
         Kokkos::create_mirror_view_and_copy(execspace, _target);
 
     Kokkos::parallel_for(
         "fill cloud", Kokkos::RangePolicy(execspace, 0, N + M),
-        KOKKOS_LAMBDA(const size_t i) {
+        KOKKOS_LAMBDA(const size_t& i) {
             cloud(i) = (i < N) ? source_mirror(i) : target_mirror(i - N);
         });
     Kokkos::fence();
@@ -91,8 +103,9 @@ void RbfPumInterpolator<ExecSpace, Dim, Coordinates>::find_radius(void)
     }
     Kokkos::deep_copy(random_points, random_points_mirror);
 
-    KNearest<Dim, Coordinates> predicate{ _nodes_per_cluster, random_points };
-    KNearestCallback<Dim, Coordinates> callback{ random_points };
+    KNearest<ExecSpace, Dim, Coordinates> predicate{ _nodes_per_cluster,
+                                                     random_points };
+    KNearestCallback<ExecSpace, Dim, Coordinates> callback{ random_points };
     Kokkos::View<Coordinates*, ExecSpace> values(
         Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing, "values"),
         0);
@@ -107,13 +120,72 @@ void RbfPumInterpolator<ExecSpace, Dim, Coordinates>::find_radius(void)
         "sum max radius",
         Kokkos::RangePolicy(execspace, (size_t)(values.extent(0) * 0.95),
                             values.extent(0)),
-        KOKKOS_LAMBDA(const size_t i, Coordinates& lsum) { lsum += values(i); },
+        KOKKOS_LAMBDA(const size_t& i, Coordinates& lsum) {
+            lsum += values(i);
+        },
         max_radius_sum);
     this->_radius = std::sqrt(max_radius_sum / this->_clustering_rd_samples);
 }
 
-template <typename ExecSpace, int Dim, class Coordinates>
-Coordinates RbfPumInterpolator<ExecSpace, Dim, Coordinates>::get_radius() const
+FULL_TEMPLATE
+void TEMPLATED_CLASSNAME::prepare_interpolation(void)
+{
+    assert(this->_clusters.extent(0) > 0 && this->_clusters.extent(1) > 0);
+    const ExecSpace execspace{};
+    const size_t N = _clusters.extent(1) - 1;
+    const size_t M = _clusters.extent(0);
+    const size_t Pn = Dim + 1;
+    Kokkos::View<Coordinates***, ExecSpace> all_lhs(
+        Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing, "all_lhs"),
+        M, N + Pn, N + Pn);
+    Kokkos::View<Coordinates**, ExecSpace> all_rhs(
+        Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing, "all_rhs"),
+        M, N + Pn);
+    auto f = this->_rbf_function;
+    auto data_function = KOKKOS_LAMBDA(const Point& p)
+    {
+        return 1.0;
+    };
+    auto clusters = Kokkos::create_mirror_view_and_copy(execspace, _clusters);
+    Kokkos::parallel_for(
+        "fill all_lhs rbf values (A)",
+        Kokkos::MDRangePolicy(ExecSpace{}, { 0, 0, 0 }, { N, N, M }),
+        KOKKOS_LAMBDA(const size_t& i, const size_t& j, const size_t& k) {
+            if (j >= i)
+            {
+                auto rbf_val = f(NDdistance<Dim, Coordinates>(
+                    clusters(k, i + 1), clusters(k, j + 1)));
+                all_lhs(k, i, j) = rbf_val;
+                all_rhs(k, i) = data_function(clusters(k, 1 + i));
+            }
+        });
+    auto p = this->_polynomial;
+    Kokkos::parallel_for(
+        "fill all_rhs poly values (P/Pt)",
+        Kokkos::MDRangePolicy(ExecSpace{}, { 0, 0 }, { N, M }),
+        KOKKOS_LAMBDA(const size_t& j, const size_t& k) {
+            auto poly_values = p(clusters(k, 1 + j));
+            for (size_t i = 0; i < Pn; ++i)
+            {
+                all_lhs(k, N + i, j) = poly_values[i];
+                all_lhs(k, j, N + i) = poly_values[i];
+            }
+        });
+    Kokkos::parallel_for(
+        "fill all_rhs padding zeroes (0)",
+        Kokkos::MDRangePolicy(execspace, { N, N, (size_t)0 },
+                              { N + Pn, N + Pn, M }),
+        KOKKOS_LAMBDA(const size_t& i, const size_t& j, const size_t& k) {
+            all_lhs(k, i, j) = 0.0;
+            all_rhs(k, i) = 0.0;
+        });
+    Kokkos::fence();
+
+    // TODO: solve for alpha & beta using KokkosKernels::batched*
+}
+
+FULL_TEMPLATE
+Coordinates TEMPLATED_CLASSNAME::get_radius() const
 {
     return this->_radius;
 }

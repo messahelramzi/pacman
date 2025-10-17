@@ -3,7 +3,10 @@
 #include <iostream>
 
 #include "interpolator.hpp"
+#include "polynomial.hpp"
+#include "rbf_functions.hpp"
 #include "utils.hpp"
+
 int main(void)
 {
     auto guard = Kokkos::ScopeGuard();
@@ -28,7 +31,7 @@ int main(void)
         Kokkos::parallel_for(
             "fill source and target",
             Kokkos::RangePolicy<ExecSpace>(execspace, 0, N + M),
-            KOKKOS_LAMBDA(const int i) {
+            KOKKOS_LAMBDA(const int& i) {
                 if (i < N)
                 {
                     source(i) = ArborX::Point<3, fp_type>(
@@ -43,11 +46,13 @@ int main(void)
         Kokkos::fence();
 
         auto t1 = std::chrono::high_resolution_clock::now().time_since_epoch();
+        WendlandC2<fp_type> w2;
+        LinearPolynomial<ExecSpace, 3, fp_type> poly;
         RbfPumInterpolator r =
-            RbfPumInterpolator<ExecSpace, 3, fp_type>(source, target);
+            RbfPumInterpolator<ExecSpace, 3, fp_type, decltype(poly),
+                               decltype(w2)>(source, target, poly, w2);
         auto t2 = std::chrono::high_resolution_clock::now().time_since_epoch();
 
-        print_2d_view(r._clusters);
         std::cout << "t2 - t1: " << (t2.count() - t1.count()) / 1000000.0
                   << "ms" << std::endl;
         std::cout << "found radius: " << r.get_radius() << std::endl;

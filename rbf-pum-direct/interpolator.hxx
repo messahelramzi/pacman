@@ -5,20 +5,36 @@
 #include <ArborX_Sphere.hpp>
 #include <Kokkos_Core.hpp>
 
-template <typename ExecSpace, int Dim = 3, class Coordinates = double>
+#include "polynomial.hpp"
+#include "rbf_functions.hpp"
+
+#define FULL_TEMPLATE                                                          \
+    template <typename ExecSpace, int Dim, class Coordinates,                  \
+              typename PolynomialType, typename RbfFunctionBasisType>
+
+#define TEMPLATED_CLASSNAME                                                    \
+    RbfPumInterpolator<ExecSpace, Dim, Coordinates, PolynomialType,            \
+                       RbfFunctionBasisType>
+
+FULL_TEMPLATE
 class RbfPumInterpolator
 {
     using Point = ArborX::Point<Dim, Coordinates>;
     using Box = ArborX::Box<Dim, Coordinates>;
     using PointsView = Kokkos::View<Point*, ExecSpace>;
     using ClustersView = Kokkos::View<Point**, ExecSpace>;
+    using Polynomial = Polynomial<ExecSpace, Dim, Coordinates>;
+    using RbfFunctionBasis = RbfFunctionBasis<Coordinates>;
 
 public:
-    RbfPumInterpolator(PointsView source, PointsView target);
-    void create_clusters(void);
+    RbfPumInterpolator(PointsView source, PointsView target,
+                       PolynomialType polynomial,
+                       RbfFunctionBasisType rbf_function);
     void find_radius(void);
-    Coordinates get_radius() const;
-    ClustersView _clusters;
+    void create_clusters(void);
+    void prepare_interpolation(void);
+    Coordinates interpolate_at(Point& target) const;
+    Coordinates get_radius(void) const;
 
 private:
     double _radius;
@@ -29,6 +45,10 @@ private:
     PointsView _source;
     PointsView _target;
     Point no_data{};
+    ClustersView _clusters;
+    Kokkos::View<size_t*, ExecSpace> _nb_values_per_cluster;
+    PolynomialType _polynomial;
+    RbfFunctionBasisType _rbf_function;
 };
 
 #endif /* ! INTERPOLATOR_HXX */

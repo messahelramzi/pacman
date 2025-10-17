@@ -7,12 +7,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(EXPORT_COMPILE_COMMANDS ON)
 
 find_package(Kokkos REQUIRED)
+find_package(KokkosKernels REQUIRED)
 find_package(ArborX REQUIRED)
 
 add_executable(main main.cpp)
 
 target_link_libraries(main
   Kokkos::kokkos
+  KokkosKernels::kokkoskernels
   ArborX::ArborX
 )
 
