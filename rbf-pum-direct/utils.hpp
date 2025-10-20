@@ -33,11 +33,11 @@ std::string sphere_to_str(const ArborX::Sphere<Dim, Coordinates>& sphere)
 }
 
 template <int Dim, class Coordinates>
-KOKKOS_INLINE_FUNCTION size_t
+KOKKOS_INLINE_FUNCTION Coordinates
 _NDdistance_without_sqrt(const ArborX::Point<Dim, Coordinates>& lhs,
                          const ArborX::Point<Dim, Coordinates>& rhs)
 {
-    size_t s = 0;
+    Coordinates s = 0;
     for (int i = 0; i < Dim; i++)
     {
         s += (rhs[i] - lhs[i]) * (rhs[i] - lhs[i]);
@@ -95,6 +95,18 @@ void print_view(ViewType& v, std::string sep = " ")
     for (size_t i = 0; i < m.extent(0); ++i)
     {
         std::cout << m(i) << sep;
+    }
+    std::cout << std::endl;
+    std::cout << v.label() << ".extent(0): " << m.extent(0) << std::endl;
+}
+
+template <typename ViewType>
+void print_points_view(ViewType& v, std::string sep = " ")
+{
+    auto m = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{}, v);
+    for (size_t i = 0; i < m.extent(0); ++i)
+    {
+        std::cout << point_to_str(m(i)) << sep;
     }
     std::cout << std::endl;
     std::cout << v.label() << ".extent(0): " << m.extent(0) << std::endl;

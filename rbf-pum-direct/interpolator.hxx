@@ -27,8 +27,9 @@ class RbfPumInterpolator
     using RbfFunctionBasis = RbfFunctionBasis<Coordinates>;
 
 public:
-    RbfPumInterpolator(PointsView source, PointsView target,
-                       PolynomialType polynomial,
+    RbfPumInterpolator(PointsView source,
+                       Kokkos::View<Coordinates*, ExecSpace> values,
+                       PointsView target, PolynomialType polynomial,
                        RbfFunctionBasisType rbf_function);
     void find_radius(void);
     void create_clusters(void);
@@ -40,9 +41,10 @@ private:
     double _radius;
     const int _nodes_per_cluster = 50;
     const double _relative_overlap = 0.15;
-    const size_t _clustering_rd_samples = 100;
+    const size_t _clustering_rd_samples = 10000;
     Box _bd;
     PointsView _source;
+    Kokkos::View<Coordinates*, ExecSpace> _values;
     PointsView _target;
     Point no_data{};
     ClustersView _clusters;

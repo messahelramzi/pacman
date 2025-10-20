@@ -2,11 +2,11 @@
 #define INTERPOLATOR_HPP
 
 #include <ArborX_LinearBVH.hpp>
-#include <KokkosBatched_LU_Decl.hpp>
-#include <KokkosBatched_LU_Serial_Impl.hpp>
+#include <KokkosBatched_Getrf.hpp>
+#include <KokkosBatched_Getrs.hpp>
 #include <KokkosBatched_SolveLU_Decl.hpp>
+#include <Kokkos_Random.hpp>
 #include <iomanip>
-#include <random>
 
 #include "callbacks.hpp"
 #include "clustering.hpp"
@@ -15,15 +15,45 @@
 #include "rbf_functions.hpp"
 #include "utils.hpp"
 
+/* Constructor for the RBF PUM Interpolator:
+** Once it returns from the constructor, the interpolator is ready to use, with
+*the class member `interpolate_at`.
+** The constructor automatically calls this member with the given `target`
+*points.
+** @param source: a 1-D `Kokkos::View` which contains source points of the
+*field.
+** @param values: a 1-D `Kokkos::View` which contains the values associated to
+*the source points of the field. Its size is the same as `source`'s.
+** @param target: a 1-D `Kokkos::View` which contains the points we want to
+*interpolate at.
+** @param polynomial: A user-defined functor that is used to perform a
+*polynomial augmentation on the rbf matrices.
+** @param rbf_function: A user-defined functor which is the rbf function used
+*for clusters points evaluation.
+*/
 FULL_TEMPLATE
-TEMPLATED_CLASSNAME::RbfPumInterpolator(PointsView source, PointsView target,
-                                        PolynomialType polynomial,
-                                        RbfFunctionBasisType rbf_function)
+TEMPLATED_CLASSNAME::RbfPumInterpolator(
+    PointsView source, Kokkos::View<Coordinates*, ExecSpace> values,
+    PointsView target, PolynomialType polynomial,
+    RbfFunctionBasisType rbf_function)
 {
-    this->_source = PointsView("_source", source.extent(0));
+    const ExecSpace execspace{};
+    this->_source =
+        PointsView(Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
+                                      "this->_source"),
+                   source.extent(0));
     Kokkos::deep_copy(_source, source);
-    this->_target = PointsView("_target", target.extent(0));
+    this->_values = Kokkos::View<Coordinates*, ExecSpace>(
+        Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
+                           "this->_values"),
+        values.extent(0));
+    Kokkos::deep_copy(_values, values);
+    this->_target =
+        PointsView(Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
+                                      "this->_target"),
+                   target.extent(0));
     Kokkos::deep_copy(_target, target);
+
     this->_radius = 0;
     this->_polynomial = polynomial;
     this->_rbf_function = rbf_function;
@@ -45,63 +75,52 @@ void TEMPLATED_CLASSNAME::find_radius(void)
     assert(this->_nodes_per_cluster > 0);
     const ExecSpace execspace{};
 
-    const size_t N = _source.extent(0);
-    const size_t M = _target.extent(0);
+    const size_t N = this->_source.extent(0);
+    const size_t M = this->_target.extent(0);
+    // cloud=[source, target]
     PointsView cloud(
         Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing, "cloud"),
         N + M);
 
-    const auto source_mirror =
-        Kokkos::create_mirror_view_and_copy(execspace, _source);
-    const auto target_mirror =
-        Kokkos::create_mirror_view_and_copy(execspace, _target);
+    // source: [0, N[,
+    // target: [N, M[,
+    // 0x0LU = 0 but with unsigned long type (inference issue)
+    auto source_subview = Kokkos::subview(cloud, Kokkos::make_pair(0x0LU, N));
+    auto target_subview = Kokkos::subview(cloud, Kokkos::make_pair(N, N + M));
 
-    Kokkos::parallel_for(
-        "fill cloud", Kokkos::RangePolicy(execspace, 0, N + M),
-        KOKKOS_LAMBDA(const size_t& i) {
-            cloud(i) = (i < N) ? source_mirror(i) : target_mirror(i - N);
-        });
-    Kokkos::fence();
+    Kokkos::deep_copy(source_subview, this->_source);
+    Kokkos::deep_copy(target_subview, this->_target);
 
     ArborX::BoundingVolumeHierarchy bvh{
         execspace, ArborX::Experimental::attach_indices(cloud)
     };
+
     _bd = bvh.bounds();
     const Point lower = _bd.minCorner();
     const Point upper = _bd.maxCorner();
 
-    Coordinates coordinates[2 * Dim];
-    for (int i = 0; i < Dim; i++)
-    {
-        coordinates[i] = lower[i];
-        coordinates[Dim + i] = upper[i];
-    }
-
-    std::default_random_engine re_array[Dim];
-    std::uniform_real_distribution<Coordinates> unif_array[Dim];
-    for (int i = 0; i < Dim; i++)
-    {
-        re_array[i] = {};
-        unif_array[i] = std::uniform_real_distribution<Coordinates>(
-            coordinates[i], coordinates[Dim + i]);
-    }
+    uint32_t _seed =
+        std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    Kokkos::Random_XorShift1024_Pool<> random_pool(_seed);
 
     PointsView random_points(Kokkos::view_alloc(execspace,
                                                 Kokkos::WithoutInitializing,
                                                 "random_points"),
                              this->_clustering_rd_samples);
-    auto random_points_mirror =
-        Kokkos::create_mirror_view(Kokkos::HostSpace{}, random_points);
-    for (size_t i = 0; i < this->_clustering_rd_samples; ++i)
-    {
-        Point random_point{};
-        for (int d = 0; d < Dim; d++)
-        {
-            random_point[d] = unif_array[d](re_array[d]);
-        }
-        random_points_mirror(i) = random_point;
-    }
-    Kokkos::deep_copy(random_points, random_points_mirror);
+    Kokkos::parallel_for(
+        "fill random points",
+        Kokkos::RangePolicy(execspace, 0, this->_clustering_rd_samples),
+        KOKKOS_LAMBDA(const size_t& i) {
+            Point rd_point{};
+            auto gen = random_pool.get_state();
+            for (int d = 0; d < Dim; ++d)
+            {
+                rd_point[d] = gen.drand(lower[d], upper[d]);
+            }
+            random_pool.free_state(gen);
+            random_points(i) = rd_point;
+        });
+    Kokkos::fence();
 
     KNearest<ExecSpace, Dim, Coordinates> predicate{ _nodes_per_cluster,
                                                      random_points };
@@ -114,14 +133,17 @@ void TEMPLATED_CLASSNAME::find_radius(void)
         0);
     ArborX::query(bvh, execspace, predicate, callback, values, offsets);
 
-    Kokkos::sort(values);
     Coordinates max_radius_sum = 0.;
     Kokkos::parallel_reduce(
         "sum max radius",
-        Kokkos::RangePolicy(execspace, (size_t)(values.extent(0) * 0.95),
-                            values.extent(0)),
+        Kokkos::RangePolicy(execspace, 0, this->_clustering_rd_samples),
         KOKKOS_LAMBDA(const size_t& i, Coordinates& lsum) {
-            lsum += values(i);
+            Coordinates n_max = 0;
+            for (size_t ii = offsets(i); ii < offsets(i + 1); ++ii)
+            {
+                n_max = (n_max > values(ii)) ? n_max : values(ii);
+            }
+            lsum += n_max;
         },
         max_radius_sum);
     this->_radius = std::sqrt(max_radius_sum / this->_clustering_rd_samples);
@@ -142,22 +164,17 @@ void TEMPLATED_CLASSNAME::prepare_interpolation(void)
         Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing, "all_rhs"),
         M, N + Pn);
     auto f = this->_rbf_function;
-    auto data_function = KOKKOS_LAMBDA(const Point& p)
-    {
-        return 1.0;
-    };
     auto clusters = Kokkos::create_mirror_view_and_copy(execspace, _clusters);
+    auto values = Kokkos::create_mirror_view_and_copy(execspace, _values);
     Kokkos::parallel_for(
         "fill all_lhs rbf values (A)",
         Kokkos::MDRangePolicy(ExecSpace{}, { 0, 0, 0 }, { N, N, M }),
         KOKKOS_LAMBDA(const size_t& i, const size_t& j, const size_t& k) {
-            if (j >= i)
-            {
-                auto rbf_val = f(NDdistance<Dim, Coordinates>(
-                    clusters(k, i + 1), clusters(k, j + 1)));
-                all_lhs(k, i, j) = rbf_val;
-                all_rhs(k, i) = data_function(clusters(k, 1 + i));
-            }
+            auto rbf_val = f(NDdistance<Dim, Coordinates>(clusters(k, i + 1),
+                                                          clusters(k, j + 1)));
+            all_lhs(k, i, j) = rbf_val;
+            all_lhs(k, j, i) = rbf_val;
+            all_rhs(k, i) = values(i);
         });
     auto p = this->_polynomial;
     Kokkos::parallel_for(
@@ -172,7 +189,7 @@ void TEMPLATED_CLASSNAME::prepare_interpolation(void)
             }
         });
     Kokkos::parallel_for(
-        "fill all_rhs padding zeroes (0)",
+        "fill all_rhs padding zeros (0)",
         Kokkos::MDRangePolicy(execspace, { N, N, (size_t)0 },
                               { N + Pn, N + Pn, M }),
         KOKKOS_LAMBDA(const size_t& i, const size_t& j, const size_t& k) {
@@ -181,7 +198,49 @@ void TEMPLATED_CLASSNAME::prepare_interpolation(void)
         });
     Kokkos::fence();
 
-    // TODO: solve for alpha & beta using KokkosKernels::batched*
+    // TODO: solve for alpha & beta using KokkosBatched
+    const size_t batch_size = M;
+    const size_t mat_size = N + Pn;
+
+    using team_policy = Kokkos::TeamPolicy<ExecSpace>;
+    using member_type = team_policy::member_type;
+    team_policy policy(batch_size, Kokkos::AUTO);
+
+    // const size_t bytes_per_team =
+    //     mat_size * (mat_size + 1) * sizeof(Coordinates);
+    // policy.set_scratch_size(0, Kokkos::PerTeam(bytes_per_team));
+
+    Kokkos::View<Coordinates**, ExecSpace> coeffs(
+        Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing, "coeffs"),
+        batch_size, mat_size);
+
+    Kokkos::parallel_for(
+        "Solve systems", policy, KOKKOS_LAMBDA(const member_type& member) {
+            const size_t i = member.league_rank();
+
+            auto lhs_i =
+                Kokkos::subview(all_lhs, i, Kokkos::ALL(), Kokkos::ALL());
+            auto rhs_i = Kokkos::subview(all_rhs, i, Kokkos::ALL());
+
+            int r1 = KokkosBatched::TeamTrsm<
+                member_type, KokkosBatched::Side::Left,
+                KokkosBatched::Uplo::Lower, KokkosBatched::Trans::NoTranspose,
+                KokkosBatched::Diag::NonUnit,
+                KokkosBatched::Algo::Trsm::Blocked>::invoke(member, 1.0, lhs_i,
+                                                            rhs_i);
+            member.team_barrier();
+            if (r1 != 0)
+            {
+                Kokkos::printf("Error @ Solve for i=%lu\n", i);
+            }
+
+            for (size_t ii = 0; ii < mat_size; ++ii)
+            {
+                coeffs(i, ii) = rhs_i(ii);
+            }
+        });
+
+    Kokkos::fence();
 }
 
 FULL_TEMPLATE
