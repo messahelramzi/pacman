@@ -168,7 +168,8 @@ void TEMPLATED_CLASSNAME::prepare_interpolation(void)
     auto values = Kokkos::create_mirror_view_and_copy(execspace, _values);
     Kokkos::parallel_for(
         "fill all_lhs rbf values (A)",
-        Kokkos::MDRangePolicy(ExecSpace{}, { 0, 0, 0 }, { N, N, M }),
+        Kokkos::MDRangePolicy(ExecSpace{}, { 0x0LU, 0x0LU, 0x0LU },
+                              { N, N, M }),
         KOKKOS_LAMBDA(const size_t& i, const size_t& j, const size_t& k) {
             auto rbf_val = f(NDdistance<Dim, Coordinates>(clusters(k, i + 1),
                                                           clusters(k, j + 1)));
@@ -179,7 +180,7 @@ void TEMPLATED_CLASSNAME::prepare_interpolation(void)
     auto p = this->_polynomial;
     Kokkos::parallel_for(
         "fill all_rhs poly values (P/Pt)",
-        Kokkos::MDRangePolicy(ExecSpace{}, { 0, 0 }, { N, M }),
+        Kokkos::MDRangePolicy(ExecSpace{}, { 0x0LU, 0x0LU }, { N, M }),
         KOKKOS_LAMBDA(const size_t& j, const size_t& k) {
             auto poly_values = p(clusters(k, 1 + j));
             for (size_t i = 0; i < Pn; ++i)
@@ -190,7 +191,7 @@ void TEMPLATED_CLASSNAME::prepare_interpolation(void)
         });
     Kokkos::parallel_for(
         "fill all_rhs padding zeros (0)",
-        Kokkos::MDRangePolicy(execspace, { N, N, (size_t)0 },
+        Kokkos::MDRangePolicy(execspace, { N, N, 0x0LU },
                               { N + Pn, N + Pn, M }),
         KOKKOS_LAMBDA(const size_t& i, const size_t& j, const size_t& k) {
             all_lhs(k, i, j) = 0.0;

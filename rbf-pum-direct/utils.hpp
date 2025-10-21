@@ -134,11 +134,26 @@ void print_pair_view(ViewType& v, std::string sep = " ")
     auto m = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{}, v);
     for (size_t i = 0; i < m.extent(0); ++i)
     {
-        std::cout << "<" << point_to_str(m(i).first) << ", " << m(i).second
-                  << ">" << sep;
+        std::cout << "<" << point_to_str(m(i).first) << ", "
+                  << point_to_str(m(i).second) << ">" << sep;
     }
     std::cout << std::endl;
     std::cout << v.label() << ".extent(0): " << m.extent(0) << std::endl;
+}
+
+template <int Dim, class Coordinates>
+constexpr inline bool
+points_are_equal(const ArborX::Point<Dim, Coordinates>& lhs,
+                 const ArborX::Point<Dim, Coordinates>& rhs)
+{
+    for (int i = 0; i < Dim; ++i)
+    {
+        if (lhs[i] != rhs[i])
+        {
+            return false;
+        }
+    }
+    return true;
 }
 
 #endif /* ! UTILS_HPP */

@@ -47,9 +47,8 @@ int main(void)
         using point = ArborX::Point<dimensions, scalar_type>;
         exec_space execspace{};
         // 0.01 -> 0.001 (precice aste turbine)
-        const size_t N = 3458;
-        // const size_t M = 338992;
-        const size_t M = 33899;
+        const size_t N = 34580;
+        const size_t M = 338992;
 
         Kokkos::View<point*, exec_space> source(
             Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
