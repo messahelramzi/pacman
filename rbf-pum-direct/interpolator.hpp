@@ -58,6 +58,8 @@ TEMPLATED_CLASSNAME::RbfPumInterpolator(
     Kokkos::deep_copy(_target, target);
 
     this->_radius = 0;
+    this->_source_bvh =
+        ArborX::BoundingVolumeHierarchy{ execspace, this->_source };
     this->_polynomial = polynomial;
     this->_rbf_function = rbf_function;
 
@@ -80,67 +82,37 @@ void TEMPLATED_CLASSNAME::find_radius(void)
     assert(this->_nodes_per_cluster > 0);
     const ExecSpace execspace{};
 
-    Kokkos::Profiling::pushRegion(
-        "RbfPumInterpolator::find_radius build cloud");
-    const size_t N = this->_source.extent(0);
-    const size_t M = this->_target.extent(0);
-    // cloud=[source, target]
-    PointsView cloud(
+    PointsView samples(
         Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
-                           "RbfPumInterpolator::find_radius::cloud"),
-        N + M);
+                           "RbfPumInterpolator::find_radius::samples"),
+        2 * Dim);
+    auto samples_h = Kokkos::create_mirror_view(Kokkos::WithoutInitializing,
+                                                Kokkos::HostSpace{}, samples);
 
-    // source: [0, N[,
-    // target: [N, M[,
-    // 0x0LU = 0 but with unsigned long type (inference issue)
-    auto source_subview = Kokkos::subview(cloud, Kokkos::make_pair(0x0LU, N));
-    auto target_subview = Kokkos::subview(cloud, Kokkos::make_pair(N, N + M));
+    Point lower = this->_source_bvh.bounds().minCorner();
+    Point upper = this->_source_bvh.bounds().maxCorner();
+    Point center{};
+    for (int d = 0; d < Dim; ++d)
+    {
+        center[d] = (lower[d] + upper[d]) / 2.;
+    }
 
-    Kokkos::deep_copy(source_subview, this->_source);
-    Kokkos::deep_copy(target_subview, this->_target);
+    for (int d = 0; d < Dim; ++d)
+    {
+        Point p = Point{ center };
+        Coordinates l = p[d];
+        p[d] -= l * 0.25;
+        samples_h(d) = Point{ p };
+        p[d] += l * 0.5;
+        samples_h(Dim + d) = Point{ p };
+    }
 
-    Kokkos::Profiling::popRegion(); // ! RbfPumInterpolator::find_radius build
-                                    // cloud
+    Kokkos::deep_copy(samples, samples_h);
 
-    ArborX::BoundingVolumeHierarchy bvh{
-        execspace, ArborX::Experimental::attach_indices(cloud)
-    };
+    KNearest<ExecSpace, Dim, Coordinates> predicate{ this->_nodes_per_cluster,
+                                                     samples };
+    KNearestCallback<ExecSpace, Dim, Coordinates> callback{ samples };
 
-    _bd = bvh.bounds();
-    const Point lower = _bd.minCorner();
-    const Point upper = _bd.maxCorner();
-
-    Kokkos::Profiling::pushRegion(
-        "RbfPumInterpolator::find_radius generate random points");
-    uint32_t _seed =
-        std::chrono::high_resolution_clock::now().time_since_epoch().count();
-    Kokkos::Random_XorShift1024_Pool<> random_pool(_seed);
-
-    PointsView random_points(
-        Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
-                           "RbfPumInterpolator::find_radius::random_points"),
-        this->_clustering_rd_samples);
-    Kokkos::parallel_for(
-        "RbfPumInterpolator::find_radius::p_for fill random points",
-        Kokkos::RangePolicy(execspace, 0, this->_clustering_rd_samples),
-        KOKKOS_LAMBDA(const size_t& i) {
-            Point rd_point{};
-            auto gen = random_pool.get_state();
-            for (int d = 0; d < Dim; ++d)
-            {
-                rd_point[d] = gen.drand(lower[d], upper[d]);
-            }
-            random_pool.free_state(gen);
-            random_points(i) = rd_point;
-        });
-    Kokkos::fence();
-
-    Kokkos::Profiling::popRegion(); // ! RbfPumInterpolator::find_radius
-                                    // generate random points
-
-    KNearest<ExecSpace, Dim, Coordinates> predicate{ _nodes_per_cluster,
-                                                     random_points };
-    KNearestCallback<ExecSpace, Dim, Coordinates> callback{ random_points };
     Kokkos::View<Coordinates*, ExecSpace> values(
         Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
                            "RbfPumInterpolator::find_radius::values"),
@@ -149,15 +121,16 @@ void TEMPLATED_CLASSNAME::find_radius(void)
         Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
                            "RbfPumInterpolator::find_radius::offsets"),
         0);
-    ArborX::query(bvh, execspace, predicate, callback, values, offsets);
+    ArborX::query(this->_source_bvh, execspace, predicate, callback, values,
+                  offsets);
 
     Kokkos::View<Coordinates*, ExecSpace> max_radii(
         Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
                            "RbfPumInterpolator::find_radius::max_radii"),
-        this->_clustering_rd_samples);
+        2 * Dim);
     Kokkos::parallel_for(
         "RbfPumInterpolator::find_radius::p_for sum max radius",
-        Kokkos::RangePolicy(execspace, 0, this->_clustering_rd_samples),
+        Kokkos::RangePolicy(execspace, 0, 2 * Dim),
         KOKKOS_LAMBDA(const size_t& i) {
             Coordinates n_max = 0;
             for (size_t ii = offsets(i); ii < offsets(i + 1); ++ii)
@@ -169,7 +142,8 @@ void TEMPLATED_CLASSNAME::find_radius(void)
     Kokkos::sort(max_radii);
     auto max_radii_h =
         Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{}, max_radii);
-    this->_radius = std::sqrt(max_radii_h(this->_clustering_rd_samples / 2));
+    this->_radius = std::sqrt(max_radii_h(2 * Dim / 2));
+
     Kokkos::Profiling::popRegion(); // ! RbfPumInterpolator::find_radius
 }
 

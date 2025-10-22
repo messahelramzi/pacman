@@ -2,6 +2,7 @@
 #define INTERPOLATOR_HXX
 
 #include <ArborX_Box.hpp>
+#include <ArborX_LinearBVH.hpp>
 #include <ArborX_Sphere.hpp>
 #include <Kokkos_Core.hpp>
 
@@ -41,11 +42,11 @@ private:
     double _radius;
     const int _nodes_per_cluster = 50;
     const double _relative_overlap = 0.15;
-    const size_t _clustering_rd_samples = 10000;
-    Box _bd;
     PointsView _source;
     Kokkos::View<Coordinates*, ExecSpace> _values;
     PointsView _target;
+    ArborX::BoundingVolumeHierarchy<typename PointsView::memory_space, Point>
+        _source_bvh;
     Point no_data{};
     ClustersView _clusters;
     Kokkos::View<size_t*, ExecSpace> _nb_values_per_cluster;

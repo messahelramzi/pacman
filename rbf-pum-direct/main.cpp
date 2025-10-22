@@ -80,9 +80,9 @@ int main(int argc, char* argv[])
     using RbfFunctionBasisType = WendlandC2<scalar_type>;
     using PolynomialType = LinearPolynomial<execution_space, dim, scalar_type>;
 
-    Kokkos::Profiling::ScopedRegion region("main::main");
     auto guard = Kokkos::ScopeGuard();
     {
+        Kokkos::Profiling::ScopedRegion region("main::main");
         size_t N, M;
         auto source_grid =
             get_points_from_vtu_grid<dim, scalar_type>(argv[1], &N);
@@ -98,18 +98,21 @@ int main(int argc, char* argv[])
             Kokkos::view_alloc(execution_space{}, Kokkos::WithoutInitializing,
                                "main::source"),
             N);
-        auto source_h = Kokkos::create_mirror_view(Kokkos::HostSpace{}, source);
+        auto source_h = Kokkos::create_mirror_view(Kokkos::WithoutInitializing,
+                                                   Kokkos::HostSpace{}, source);
         Kokkos::View<scalar_type*, execution_space> values(
             Kokkos::view_alloc(execution_space{}, Kokkos::WithoutInitializing,
                                "main::values"),
             N);
-        auto values_h = Kokkos::create_mirror_view(Kokkos::HostSpace{}, values);
+        auto values_h = Kokkos::create_mirror_view(Kokkos::WithoutInitializing,
+                                                   Kokkos::HostSpace{}, values);
 
         Kokkos::View<ArborX::Point<dim, scalar_type>*, execution_space> target(
             Kokkos::view_alloc(execution_space{}, Kokkos::WithoutInitializing,
                                "main::target"),
             M);
-        auto target_h = Kokkos::create_mirror_view(Kokkos::HostSpace{}, target);
+        auto target_h = Kokkos::create_mirror_view(Kokkos::WithoutInitializing,
+                                                   Kokkos::HostSpace{}, target);
 
         for (size_t i = 0; i < N; ++i)
         {

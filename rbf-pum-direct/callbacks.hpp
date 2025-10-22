@@ -39,7 +39,7 @@ struct KNearestCallback
                                     OutputFunctor const& out) const
     {
         out(_NDdistance_without_sqrt<Dim, Coordinates>(
-            centers(ArborX::getData(predicate)), value.value));
+            centers(ArborX::getData(predicate)), value));
     }
 };
 

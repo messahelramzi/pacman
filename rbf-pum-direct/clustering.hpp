@@ -29,8 +29,8 @@ FULL_TEMPLATE void TEMPLATED_CLASSNAME::create_clusters(void)
 
     const Coordinates spacing =
         std::sqrt(4.0 / Dim) * this->_radius * (1.0 - this->_relative_overlap);
-    const Point lower = _bd.minCorner();
-    const Point upper = _bd.maxCorner();
+    const Point lower = _source_bvh.bounds().minCorner();
+    const Point upper = _source_bvh.bounds().maxCorner();
 
     size_t nb_elements[Dim];
     for (int i = 0; i < Dim; ++i)
@@ -47,9 +47,8 @@ FULL_TEMPLATE void TEMPLATED_CLASSNAME::create_clusters(void)
     CountValidClustersCallback<ExecSpace, Dim, Coordinates> callback{
         nb_valid_points
     };
-    ArborX::BoundingVolumeHierarchy bvh{ execspace, this->_source };
 
-    bvh.query(execspace, predicate, callback);
+    this->_source_bvh.query(execspace, predicate, callback);
 
     auto m = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{},
                                                  nb_valid_points);
@@ -65,7 +64,7 @@ FULL_TEMPLATE void TEMPLATED_CLASSNAME::create_clusters(void)
         spacing, this->_radius, lower, nb_elements);
     FindClustersCentersCallback<ExecSpace, Dim, Coordinates> callback2{ pairs,
                                                                         id };
-    bvh.query(execspace, predicate2, callback2);
+    this->_source_bvh.query(execspace, predicate2, callback2);
     Kokkos::Profiling::popRegion(); // ! RbfPumInterpolator::create_clusters
                                     // count centers
 
@@ -80,7 +79,8 @@ FULL_TEMPLATE void TEMPLATED_CLASSNAME::create_clusters(void)
         pairs.extent(0));
     auto pairs_h =
         Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{}, pairs);
-    auto offsets_h = Kokkos::create_mirror_view(Kokkos::HostSpace{}, offsets);
+    auto offsets_h = Kokkos::create_mirror_view(Kokkos::WithoutInitializing,
+                                                Kokkos::HostSpace{}, offsets);
     int cumsum = 0;
     int elts = 0;
     int max_elts = 0;
