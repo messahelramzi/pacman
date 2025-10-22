@@ -31,6 +31,7 @@ target_compile_features(main PRIVATE cxx_std_17)
 target_compile_definitions(main PRIVATE KOKKOS_ENABLE_CUDA)
 
 target_compile_options(main PRIVATE
-    -O0
-    -g3
+    -O3
+    -g0
+    -m64
 )

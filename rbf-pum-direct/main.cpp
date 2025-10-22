@@ -3,6 +3,10 @@
 #include <Kokkos_Random.hpp>
 #include <chrono>
 #include <iostream>
+#include <vtkNew.h>
+#include <vtkSmartPointer.h>
+#include <vtkUnstructuredGrid.h>
+#include <vtkXMLUnstructuredGridReader.h>
 
 #include "interpolator.hpp"
 #include "polynomial.hpp"
@@ -10,8 +14,7 @@
 #include "utils.hpp"
 
 template <class scalar_type>
-KOKKOS_INLINE_FUNCTION scalar_type
-franke_function(ArborX::Point<3, scalar_type> point)
+scalar_type franke_function(ArborX::Point<3, scalar_type> point)
 {
     scalar_type x = point[0];
     scalar_type y = point[1];
@@ -34,84 +37,113 @@ franke_function(ArborX::Point<3, scalar_type> point)
                      + (9.0 * z - 5.0) * (9.0 * z - 5.0)));
 }
 
+template <int Dim, class Coordinates>
+ArborX::Point<Dim, Coordinates>* get_points_from_vtu_grid(char* filename,
+                                                          size_t* out_N)
+{
+    vtkNew<vtkXMLUnstructuredGridReader> reader;
+    reader->SetFileName(filename);
+    reader->Update();
+    vtkUnstructuredGrid* grid = reader->GetOutput();
+    vtkPoints* points = grid->GetPoints();
+    vtkIdType N = points->GetNumberOfPoints();
+    ArborX::Point<Dim, Coordinates>* ret =
+        (ArborX::Point<Dim, Coordinates>*)malloc(
+            N * sizeof(ArborX::Point<Dim, Coordinates>));
+    for (vtkIdType i = 0; i < N; ++i)
+    {
+        Coordinates coords[3];
+        points->GetPoint(i, coords);
+        auto p = ArborX::Point<Dim, Coordinates>{};
+        for (int j = 0; j < Dim; ++j)
+        {
+            p[j] = coords[j];
+        }
+        ret[i] = p;
+    }
+    *out_N = N;
+    return ret;
+}
+
 int main(int argc, char* argv[])
 {
+    if (argc < 3)
+    {
+        std::cerr << "Usage: " << argv[0]
+                  << " <source mesh.vtu> <target mesh.vtu>" << std::endl;
+        return EXIT_FAILURE;
+    }
+
+    constexpr const int dim = 3;
+    using scalar_type = double;
+    using execution_space = Kokkos::DefaultExecutionSpace;
+    using RbfFunctionBasisType = WendlandC2<scalar_type>;
+    using PolynomialType = LinearPolynomial<execution_space, dim, scalar_type>;
+
     Kokkos::Profiling::ScopedRegion region("main::main");
     auto guard = Kokkos::ScopeGuard();
     {
-        using exec_space = Kokkos::DefaultExecutionSpace;
-        using host_space = Kokkos::HostSpace;
-        using scalar_type = double;
-        const int dimensions = 3;
-        using polynomial =
-            LinearPolynomial<exec_space, dimensions, scalar_type>;
-        using rbf_function = WendlandC2<scalar_type>;
-        using point = ArborX::Point<dimensions, scalar_type>;
+        size_t N, M;
+        auto source_grid =
+            get_points_from_vtu_grid<dim, scalar_type>(argv[1], &N);
+        auto values_host = (scalar_type*)malloc(N * sizeof(scalar_type));
+        auto target_grid =
+            get_points_from_vtu_grid<dim, scalar_type>(argv[2], &M);
+        for (size_t i = 0; i < N; ++i)
+        {
+            values_host[i] = franke_function<scalar_type>(source_grid[i]);
+        }
 
-        exec_space execspace{};
-        const size_t N = 3458888;
-        const size_t M = 338992;
-
-        Kokkos::View<point*, exec_space> source(
-            Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
+        Kokkos::View<ArborX::Point<dim, scalar_type>*, execution_space> source(
+            Kokkos::view_alloc(execution_space{}, Kokkos::WithoutInitializing,
                                "main::source"),
             N);
-        Kokkos::View<scalar_type*, exec_space> values(
-            Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
+        auto source_h = Kokkos::create_mirror_view(Kokkos::HostSpace{}, source);
+        Kokkos::View<scalar_type*, execution_space> values(
+            Kokkos::view_alloc(execution_space{}, Kokkos::WithoutInitializing,
                                "main::values"),
             N);
-        Kokkos::View<point*, exec_space> target(
-            Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
+        auto values_h = Kokkos::create_mirror_view(Kokkos::HostSpace{}, values);
+
+        Kokkos::View<ArborX::Point<dim, scalar_type>*, execution_space> target(
+            Kokkos::view_alloc(execution_space{}, Kokkos::WithoutInitializing,
                                "main::target"),
             M);
+        auto target_h = Kokkos::create_mirror_view(Kokkos::HostSpace{}, target);
 
-        Kokkos::Random_XorShift1024_Pool<> random_pool(
-            std::chrono::high_resolution_clock::now()
-                .time_since_epoch()
-                .count());
+        for (size_t i = 0; i < N; ++i)
+        {
+            source_h(i) = source_grid[i];
+            values_h(i) = values_host[i];
+        }
+        for (size_t i = 0; i < M; ++i)
+        {
+            target_h(i) = target_grid[i];
+        }
 
-        scalar_type lower = 0.;
-        scalar_type upper = 1.;
-        Kokkos::parallel_for(
-            "main::p_for fill example views - source & values",
-            Kokkos::RangePolicy(execspace, 0, N),
-            KOKKOS_LAMBDA(const size_t& i) {
-                point p{};
-                auto gen = random_pool.get_state();
-                for (int d = 0; d < dimensions; ++d)
-                {
-                    p[d] = gen.drand(lower, upper);
-                }
-                random_pool.free_state(gen);
-                source(i) = p;
-                values(i) = franke_function(p);
-            });
-        Kokkos::parallel_for(
-            "main::p_for fill example views - target",
-            Kokkos::RangePolicy(execspace, 0, M),
-            KOKKOS_LAMBDA(const size_t& i) {
-                point p{};
-                auto gen = random_pool.get_state();
-                for (int d = 0; d < dimensions; ++d)
-                {
-                    p[d] = gen.drand(lower, upper);
-                }
-                random_pool.free_state(gen);
-                target(i) = p;
-            });
-        Kokkos::fence();
+        Kokkos::deep_copy(source, source_h);
+        Kokkos::deep_copy(values, values_h);
+        Kokkos::deep_copy(target, target_h);
 
-        auto f = rbf_function{};
-        auto p = polynomial{};
+        RbfFunctionBasisType rbf_function{};
+        PolynomialType polynomial{};
 
         auto t1 = std::chrono::high_resolution_clock::now().time_since_epoch();
-        auto r =
-            RbfPumInterpolator<exec_space, dimensions, scalar_type, polynomial,
-                               rbf_function>(source, values, target, p, f);
+        auto interpolator =
+            RbfPumInterpolator<execution_space, dim, scalar_type,
+                               PolynomialType, RbfFunctionBasisType>(
+                source, values, target, polynomial, rbf_function);
         auto t2 = std::chrono::high_resolution_clock::now().time_since_epoch();
-        std::cout << "found _radius: " << r.get_radius() << std::endl;
-        std::cout << "time: " << (t2 - t1).count() / 1000000 << "ms"
-                  << std::endl;
+
+        std::cout << "Source mesh: " << argv[1] << "(points: " << N << ")\n";
+        std::cout << "Target mesh: " << argv[2] << "(points: " << M << ")\n";
+        std::cout << "Time spent: " << (t2 - t1).count() / 1'000'000 << "ms"
+                  << "\n";
+        std::cout << "Found radius: " << interpolator.get_radius() << std::endl;
+
+        free(source_grid);
+        free(target_grid);
+        free(values_host);
     }
 
     return 0;
