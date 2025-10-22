@@ -1,4 +1,5 @@
 #include <Kokkos_Core.hpp>
+#include <Kokkos_Profiling_ScopedRegion.hpp>
 #include <Kokkos_Random.hpp>
 #include <chrono>
 #include <iostream>
@@ -33,8 +34,9 @@ franke_function(ArborX::Point<3, scalar_type> point)
                      + (9.0 * z - 5.0) * (9.0 * z - 5.0)));
 }
 
-int main(void)
+int main(int argc, char* argv[])
 {
+    Kokkos::Profiling::ScopedRegion region("main::main");
     auto guard = Kokkos::ScopeGuard();
     {
         using exec_space = Kokkos::DefaultExecutionSpace;
@@ -45,9 +47,9 @@ int main(void)
             LinearPolynomial<exec_space, dimensions, scalar_type>;
         using rbf_function = WendlandC2<scalar_type>;
         using point = ArborX::Point<dimensions, scalar_type>;
+
         exec_space execspace{};
-        // 0.01 -> 0.001 (precice aste turbine)
-        const size_t N = 34580;
+        const size_t N = 3458888;
         const size_t M = 338992;
 
         Kokkos::View<point*, exec_space> source(
@@ -71,7 +73,7 @@ int main(void)
         scalar_type lower = 0.;
         scalar_type upper = 1.;
         Kokkos::parallel_for(
-            "fill example views - source & values",
+            "main::p_for fill example views - source & values",
             Kokkos::RangePolicy(execspace, 0, N),
             KOKKOS_LAMBDA(const size_t& i) {
                 point p{};
@@ -85,7 +87,8 @@ int main(void)
                 values(i) = franke_function(p);
             });
         Kokkos::parallel_for(
-            "fill example views - target", Kokkos::RangePolicy(execspace, 0, M),
+            "main::p_for fill example views - target",
+            Kokkos::RangePolicy(execspace, 0, M),
             KOKKOS_LAMBDA(const size_t& i) {
                 point p{};
                 auto gen = random_pool.get_state();
