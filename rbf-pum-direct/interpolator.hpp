@@ -139,10 +139,11 @@ void TEMPLATED_CLASSNAME::find_radius(void)
             }
             max_radii(i) = n_max;
         });
+    Kokkos::fence();
     Kokkos::sort(max_radii);
     auto max_radii_h =
         Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{}, max_radii);
-    this->_radius = std::sqrt(max_radii_h(2 * Dim / 2));
+    this->_radius = std::sqrt(max_radii_h(Dim));
 
     Kokkos::Profiling::popRegion(); // ! RbfPumInterpolator::find_radius
 }

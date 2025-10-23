@@ -10,9 +10,9 @@ find_package(Kokkos REQUIRED)
 find_package(KokkosKernels REQUIRED)
 find_package(ArborX REQUIRED)
 find_package(VTK COMPONENTS
-    vtkCommonCore
-    vtkIOXML
-    vtkCommonDataModel
+    CommonCore
+    IOXML
+    CommonDataModel
     REQUIRED)
 
 add_executable(main main.cpp)

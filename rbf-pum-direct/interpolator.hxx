@@ -40,8 +40,9 @@ public:
 
 private:
     double _radius;
-    const int _nodes_per_cluster = 50;
-    const double _relative_overlap = 0.15;
+    constexpr const int _nodes_per_cluster = 50;
+    constexpr const double _relative_overlap = 0.15;
+    constexpr const bool project_to_input = true;
     PointsView _source;
     Kokkos::View<Coordinates*, ExecSpace> _values;
     PointsView _target;

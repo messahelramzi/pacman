@@ -103,7 +103,7 @@ FULL_TEMPLATE void TEMPLATED_CLASSNAME::create_clusters(void)
     Kokkos::resize(offsets, k);
     Kokkos::deep_copy(offsets, offsets_h);
 
-    size_t ext0 = k;
+    size_t ext0 = --k;
     size_t ext1 = max_elts + 1;
 
     Kokkos::View<size_t, ExecSpace> id2(
@@ -152,6 +152,8 @@ FULL_TEMPLATE void TEMPLATED_CLASSNAME::create_clusters(void)
         ext0);
     Kokkos::deep_copy(_nb_values_per_cluster, nb_values_per_cluster);
     Kokkos::Profiling::popRegion(); // ! RbfPumInterpolator::create_clusters
+    std::cout << "nb clusters: " << ext0 << "\n";
+    print_view(_nb_values_per_cluster);
 }
 
 #endif /* ! CLUSTERING_HPP */

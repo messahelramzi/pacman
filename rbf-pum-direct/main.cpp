@@ -1,6 +1,5 @@
 #include <Kokkos_Core.hpp>
 #include <Kokkos_Profiling_ScopedRegion.hpp>
-#include <Kokkos_Random.hpp>
 #include <chrono>
 #include <iostream>
 #include <vtkNew.h>
