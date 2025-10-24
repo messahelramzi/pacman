@@ -34,15 +34,17 @@ public:
                        RbfFunctionBasisType rbf_function);
     void find_radius(void);
     void create_clusters(void);
+    void _create_clusters_proj(void);
+    void _create_clusters_no_proj(void);
     void prepare_interpolation(void);
     Coordinates interpolate_at(Point& target) const;
-    Coordinates get_radius(void) const;
+    std::string get_interpolator_details(void) const;
 
 private:
     double _radius;
-    constexpr const int _nodes_per_cluster = 50;
-    constexpr const double _relative_overlap = 0.15;
-    constexpr const bool project_to_input = true;
+    const int _nodes_per_cluster = 50;
+    const double _relative_overlap = 0.15;
+    const bool _project_to_input = true;
     PointsView _source;
     Kokkos::View<Coordinates*, ExecSpace> _values;
     PointsView _target;

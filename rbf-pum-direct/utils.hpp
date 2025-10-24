@@ -141,19 +141,73 @@ void print_pair_view(ViewType& v, std::string sep = " ")
     std::cout << v.label() << ".extent(0): " << m.extent(0) << std::endl;
 }
 
-template <int Dim, class Coordinates>
-constexpr inline bool
-points_are_equal(const ArborX::Point<Dim, Coordinates>& lhs,
-                 const ArborX::Point<Dim, Coordinates>& rhs)
+/* Operators overloads for ArborX::Point
+ */
+namespace ArborX
 {
-    for (int i = 0; i < Dim; ++i)
+    template <int Dim, class Coordinates>
+    KOKKOS_INLINE_FUNCTION constexpr bool
+    operator==(const ArborX::Point<Dim, Coordinates>& lhs,
+               const ArborX::Point<Dim, Coordinates>& rhs)
     {
-        if (lhs[i] != rhs[i])
+        for (int i = 0; i < Dim; ++i)
         {
-            return false;
+            if (lhs[i] != rhs[i])
+            {
+                return false;
+            }
         }
+        return true;
     }
-    return true;
+
+    template <int Dim, class Coordinates>
+    KOKKOS_INLINE_FUNCTION constexpr bool
+    operator!=(const ArborX::Point<Dim, Coordinates>& lhs,
+               const ArborX::Point<Dim, Coordinates>& rhs)
+    {
+        return !(lhs == rhs);
+    }
+
+    template <int Dim, class Coordinates>
+    KOKKOS_INLINE_FUNCTION constexpr bool
+    operator<(const ArborX::Point<Dim, Coordinates>& lhs,
+              const ArborX::Point<Dim, Coordinates>& rhs)
+    {
+        return _NDdistance_without_sqrt<Dim, Coordinates>(
+                   ArborX::Point<Dim, Coordinates>{}, lhs)
+            < _NDdistance_without_sqrt<Dim, Coordinates>(
+                   ArborX::Point<Dim, Coordinates>{}, rhs);
+    }
+} // namespace ArborX
+
+template <typename ViewType>
+std::string inline get_clusters_info(ViewType& nb_vertices_per_clusters)
+{
+    size_t maximum = 0;
+    size_t minimum = std::numeric_limits<size_t>::max();
+    double average = 0;
+    auto view_h = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{},
+                                                      nb_vertices_per_clusters);
+    for (size_t i = 0; i < view_h.extent(0); ++i)
+    {
+        if (view_h(i) > maximum)
+        {
+            maximum = view_h(i);
+        }
+        if (view_h(i) < minimum)
+        {
+            minimum = view_h(i);
+        }
+        average += view_h(i);
+    }
+    average /= (double)(view_h.extent(0));
+    std::ostringstream strs;
+    strs << "Number of clusters: " << nb_vertices_per_clusters.extent(0)
+         << "\n";
+    strs << "    Maximum: " << maximum << "\n";
+    strs << "    Minimum: " << minimum << "\n";
+    strs << "    Average: " << average;
+    return strs.str();
 }
 
 #endif /* ! UTILS_HPP */

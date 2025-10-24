@@ -141,7 +141,7 @@ int main(int argc, char* argv[])
         std::cout << "Target mesh: " << argv[2] << "(points: " << M << ")\n";
         std::cout << "Time spent: " << (t2 - t1).count() / 1'000'000 << "ms"
                   << "\n";
-        std::cout << "Found radius: " << interpolator.get_radius() << std::endl;
+        std::cout << interpolator.get_interpolator_details() << std::endl;
 
         free(source_grid);
         free(target_grid);

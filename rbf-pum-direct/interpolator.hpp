@@ -8,7 +8,11 @@
 #include <Kokkos_Core.hpp>
 #include <Kokkos_Profiling_ScopedRegion.hpp>
 #include <Kokkos_Random.hpp>
+#include <boost/type_index.hpp>
 #include <iomanip>
+#include <iostream>
+#include <limits>
+#include <sstream>
 
 #include "callbacks.hpp"
 #include "clustering.hpp"
@@ -85,7 +89,7 @@ void TEMPLATED_CLASSNAME::find_radius(void)
     PointsView samples(
         Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
                            "RbfPumInterpolator::find_radius::samples"),
-        2 * Dim);
+        2 * Dim + 1);
     auto samples_h = Kokkos::create_mirror_view(Kokkos::WithoutInitializing,
                                                 Kokkos::HostSpace{}, samples);
 
@@ -97,17 +101,49 @@ void TEMPLATED_CLASSNAME::find_radius(void)
         center[d] = (lower[d] + upper[d]) / 2.;
     }
 
+    samples_h(0) = Point{ center };
     for (int d = 0; d < Dim; ++d)
     {
         Point p = Point{ center };
         Coordinates l = p[d];
         p[d] -= l * 0.25;
-        samples_h(d) = Point{ p };
+        samples_h(d + 1) = Point{ p };
         p[d] += l * 0.5;
-        samples_h(Dim + d) = Point{ p };
+        samples_h(Dim + d + 1) = Point{ p };
     }
 
     Kokkos::deep_copy(samples, samples_h);
+
+    CreateClustersPairs<ExecSpace, Dim, Coordinates> ccp{
+        samples, std::numeric_limits<Coordinates>::max()
+    };
+
+    CreateClustersPairsCallback<ExecSpace, Dim, Coordinates> ccp_callback{};
+
+    using CreateClustersPairsRet = Kokkos::pair<Point, Point>;
+    Kokkos::View<CreateClustersPairsRet*, ExecSpace> ccp_values(
+        Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
+                           "RbfPumInterpolator::find_radius::ccp_values"),
+        0);
+    Kokkos::View<int*, ExecSpace> ccp_offsets(
+        Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
+                           "RbfPumInterpolator::find_radius::ccp_offsets"),
+        0);
+
+    this->_source_bvh.query(execspace, ccp, ccp_callback, ccp_values,
+                            ccp_offsets);
+
+    Kokkos::parallel_for(
+        "RbfPumInterpolator::find_radius::p_for project samples on the source "
+        "mesh",
+        Kokkos::RangePolicy(execspace, 0, 2 * Dim + 1),
+        KOKKOS_LAMBDA(const size_t& i) {
+            for (size_t ii = ccp_offsets(i); ii < ccp_offsets(i + 1); ++ii)
+            {
+                samples(i) = ccp_values(ii).second;
+            }
+        });
+    Kokkos::fence();
 
     KNearest<ExecSpace, Dim, Coordinates> predicate{ this->_nodes_per_cluster,
                                                      samples };
@@ -127,10 +163,10 @@ void TEMPLATED_CLASSNAME::find_radius(void)
     Kokkos::View<Coordinates*, ExecSpace> max_radii(
         Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
                            "RbfPumInterpolator::find_radius::max_radii"),
-        2 * Dim);
+        2 * Dim + 1);
     Kokkos::parallel_for(
         "RbfPumInterpolator::find_radius::p_for sum max radius",
-        Kokkos::RangePolicy(execspace, 0, 2 * Dim),
+        Kokkos::RangePolicy(execspace, 0, 2 * Dim + 1),
         KOKKOS_LAMBDA(const size_t& i) {
             Coordinates n_max = 0;
             for (size_t ii = offsets(i); ii < offsets(i + 1); ++ii)
@@ -253,9 +289,31 @@ void TEMPLATED_CLASSNAME::prepare_interpolation(void)
 }
 
 FULL_TEMPLATE
-Coordinates TEMPLATED_CLASSNAME::get_radius() const
+std::string TEMPLATED_CLASSNAME::get_interpolator_details(void) const
 {
-    return this->_radius;
+    std::ostringstream strs;
+    strs << "#Source points: " << this->_source.extent(0) << "\n";
+    strs << "#Values: " << this->_values.extent(0) << "\n";
+    strs << "#Target points: " << this->_target.extent(0) << "\n";
+    strs << "Source bounding box:\n";
+    strs << "    Lower: "
+         << point_to_str(this->_source_bvh.bounds().minCorner()) << "\n";
+    strs << "    Upper: "
+         << point_to_str(this->_source_bvh.bounds().maxCorner()) << "\n";
+    strs << "Interpolation params:\n";
+    strs << "    #Points per cluster: " << this->_nodes_per_cluster << "\n";
+    strs << "    Relative overlap: " << this->_relative_overlap << "\n";
+    strs << "    Project to input: " << std::boolalpha
+         << this->_project_to_input << "\n";
+    strs << "    RBF Function: "
+         << boost::typeindex::type_id<RbfFunctionBasisType>().pretty_name()
+         << "\n";
+    strs << "    Polynomial Function: "
+         << boost::typeindex::type_id<PolynomialType>().pretty_name() << "\n";
+    strs << "Found radius: " << this->_radius << "\n";
+    strs << get_clusters_info(_nb_values_per_cluster);
+
+    return strs.str();
 }
 
 #endif /* ! INTERPOLATOR_HPP */
