@@ -84,7 +84,7 @@ template <typename ViewType>
 void print_size_of_view(ViewType& v)
 {
     size_t size = v.size() * sizeof(typename ViewType::value_type);
-    std::cout << v.label() << " size: " << size << "b = " << size / 1000000.0
+    std::cout << v.label() << " size: " << size << "b = " << size / 1'000'000.0
               << "Mb" << std::endl;
 }
 
@@ -113,7 +113,7 @@ void print_points_view(ViewType& v, std::string sep = " ")
 }
 
 template <typename ViewType>
-void print_2d_view(ViewType& v, std::string sep = " ")
+void print_2d_points_view(ViewType& v, std::string sep = " ")
 {
     auto m = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{}, v);
     for (size_t i = 0; i < m.extent(0); ++i)
@@ -121,6 +121,22 @@ void print_2d_view(ViewType& v, std::string sep = " ")
         for (size_t j = 0; j < m.extent(1); ++j)
         {
             std::cout << point_to_str(m(i, j)) << sep;
+        }
+        std::cout << std::endl;
+    }
+    std::cout << v.label() << ".extent(0): " << m.extent(0) << std::endl;
+    std::cout << v.label() << ".extent(1): " << m.extent(1) << std::endl;
+}
+
+template <typename ViewType>
+void print_2d_view(ViewType& v, std::string sep = " ")
+{
+    auto m = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{}, v);
+    for (size_t i = 0; i < m.extent(0); ++i)
+    {
+        for (size_t j = 0; j < m.extent(1); ++j)
+        {
+            std::cout << m(i, j) << sep;
         }
         std::cout << std::endl;
     }

@@ -42,23 +42,23 @@ FULL_TEMPLATE void TEMPLATED_CLASSNAME::_create_clusters_no_proj(void)
     size_t nb_elements[Dim];
     for (int i = 0; i < Dim; ++i)
     {
-        nb_elements[i] = (size_t)((upper[i] - lower[i]) / spacing);
+        nb_elements[i] = std::ceil((upper[i] - lower[i]) / spacing) + 1;
     }
 
     Kokkos::Profiling::pushRegion(
         "RbfPumInterpolator::_create_clusters_no_proj count centers");
-    Kokkos::View<size_t, ExecSpace> nb_valid_points(
-        "RbfPumInterpolator::_create_clusters_no_proj::nb_valid_points");
+    Kokkos::View<size_t, ExecSpace> output_value(
+        "RbfPumInterpolator::_create_clusters_no_proj::output_value");
     CountValidClusters<ExecSpace, Dim, Coordinates> predicate(
         spacing, this->_radius, lower, nb_elements);
     CountValidClustersCallback<ExecSpace, Dim, Coordinates> callback{
-        nb_valid_points
+        output_value
     };
 
     this->_source_bvh.query(execspace, predicate, callback);
 
-    auto m = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{},
-                                                 nb_valid_points);
+    auto m =
+        Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{}, output_value);
 
     using FindClustersCentersRet = Kokkos::pair<Point, Point>;
     Kokkos::View<FindClustersCentersRet*, ExecSpace> pairs(
@@ -178,27 +178,28 @@ FULL_TEMPLATE void TEMPLATED_CLASSNAME::_create_clusters_proj(void)
     size_t nb_elements[Dim];
     for (int i = 0; i < Dim; ++i)
     {
-        nb_elements[i] = (size_t)((upper[i] - lower[i]) / spacing);
+        nb_elements[i] = std::ceil((upper[i] - lower[i]) / spacing) + 1;
     }
 
     Kokkos::Profiling::pushRegion(
         "RbfPumInterpolator::_create_clusters_proj count centers");
-    Kokkos::View<size_t, ExecSpace> nb_valid_points(
-        "RbfPumInterpolator::_create_clusters_proj::nb_valid_points");
-    CountValidClusters<ExecSpace, Dim, Coordinates> predicate(
-        spacing, this->_radius, lower, nb_elements);
-    CountValidClustersCallback<ExecSpace, Dim, Coordinates> callback{
-        nb_valid_points
-    };
+    Kokkos::View<size_t, ExecSpace> output_value(
+        "RbfPumInterpolator::_create_clusters_proj::output_value");
+    CountValidClusters<ExecSpace, Dim, Coordinates>
+        count_non_empty_centers_predicate(spacing, this->_radius, lower,
+                                          nb_elements);
+    CountValidClustersCallback<ExecSpace, Dim, Coordinates>
+        count_non_empty_centers_callback{ output_value };
 
-    this->_source_bvh.query(execspace, predicate, callback);
+    this->_source_bvh.query(execspace, count_non_empty_centers_predicate,
+                            count_non_empty_centers_callback);
 
     Kokkos::Profiling::popRegion(); // !
                                     // RbfPumInterpolator::_create_clusters_proj
                                     // count centers
 
-    auto m = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{},
-                                                 nb_valid_points);
+    auto m =
+        Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{}, output_value);
 
     PointsView centers(
         Kokkos::view_alloc(
@@ -226,8 +227,8 @@ FULL_TEMPLATE void TEMPLATED_CLASSNAME::_create_clusters_proj(void)
                        - Kokkos::Experimental::distance(
                            last, Kokkos::Experimental::end(centers)));
 
-    using CreateClustersPairsRet = Kokkos::pair<Point, Point>;
-    Kokkos::View<CreateClustersPairsRet*, ExecSpace> values(
+    using ProjectToNearestRet = Kokkos::pair<Point, Point>;
+    Kokkos::View<ProjectToNearestRet*, ExecSpace> values(
         Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
                            "RbfPumInterpolator::_create_clusters_proj::values"),
         0);
@@ -236,10 +237,9 @@ FULL_TEMPLATE void TEMPLATED_CLASSNAME::_create_clusters_proj(void)
             execspace, Kokkos::WithoutInitializing,
             "RbfPumInterpolator::_create_clusters_proj::offsets"),
         0);
-    CreateClustersPairs<ExecSpace, Dim, Coordinates> predicate3{
-        centers, this->_radius
-    };
-    CreateClustersPairsCallback<ExecSpace, Dim, Coordinates> callback3{};
+    ProjectToNearest<ExecSpace, Dim, Coordinates> predicate3{ centers,
+                                                              this->_radius };
+    ProjectToNearestCallback<ExecSpace, Dim, Coordinates> callback3{};
 
     this->_source_bvh.query(execspace, predicate3, callback3, values, offsets);
 

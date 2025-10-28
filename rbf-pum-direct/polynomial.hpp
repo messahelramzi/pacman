@@ -4,14 +4,13 @@
 #include <ArborX_Point.hpp>
 #include <Kokkos_Core.hpp>
 
-#include "utils.hpp"
-
 template <typename ExecSpace, int Dim, class ftype>
 class Polynomial
 {
 public:
     virtual KOKKOS_INLINE_FUNCTION ArborX::Point<Dim + 1, ftype>
     operator()(const ArborX::Point<Dim, ftype>& point) const = 0;
+    virtual KOKKOS_INLINE_FUNCTION int get_base_size(void) = 0;
 };
 
 template <typename ExecSpace, int Dim, class ftype>
@@ -34,8 +33,10 @@ public:
         return out;
     }
 
-private:
-    ExecSpace _execspace{};
+    KOKKOS_INLINE_FUNCTION int get_base_size(void)
+    {
+        return Dim + 1;
+    }
 };
 
 #endif /* ! POLYNOMIAL_HPP */

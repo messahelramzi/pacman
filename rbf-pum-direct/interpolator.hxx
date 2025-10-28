@@ -37,7 +37,7 @@ public:
     void _create_clusters_proj(void);
     void _create_clusters_no_proj(void);
     void prepare_interpolation(void);
-    Coordinates interpolate_at(Point& target) const;
+    Coordinates interpolate_at(const Point& target) const;
     std::string get_interpolator_details(void) const;
 
 private:
@@ -50,11 +50,15 @@ private:
     PointsView _target;
     ArborX::BoundingVolumeHierarchy<typename PointsView::memory_space, Point>
         _source_bvh;
-    Point no_data{};
+    ArborX::BoundingVolumeHierarchy<typename PointsView::memory_space, Point>
+        _target_bvh;
+    Point no_data;
     ClustersView _clusters;
     Kokkos::View<size_t*, ExecSpace> _nb_values_per_cluster;
     PolynomialType _polynomial;
     RbfFunctionBasisType _rbf_function;
+    WendlandC2<Coordinates> _weighting_function;
+    Kokkos::View<Coordinates**, Kokkos::LayoutRight, ExecSpace> _coeffs;
 };
 
 #endif /* ! INTERPOLATOR_HXX */

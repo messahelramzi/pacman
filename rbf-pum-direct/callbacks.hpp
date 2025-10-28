@@ -8,38 +8,39 @@
 #include "utils.hpp"
 
 template <typename ExecSpace, int Dim, class Coordinates>
-struct KNearest
+struct DistanceToKNearest
 {
-    const int k;
-    Kokkos::View<ArborX::Point<Dim, Coordinates>*, ExecSpace> random_points;
+    const int _k;
+    Kokkos::View<ArborX::Point<Dim, Coordinates>*, ExecSpace> _samples;
 };
 
 template <typename ExecSpace, int Dim, class Coordinates>
-struct ArborX::AccessTraits<KNearest<ExecSpace, Dim, Coordinates>>
+struct ArborX::AccessTraits<DistanceToKNearest<ExecSpace, Dim, Coordinates>>
 {
     using memory_space = ExecSpace::memory_space;
     static KOKKOS_FUNCTION std::size_t
-    size(const KNearest<ExecSpace, Dim, Coordinates>& kn)
+    size(const DistanceToKNearest<ExecSpace, Dim, Coordinates>& obj)
     {
-        return kn.random_points.extent(0);
+        return obj._samples.extent(0);
     }
     static KOKKOS_FUNCTION auto
-    get(const KNearest<ExecSpace, Dim, Coordinates>& kn, std::size_t i)
+    get(const DistanceToKNearest<ExecSpace, Dim, Coordinates>& obj,
+        std::size_t i)
     {
-        return ArborX::attach(ArborX::nearest(kn.random_points(i), kn.k), i);
+        return ArborX::attach(ArborX::nearest(obj._samples(i), obj._k),
+                              obj._samples(i));
     }
 };
 
 template <typename ExecSpace, int Dim, class Coordinates>
-struct KNearestCallback
+struct DistanceToKNearestCallback
 {
-    Kokkos::View<ArborX::Point<Dim, Coordinates>*, ExecSpace> centers;
     template <typename Predicate, typename Value, typename OutputFunctor>
     KOKKOS_FUNCTION void operator()(Predicate predicate, Value const& value,
                                     OutputFunctor const& out) const
     {
         out(_NDdistance_without_sqrt<Dim, Coordinates>(
-            centers(ArborX::getData(predicate)), value));
+            ArborX::getData(predicate), value));
     }
 };
 
@@ -260,24 +261,23 @@ struct ProjectToInputCallback
 };
 
 template <typename ExecSpace, int Dim, class Coordinates>
-struct CreateClustersPairs
+struct ProjectToNearest
 {
     Kokkos::View<ArborX::Point<Dim, Coordinates>*, ExecSpace> centers;
     Coordinates radius;
 };
 
 template <typename ExecSpace, int Dim, class Coordinates>
-struct ArborX::AccessTraits<CreateClustersPairs<ExecSpace, Dim, Coordinates>>
+struct ArborX::AccessTraits<ProjectToNearest<ExecSpace, Dim, Coordinates>>
 {
     using memory_space = ExecSpace::memory_space;
     static KOKKOS_FUNCTION std::size_t
-    size(const CreateClustersPairs<ExecSpace, Dim, Coordinates>& ccp)
+    size(const ProjectToNearest<ExecSpace, Dim, Coordinates>& ccp)
     {
         return ccp.centers.extent(0);
     }
     static KOKKOS_FUNCTION auto
-    get(const CreateClustersPairs<ExecSpace, Dim, Coordinates>& ccp,
-        std::size_t i)
+    get(const ProjectToNearest<ExecSpace, Dim, Coordinates>& ccp, std::size_t i)
     {
         return ArborX::attach(
             ArborX::intersects(
@@ -287,12 +287,49 @@ struct ArborX::AccessTraits<CreateClustersPairs<ExecSpace, Dim, Coordinates>>
 };
 
 template <typename ExecSpace, int Dim, class Coordinates>
-struct CreateClustersPairsCallback
+struct ProjectToNearestCallback
 {
     template <typename Predicate, typename Value, typename OutputFunctor>
     KOKKOS_FUNCTION void operator()(Predicate predicate, Value const& value,
                                     OutputFunctor const& out) const
     {
+        out(Kokkos::make_pair<ArborX::Point<Dim, Coordinates>,
+                              ArborX::Point<Dim, Coordinates>>(
+            ArborX::getData(predicate), value));
+    }
+};
+
+template <typename ExecSpace, int Dim, class Coordinates>
+struct Projection
+{
+    Kokkos::View<ArborX::Point<Dim, Coordinates>*, ExecSpace> _centers;
+};
+
+template <typename ExecSpace, int Dim, class Coordinates>
+struct ArborX::AccessTraits<Projection<ExecSpace, Dim, Coordinates>>
+{
+    using memory_space = ExecSpace::memory_space;
+    static KOKKOS_FUNCTION std::size_t
+    size(const Projection<ExecSpace, Dim, Coordinates>& obj)
+    {
+        return obj._centers.extent(0);
+    }
+    static KOKKOS_FUNCTION auto
+    get(const Projection<ExecSpace, Dim, Coordinates>& obj, std::size_t i)
+    {
+        return ArborX::attach(ArborX::nearest(obj._centers(i), 1),
+                              obj._centers(i));
+    }
+};
+
+template <typename ExecSpace, int Dim, class Coordinates>
+struct ProjectionCallback
+{
+    template <typename Predicate, typename Value, typename OutputFunctor>
+    KOKKOS_FUNCTION void operator()(Predicate predicate, Value const& value,
+                                    OutputFunctor const& out) const
+    {
+        // <center, projection>
         out(Kokkos::make_pair<ArborX::Point<Dim, Coordinates>,
                               ArborX::Point<Dim, Coordinates>>(
             ArborX::getData(predicate), value));

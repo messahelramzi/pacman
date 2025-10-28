@@ -68,6 +68,10 @@ public:
         }
         return Kokkos::pow(1.0 - p, 6) * (35.0 * p * p + 18 * p + 3);
     }
+    void set_r_inv(ftype r_inv)
+    {
+        this->_r_inv = r_inv;
+    }
 
 private:
     ftype _r_inv;
@@ -86,6 +90,10 @@ public:
         }
         return Kokkos::pow(1.0 - p, 8)
             * (32.0 * p * p * p + 25.0 * p * p + 8 * p + 1);
+    }
+    void set_r_inv(ftype r_inv)
+    {
+        this->_r_inv = r_inv;
     }
 
 private:
@@ -106,6 +114,10 @@ public:
         return Kokkos::pow(1.0 - p, 10)
             * (1287.0 * p * p * p * p + 1350.0 * p * p * p + 630.0 * p * p
                + 150.0 * p + 15);
+    }
+    void set_r_inv(ftype r_inv)
+    {
+        this->_r_inv = r_inv;
     }
 
 private:

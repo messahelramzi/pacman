@@ -8,9 +8,6 @@
 #include <vtkXMLUnstructuredGridReader.h>
 
 #include "interpolator.hpp"
-#include "polynomial.hpp"
-#include "rbf_functions.hpp"
-#include "utils.hpp"
 
 template <class scalar_type>
 scalar_type franke_function(ArborX::Point<3, scalar_type> point)
@@ -127,8 +124,8 @@ int main(int argc, char* argv[])
         Kokkos::deep_copy(values, values_h);
         Kokkos::deep_copy(target, target_h);
 
-        RbfFunctionBasisType rbf_function{};
-        PolynomialType polynomial{};
+        RbfFunctionBasisType rbf_function;
+        PolynomialType polynomial;
 
         auto t1 = std::chrono::high_resolution_clock::now().time_since_epoch();
         auto interpolator =
@@ -137,11 +134,29 @@ int main(int argc, char* argv[])
                 source, values, target, polynomial, rbf_function);
         auto t2 = std::chrono::high_resolution_clock::now().time_since_epoch();
 
+        // std::vector<scalar_type> target_output;
+        // target_output.reserve(target_h.extent(0));
+        // std::vector<scalar_type> reference;
+        // reference.reserve(target_h.extent(0));
+        // for (size_t i = 0; i < target_h.extent(0); ++i)
+        // {
+        //     target_output.push_back(interpolator.interpolate_at(target_h(i)));
+        //     reference.push_back(franke_function<scalar_type>(target_h(i)));
+        // }
+
         std::cout << "Source mesh: " << argv[1] << "(points: " << N << ")\n";
         std::cout << "Target mesh: " << argv[2] << "(points: " << M << ")\n";
         std::cout << "Time spent: " << (t2 - t1).count() / 1'000'000 << "ms"
                   << "\n";
         std::cout << interpolator.get_interpolator_details() << std::endl;
+
+        // for (size_t i = 0; i < target_h.extent(0); ++i)
+        // {
+        //     std::cout << "interpolated: " << target_output[i]
+        //               << ", expected: " << reference[i] << ", difference: "
+        //               << std::fabs(reference[i] - target_output[i])
+        //               << std::endl;
+        // }
 
         free(source_grid);
         free(target_grid);
