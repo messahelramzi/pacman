@@ -20,235 +20,174 @@ FULL_TEMPLATE struct sort_by_center
     }
 };
 
-FULL_TEMPLATE void TEMPLATED_CLASSNAME::create_clusters(void)
+FULL_TEMPLATE
+void TEMPLATED_CLASSNAME::create_clusters(void)
 {
     assert(this->_radius > 0);
     assert(this->_relative_overlap > 0 && this->_relative_overlap < 1);
-    (this->_project_to_input) ? (this->_create_clusters_proj())
-                              : (this->_create_clusters_no_proj());
-}
-
-FULL_TEMPLATE void TEMPLATED_CLASSNAME::_create_clusters_no_proj(void)
-{
-    Kokkos::Profiling::pushRegion(
-        "RbfPumInterpolator::_create_clusters_no_proj");
+    PRINT_STRING("Entering create_clusters");
+    const std::string _region_name = "RbfPumInterpolator::create_clusters";
+    Kokkos::Profiling::pushRegion(_region_name);
     ExecSpace execspace{};
 
     const Coordinates spacing =
         std::sqrt(4.0 / Dim) * this->_radius * (1.0 - this->_relative_overlap);
+    DEBUG_FLOAT(spacing);
     const Point lower = _source_bvh.bounds().minCorner();
     const Point upper = _source_bvh.bounds().maxCorner();
 
     size_t nb_elements[Dim];
     for (int i = 0; i < Dim; ++i)
     {
-        nb_elements[i] = std::ceil((upper[i] - lower[i]) / spacing) + 1;
+        nb_elements[i] = std::ceil((upper[i] - lower[i]) / spacing);
+        DEBUG_INT(nb_elements[i]);
     }
 
-    Kokkos::Profiling::pushRegion(
-        "RbfPumInterpolator::_create_clusters_no_proj count centers");
-    Kokkos::View<size_t, ExecSpace> output_value(
-        "RbfPumInterpolator::_create_clusters_no_proj::output_value");
-    CountValidClusters<ExecSpace, Dim, Coordinates> predicate(
-        spacing, this->_radius, lower, nb_elements);
-    CountValidClustersCallback<ExecSpace, Dim, Coordinates> callback{
-        output_value
-    };
+    using ReturnType = Kokkos::pair<Point, Point>;
+    Kokkos::View<size_t, ExecSpace> nb_matching_with_source(
+        _region_name + "::nb_matching_with_source");
 
-    this->_source_bvh.query(execspace, predicate, callback);
+    GetNonEmptyClusters<ExecSpace, Dim, Coordinates>
+        non_empty_clusters_predicate(spacing, lower, upper, nb_elements);
+    GetNonEmptyClustersCallbackFirstPass<ExecSpace, Dim, Coordinates>
+        source_non_empty_clusters_callback_first_pass{
+            this->_radius * this->_radius, nb_matching_with_source
+        };
+    this->_source_bvh.query(execspace, non_empty_clusters_predicate,
+                            source_non_empty_clusters_callback_first_pass);
 
-    auto m =
-        Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{}, output_value);
+    auto N = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{},
+                                                 nb_matching_with_source);
+    DEBUG_INT(N());
+    Kokkos::View<size_t, ExecSpace> global_source_index(
+        _region_name + "::global_source_index");
+    Kokkos::View<ReturnType*, ExecSpace> centers_matching_with_source(
+        Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
+                           _region_name + "::centers_matching_with_source"),
+        N());
+    GetNonEmptyClustersCallbackSecondPass<ExecSpace, Dim, Coordinates>
+        source_non_empty_clusters_callback_second_pass{
+            this->_radius * this->_radius, centers_matching_with_source,
+            global_source_index
+        };
+    this->_source_bvh.query(execspace, non_empty_clusters_predicate,
+                            source_non_empty_clusters_callback_second_pass);
 
-    using FindClustersCentersRet = Kokkos::pair<Point, Point>;
-    Kokkos::View<FindClustersCentersRet*, ExecSpace> pairs(
-        Kokkos::view_alloc(
-            execspace, Kokkos::WithoutInitializing,
-            "RbfPumInterpolator::_create_clusters_no_proj::pairs"),
-        m());
+    Kokkos::View<Point*, ExecSpace> clusters_centers(
+        Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
+                           _region_name + "::clusters_centers"),
+        centers_matching_with_source.extent(0));
+    Kokkos::View<size_t, ExecSpace> global_clusters_index(
+        _region_name + "::global_clusters_index");
+    FilterEmptyClusters<ExecSpace, Dim, Coordinates>
+        filter_empty_clusters_predicate{ centers_matching_with_source,
+                                         this->_project_to_input };
+    FilterEmptyClustersCallback<ExecSpace, Dim, Coordinates>
+        filter_empty_clusters_callback{ this->_radius * this->_radius,
+                                        clusters_centers,
+                                        global_clusters_index };
 
-    Kokkos::View<size_t, ExecSpace> id(
-        "RbfPumInterpolator::_create_clusters_no_proj::id");
-    FindClustersCenters<ExecSpace, Dim, Coordinates> predicate2(
-        spacing, this->_radius, lower, nb_elements);
-    FindClustersCentersCallback<ExecSpace, Dim, Coordinates> callback2{ pairs,
-                                                                        id };
-    this->_source_bvh.query(execspace, predicate2, callback2);
-    Kokkos::Profiling::popRegion(); // ! RbfPumInterpolator::create_clusters
-                                    // count centers
+    this->_target_bvh.query(execspace, filter_empty_clusters_predicate,
+                            filter_empty_clusters_callback);
 
-    Kokkos::Profiling::pushRegion(
-        "RbfPumInterpolator::_create_clusters_no_proj build clusters view");
-    Kokkos::sort(pairs,
-                 sort_by_center<ExecSpace, Dim, Coordinates, PolynomialType,
-                                RbfFunctionBasisType>());
-    Kokkos::View<int*, ExecSpace> offsets(
-        Kokkos::view_alloc(
-            execspace, Kokkos::WithoutInitializing,
-            "RbfPumInterpolator::_create_clusters_no_proj::offsets"),
-        pairs.extent(0));
-    auto pairs_h =
-        Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{}, pairs);
-    auto offsets_h = Kokkos::create_mirror_view(Kokkos::WithoutInitializing,
-                                                Kokkos::HostSpace{}, offsets);
-    int cumsum = 0;
-    int elts = 0;
-    int max_elts = 0;
-    size_t k = 1;
-    offsets_h(0) = 0;
-    for (size_t i = 1; i <= pairs_h.extent(0); ++i)
+    auto M = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{},
+                                                 global_clusters_index);
+    DEBUG_INT(M());
+    Kokkos::resize(clusters_centers, M());
+
+    const auto distances = non_empty_clusters_predicate._spacing_t;
+    Coordinates min = std::numeric_limits<Coordinates>::max();
+    for (int axis = 0; axis < Dim; ++axis)
     {
-        elts++;
-        if (i == pairs_h.extent(0) || pairs_h(i - 1).first != pairs_h(i).first)
+        if (distances[axis] < min)
         {
-            cumsum += elts;
-            max_elts = (elts > max_elts) ? (elts) : (max_elts);
-            elts = 0;
-            offsets_h(k++) = cumsum;
+            min = distances[axis];
         }
     }
+    // Squared to avoid sqrt during comparisons
+    const Coordinates threshold = 0.16 * min * min;
+    DEBUG_FLOAT(threshold);
 
-    Kokkos::resize(offsets_h, k);
-    Kokkos::resize(offsets, k);
-    Kokkos::deep_copy(offsets, offsets_h);
-
-    size_t ext0 = --k;
-    size_t ext1 = max_elts + 1;
-
-    Kokkos::View<size_t, ExecSpace> id2(
-        "RbfPumInterpolator::_create_clusters_no_proj::id2");
-    ClustersView clusters(
-        Kokkos::view_alloc(
-            execspace, Kokkos::WithoutInitializing,
-            "RbfPumInterpolator::_create_clusters_no_proj::clusters"),
-        ext0, ext1);
-    Kokkos::View<size_t*, ExecSpace> nb_values_per_cluster(
-        Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
-                           "RbfPumInterpolator::_create_clusters_no_proj::nb_"
-                           "values_per_cluster"),
-        ext0);
-    Point no_data = Point{ this->no_data };
-    Kokkos::parallel_for(
-        "RbfPumInterpolator::_create_clusters_no_proj::p_for fill clusters "
-        "view",
-        Kokkos::RangePolicy(execspace, 0, offsets.size() - 1),
-        KOKKOS_LAMBDA(const size_t i) {
-            if (offsets(i + 1) - offsets(i) > 0)
-            {
-                const size_t iid = Kokkos::atomic_fetch_inc(&(id2()));
-                clusters(iid, 0) = pairs(offsets(i)).first;
-                for (size_t ii = offsets(i); ii < offsets(i + 1); ++ii)
-                {
-                    clusters(iid, 1 + ii - offsets(i)) = pairs(ii).second;
-                }
-                nb_values_per_cluster(iid) = offsets(i + 1) - offsets(i);
-                for (size_t ii = offsets(i + 1) - offsets(i); ii < ext1; ++ii)
-                {
-                    clusters(iid, ii) = no_data;
-                }
-            }
-        });
-    Kokkos::fence();
-    Kokkos::Profiling::popRegion(); // ! RbfPumInterpolator::create_clusters
-                                    // build clusters view
-
-    _clusters =
-        ClustersView(Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
-                                        "this->_clusters"),
-                     clusters.extent(0), clusters.extent(1));
-    Kokkos::deep_copy(this->_clusters, clusters);
-    _nb_values_per_cluster = Kokkos::View<size_t*, ExecSpace>(
-        Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
-                           "this->_nb_values_per_cluster"),
-        ext0);
-    Kokkos::deep_copy(_nb_values_per_cluster, nb_values_per_cluster);
-    Kokkos::Profiling::popRegion(); // ! RbfPumInterpolator::create_clusters
-}
-
-FULL_TEMPLATE void TEMPLATED_CLASSNAME::_create_clusters_proj(void)
-{
-    Kokkos::Profiling::pushRegion("RbfPumInterpolator::_create_clusters_proj");
-    ExecSpace execspace{};
-
-    const Coordinates spacing =
-        std::sqrt(4.0 / Dim) * this->_radius * (1.0 - this->_relative_overlap);
-    const Point lower = _source_bvh.bounds().minCorner();
-    const Point upper = _source_bvh.bounds().maxCorner();
-
-    size_t nb_elements[Dim];
-    for (int i = 0; i < Dim; ++i)
+    /* We must ensure the sequential order of the comparison/tagging of centers
+     * to have a deterministic clustering.
+     * Random order of tagging we lead to the removal of different nodes
+     * and thus lead to undeterministic clustering.
+     */
+    auto clusters_centers_host = Kokkos::create_mirror_view_and_copy(
+        Kokkos::HostSpace{}, clusters_centers);
+    for (size_t i = 0; i < M(); ++i)
     {
-        nb_elements[i] = std::ceil((upper[i] - lower[i]) / spacing) + 1;
+        for (size_t j = i + 1; j < M(); ++j)
+        {
+            const Coordinates distance = _NDdistance_without_sqrt(
+                clusters_centers_host(i), clusters_centers_host(j));
+            if (distance > 0.0 && distance < threshold)
+            {
+                clusters_centers_host(i)[0] = NAN;
+            }
+        }
     }
+    Kokkos::deep_copy(clusters_centers, clusters_centers_host);
 
-    Kokkos::Profiling::pushRegion(
-        "RbfPumInterpolator::_create_clusters_proj count centers");
-    Kokkos::View<size_t, ExecSpace> output_value(
-        "RbfPumInterpolator::_create_clusters_proj::output_value");
-    CountValidClusters<ExecSpace, Dim, Coordinates>
-        count_non_empty_centers_predicate(spacing, this->_radius, lower,
-                                          nb_elements);
-    CountValidClustersCallback<ExecSpace, Dim, Coordinates>
-        count_non_empty_centers_callback{ output_value };
-
-    this->_source_bvh.query(execspace, count_non_empty_centers_predicate,
-                            count_non_empty_centers_callback);
-
-    Kokkos::Profiling::popRegion(); // !
-                                    // RbfPumInterpolator::_create_clusters_proj
-                                    // count centers
-
-    auto m =
-        Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{}, output_value);
-
-    PointsView centers(
-        Kokkos::view_alloc(
-            execspace, Kokkos::WithoutInitializing,
-            "RbfPumInterpolator::_create_clusters_proj::centers"),
-        m());
-    Kokkos::View<size_t, ExecSpace> id2(
-        "RbfPumInterpolator::_create_clusters_proj::id2");
-
-    ProjectToInput<ExecSpace, Dim, Coordinates> predicate2{ nb_elements, lower,
-                                                            spacing };
-    ProjectToInputCallback<ExecSpace, Dim, Coordinates> callback2{
-        centers, id2, this->_radius
-    };
-
-    this->_source_bvh.query(execspace, predicate2, callback2);
-
-    auto new_size =
-        Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{}, id2);
-    Kokkos::resize(centers, new_size());
-    Kokkos::sort(centers);
-    auto last = Kokkos::Experimental::unique(execspace, centers);
-    Kokkos::resize(centers,
-                   centers.extent(0)
+    Kokkos::sort(clusters_centers);
+    auto last = Kokkos::Experimental::unique(execspace, clusters_centers);
+    Kokkos::resize(clusters_centers,
+                   clusters_centers.extent(0)
                        - Kokkos::Experimental::distance(
-                           last, Kokkos::Experimental::end(centers)));
+                           last, Kokkos::Experimental::end(clusters_centers)));
 
-    using ProjectToNearestRet = Kokkos::pair<Point, Point>;
-    Kokkos::View<ProjectToNearestRet*, ExecSpace> values(
+    PointsView final_clusters_centers(
         Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
-                           "RbfPumInterpolator::_create_clusters_proj::values"),
-        0);
-    Kokkos::View<int*, ExecSpace> offsets(
-        Kokkos::view_alloc(
-            execspace, Kokkos::WithoutInitializing,
-            "RbfPumInterpolator::_create_clusters_proj::offsets"),
-        0);
-    ProjectToNearest<ExecSpace, Dim, Coordinates> predicate3{ centers,
-                                                              this->_radius };
-    ProjectToNearestCallback<ExecSpace, Dim, Coordinates> callback3{};
+                           _region_name + "::final_clusters_centers"),
+        clusters_centers.extent(0));
+    Kokkos::View<size_t, ExecSpace> final_clusters_filter_index(
+        _region_name + "::final_clusters_filter_index");
 
-    this->_source_bvh.query(execspace, predicate3, callback3, values, offsets);
+    FilterClustersPostProcess<ExecSpace, Dim, Coordinates>
+        post_process_predicate{ clusters_centers };
+    FilterClustersPostProcessCallback<ExecSpace, Dim, Coordinates>
+        post_process_callback{ this->_radius * this->_radius,
+                               final_clusters_centers,
+                               final_clusters_filter_index };
+
+    this->_target_bvh.query(execspace, post_process_predicate,
+                            post_process_callback);
+
+    auto index_mirror = Kokkos::create_mirror_view_and_copy(
+        Kokkos::HostSpace{}, final_clusters_filter_index);
+    Kokkos::resize(final_clusters_centers, index_mirror());
+
+    Kokkos::sort(final_clusters_centers);
+    auto last2 =
+        Kokkos::Experimental::unique(execspace, final_clusters_centers);
+    Kokkos::resize(
+        final_clusters_centers,
+        final_clusters_centers.extent(0)
+            - Kokkos::Experimental::distance(
+                last2, Kokkos::Experimental::end(final_clusters_centers)));
+
+    Kokkos::View<ReturnType*, ExecSpace> clusters_values(
+        Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
+                           _region_name + "::clusters_values"),
+        0);
+    Kokkos::View<int*, ExecSpace> clusters_offsets(
+        Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
+                           _region_name + "::clusters_offsets"),
+        0);
+    GetClustersValues<ExecSpace, Dim, Coordinates>
+        get_clusters_values_predicate{ final_clusters_centers, this->_radius };
+    GetClustersValuesCallback<ExecSpace, Dim, Coordinates>
+        get_clusters_values_callback{};
+    this->_source_bvh.query(execspace, get_clusters_values_predicate,
+                            get_clusters_values_callback, clusters_values,
+                            clusters_offsets);
 
     size_t ext0, ext1;
     Kokkos::parallel_reduce(
-        "RbfPumInterpolator::_create_clusters_proj::find clusters extents size",
-        Kokkos::RangePolicy(execspace, 0, offsets.size() - 1),
+        _region_name + "::find clusters extents size",
+        Kokkos::RangePolicy(execspace, 0, clusters_offsets.size() - 1),
         KOKKOS_LAMBDA(const size_t i, size_t& lmax, size_t& lsum) {
-            size_t l = offsets(i + 1) - offsets(i);
+            size_t l = clusters_offsets(i + 1) - clusters_offsets(i);
             if (l > 0)
             {
                 lsum++;
@@ -258,36 +197,38 @@ FULL_TEMPLATE void TEMPLATED_CLASSNAME::_create_clusters_proj(void)
         Kokkos::Max<size_t>(ext1), ext0);
 
     ext1++;
-    Kokkos::View<size_t, ExecSpace> id3(
-        "RbfPumInterpolator::_create_clusters_proj::id3");
-    ClustersView clusters(
-        Kokkos::view_alloc(
-            execspace, Kokkos::WithoutInitializing,
-            "RbfPumInterpolator::_create_clusters_proj::clusters"),
-        ext0, ext1);
+    Kokkos::View<size_t, ExecSpace> global_clusters_index_final(
+        _region_name + "::global_clusters_index_final");
+    ClustersView clusters(Kokkos::view_alloc(execspace,
+                                             Kokkos::WithoutInitializing,
+                                             _region_name + "::clusters"),
+                          ext0, ext1);
     Kokkos::View<size_t*, ExecSpace> nb_values_per_cluster(
         Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
-                           "RbfPumInterpolator::_create_clusters_proj::nb_"
-                           "values_per_cluster"),
+                           _region_name + "::nb_values_per_cluster"),
         ext0);
-    Point no_data = Point{ this->no_data };
     Kokkos::parallel_for(
-        "RbfPumInterpolator::_create_clusters_proj::p_for fill clusters "
-        "view",
-        Kokkos::RangePolicy(execspace, 0, offsets.size() - 1),
+        _region_name + "::p_for fill clusters view",
+        Kokkos::RangePolicy(execspace, 0, clusters_offsets.size() - 1),
         KOKKOS_LAMBDA(const size_t i) {
-            if (offsets(i + 1) - offsets(i) > 0)
+            if (clusters_offsets(i + 1) - clusters_offsets(i) > 0)
             {
-                const size_t iid = Kokkos::atomic_fetch_inc(&(id3()));
-                clusters(iid, 0) = values(offsets(i)).first;
-                for (size_t ii = offsets(i); ii < offsets(i + 1); ++ii)
+                const size_t iid =
+                    Kokkos::atomic_fetch_inc(&(global_clusters_index_final()));
+                clusters(iid, 0) = clusters_values(clusters_offsets(i)).first;
+                for (size_t ii = clusters_offsets(i);
+                     ii < clusters_offsets(i + 1); ++ii)
                 {
-                    clusters(iid, 1 + ii - offsets(i)) = values(ii).second;
+                    clusters(iid, 1 + ii - clusters_offsets(i)) =
+                        clusters_values(ii).second;
                 }
-                nb_values_per_cluster(iid) = offsets(i + 1) - offsets(i);
-                for (size_t ii = offsets(i + 1) - offsets(i); ii < ext1; ++ii)
+                nb_values_per_cluster(iid) =
+                    clusters_offsets(i + 1) - clusters_offsets(i);
+                for (size_t ii = clusters_offsets(i + 1) - clusters_offsets(i);
+                     ii < ext1; ++ii)
                 {
-                    clusters(iid, ii) = no_data;
+                    clusters(iid, ii) = ArborX::Point<Dim, Coordinates>{};
+                    ;
                 }
             }
         });
@@ -303,9 +244,6 @@ FULL_TEMPLATE void TEMPLATED_CLASSNAME::_create_clusters_proj(void)
                            "this->_nb_values_per_cluster"),
         ext0);
     Kokkos::deep_copy(_nb_values_per_cluster, nb_values_per_cluster);
-
-    Kokkos::Profiling::popRegion(); // !
-                                    // RbfPumInterpolator::_create_clusters_proj
 }
 
 #endif /* ! CLUSTERING_HPP */

@@ -34,8 +34,6 @@ public:
                        RbfFunctionBasisType rbf_function);
     void find_radius(void);
     void create_clusters(void);
-    void _create_clusters_proj(void);
-    void _create_clusters_no_proj(void);
     void prepare_interpolation(void);
     Coordinates interpolate_at(const Point& target) const;
     std::string get_interpolator_details(void) const;
@@ -58,7 +56,7 @@ private:
     PolynomialType _polynomial;
     RbfFunctionBasisType _rbf_function;
     WendlandC2<Coordinates> _weighting_function;
-    Kokkos::View<Coordinates**, Kokkos::LayoutRight, ExecSpace> _coeffs;
+    Kokkos::View<Coordinates**, ExecSpace> _coeffs;
 };
 
 #endif /* ! INTERPOLATOR_HXX */

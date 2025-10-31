@@ -45,257 +45,233 @@ struct DistanceToKNearestCallback
 };
 
 template <typename ExecSpace, int Dim, class Coordinates>
-struct CountValidClusters
+struct GetNonEmptyClusters
 {
-    const Coordinates spacing;
-    const Coordinates radius;
-    const ArborX::Point<Dim, Coordinates> lower;
-    size_t shape[Dim];
-
-    CountValidClusters(Coordinates s, Coordinates r,
-                       ArborX::Point<Dim, Coordinates> l, size_t d[Dim])
-        : spacing(s)
-        , radius(r)
-        , lower(l)
+    Coordinates _spacing;
+    size_t _shape[Dim];
+    ArborX::Point<Dim, Coordinates> _lower;
+    Coordinates _spacing_t[Dim];
+    GetNonEmptyClusters(Coordinates spacing,
+                        ArborX::Point<Dim, Coordinates> lower,
+                        ArborX::Point<Dim, Coordinates> upper,
+                        size_t shape[Dim])
+        : _spacing(spacing)
+        , _lower(lower)
     {
-        for (int i = 0; i < Dim; ++i)
+        for (int axis = 0; axis < Dim; ++axis)
         {
-            shape[i] = d[i];
+            _shape[axis] = shape[axis];
+            this->_spacing_t[axis] = (upper[axis] - lower[axis]) / shape[axis];
+            // clang-format off
+            // +1 at each dimension to compensate for "startGridAtEdge @ precice::CreateClustering.hpp:L399~404"
+            // clang-format on
+            this->_shape[axis]++;
         }
     }
 };
 
 template <typename ExecSpace, int Dim, class Coordinates>
-struct ArborX::AccessTraits<CountValidClusters<ExecSpace, Dim, Coordinates>>
+struct ArborX::AccessTraits<GetNonEmptyClusters<ExecSpace, Dim, Coordinates>>
 {
-    static KOKKOS_FUNCTION std::size_t
-    size(const CountValidClusters<ExecSpace, Dim, Coordinates>& cvc)
+    using memory_space = ExecSpace::memory_space;
+    static KOKKOS_FUNCTION auto
+    size(const GetNonEmptyClusters<ExecSpace, Dim, Coordinates>& obj)
     {
         size_t prod = 1;
-        for (int i = 0; i < Dim; ++i)
+        for (int axis = 0; axis < Dim; ++axis)
         {
-            prod *= cvc.shape[i];
+            prod *= obj._shape[axis];
         }
         return prod;
     }
 
     static KOKKOS_FUNCTION auto
-    get(const CountValidClusters<ExecSpace, Dim, Coordinates>& cvc,
-        std::size_t i)
+    get(const GetNonEmptyClusters<ExecSpace, Dim, Coordinates>& obj, size_t i)
     {
-        ArborX::Point<Dim, Coordinates> center;
-        for (int axis = 0; axis < Dim; ++axis)
+        // const size_t i_copy = i;
+        ArborX::Point<Dim, Coordinates> candidate;
+        for (int axis = Dim - 1; axis >= 0; --axis)
         {
-            size_t prod = 1;
-            for (int tt = axis + 1; tt < Dim; ++tt)
-            {
-                prod *= cvc.shape[tt];
-            }
-            center[axis] = cvc.lower[axis] + i / prod * cvc.spacing;
-            i = i % prod;
+            candidate[axis] = obj._lower[axis]
+                + obj._spacing_t[axis] * (i % obj._shape[axis]);
+            i /= obj._shape[axis];
         }
-        return ArborX::intersects(
-            ArborX::Sphere<Dim, Coordinates>(center, cvc.radius));
+        // Kokkos::printf("%lu. candidate = (%f, %f, %f)\n", i_copy,
+        // candidate[0],
+        //                candidate[1], candidate[2]);
+        return ArborX::attach(ArborX::nearest(candidate, 1), candidate);
     }
-    using memory_space = ExecSpace::memory_space;
 };
 
 template <typename ExecSpace, int Dim, class Coordinates>
-struct CountValidClustersCallback
+struct GetNonEmptyClustersCallbackFirstPass
 {
+    Coordinates _squared_radius;
     Kokkos::View<size_t, ExecSpace> _count;
 
     template <typename Predicate, typename Value>
-    KOKKOS_FUNCTION void operator()(Predicate, Value const& value) const
+    KOKKOS_FUNCTION void operator()(Predicate predicate,
+                                    Value const& value) const
     {
+        auto distance = _NDdistance_without_sqrt<Dim, Coordinates>(
+            ArborX::getData(predicate), value);
+        if (distance < 0.0 || distance > this->_squared_radius)
+        {
+            return;
+        }
         Kokkos::atomic_inc(&(this->_count()));
     }
 };
 
 template <typename ExecSpace, int Dim, class Coordinates>
-struct FindClustersCenters
+struct GetNonEmptyClustersCallbackSecondPass
 {
-    const Coordinates spacing;
-    const Coordinates radius;
-    const ArborX::Point<Dim, Coordinates> lower;
-    size_t shape[Dim];
-
-    FindClustersCenters(Coordinates s, Coordinates r,
-                        ArborX::Point<Dim, Coordinates> l, size_t d[Dim])
-        : spacing(s)
-        , radius(r)
-        , lower(l)
-    {
-        for (int i = 0; i < Dim; ++i)
-        {
-            shape[i] = d[i];
-        }
-    }
-};
-
-template <typename ExecSpace, int Dim, class Coordinates>
-struct ArborX::AccessTraits<FindClustersCenters<ExecSpace, Dim, Coordinates>>
-{
-    static KOKKOS_FUNCTION std::size_t
-    size(const FindClustersCenters<ExecSpace, Dim, Coordinates>& fcc)
-    {
-        size_t prod = 1;
-        for (int i = 0; i < Dim; ++i)
-        {
-            prod *= fcc.shape[i];
-        }
-        return prod;
-    }
-
-    static KOKKOS_FUNCTION auto
-    get(const FindClustersCenters<ExecSpace, Dim, Coordinates>& fcc,
-        std::size_t i)
-    {
-        ArborX::Point<Dim, Coordinates> center;
-        for (int axis = 0; axis < Dim; ++axis)
-        {
-            size_t prod = 1;
-            for (int tt = axis + 1; tt < Dim; ++tt)
-            {
-                prod *= fcc.shape[tt];
-            }
-            center[axis] = fcc.lower[axis] + i / prod * fcc.spacing;
-            i = i % prod;
-        }
-        return ArborX::attach(
-            ArborX::intersects(
-                ArborX::Sphere<Dim, Coordinates>(center, fcc.radius)),
-            center);
-    }
-    using memory_space = ExecSpace::memory_space;
-};
-
-template <typename ExecSpace, int Dim, class Coordinates>
-struct FindClustersCentersCallback
-{
-    Kokkos::View<Kokkos::pair<ArborX::Point<Dim, Coordinates>,
-                              ArborX::Point<Dim, Coordinates>>*,
-                 ExecSpace>
-        _out;
+    using ReturnType = Kokkos::pair<ArborX::Point<Dim, Coordinates>,
+                                    ArborX::Point<Dim, Coordinates>>;
+    Coordinates _squared_radius;
+    Kokkos::View<ReturnType*, ExecSpace> _out;
     Kokkos::View<size_t, ExecSpace> _id;
 
     template <typename Predicate, typename Value>
     KOKKOS_FUNCTION void operator()(Predicate predicate,
                                     Value const& value) const
     {
-        size_t idd = Kokkos::atomic_fetch_inc(&(this->_id()));
-        this->_out(idd) = Kokkos::make_pair<ArborX::Point<Dim, Coordinates>,
-                                            ArborX::Point<Dim, Coordinates>>(
+        auto distance = _NDdistance_without_sqrt<Dim, Coordinates>(
             ArborX::getData(predicate), value);
-    }
-};
-
-template <typename ExecSpace, int Dim, class Coordinates>
-struct ProjectToInput
-{
-    size_t _shape[Dim];
-    ArborX::Point<Dim, Coordinates> _lower;
-    Coordinates _spacing;
-    ProjectToInput(const size_t shape[Dim],
-                   ArborX::Point<Dim, Coordinates> lower, Coordinates spacing)
-        : _lower(lower)
-        , _spacing(spacing)
-    {
-        for (int d = 0; d < Dim; ++d)
+        if (distance < 0.0 || distance > this->_squared_radius)
         {
-            _shape[d] = shape[d];
+            return;
         }
+        const size_t index = Kokkos::atomic_fetch_inc(&(this->_id()));
+        this->_out(index) =
+            Kokkos::make_pair(ArborX::getData(predicate), value);
     }
 };
 
 template <typename ExecSpace, int Dim, class Coordinates>
-struct ArborX::AccessTraits<ProjectToInput<ExecSpace, Dim, Coordinates>>
+struct FilterEmptyClusters
+{
+    Kokkos::View<Kokkos::pair<ArborX::Point<Dim, Coordinates>,
+                              ArborX::Point<Dim, Coordinates>>*,
+                 ExecSpace>
+        _centers_candidates;
+    bool _use_proj;
+};
+
+template <typename ExecSpace, int Dim, class Coordinates>
+struct ArborX::AccessTraits<FilterEmptyClusters<ExecSpace, Dim, Coordinates>>
 {
     using memory_space = ExecSpace::memory_space;
-    static KOKKOS_FUNCTION std::size_t
-    size(const ProjectToInput<ExecSpace, Dim, Coordinates>& pti)
-    {
-        size_t prod = 1;
-        for (int d = 0; d < Dim; ++d)
-        {
-            prod *= pti._shape[d];
-        }
-        return prod;
-    }
     static KOKKOS_FUNCTION auto
-    get(const ProjectToInput<ExecSpace, Dim, Coordinates>& pti, std::size_t i)
+    size(const FilterEmptyClusters<ExecSpace, Dim, Coordinates>& obj)
     {
-        ArborX::Point<Dim, Coordinates> center;
-        for (int axis = 0; axis < Dim; ++axis)
+        return obj._centers_candidates.extent(0);
+    }
+
+    static KOKKOS_FUNCTION auto
+    get(const FilterEmptyClusters<ExecSpace, Dim, Coordinates>& obj, size_t i)
+    {
+        if (obj._use_proj)
         {
-            size_t prod = 1;
-            for (int tt = axis + 1; tt < Dim; ++tt)
-            {
-                prod *= pti._shape[tt];
-            }
-            center[axis] = pti._lower[axis] + i / prod * pti._spacing;
-            i = i % prod;
+            return ArborX::attach(
+                ArborX::nearest(obj._centers_candidates(i).first, 1),
+                obj._centers_candidates(i).second);
         }
-        return ArborX::attach(ArborX::nearest(center, 1), center);
+        else
+        {
+            return ArborX::attach(
+                ArborX::nearest(obj._centers_candidates(i).first, 1),
+                obj._centers_candidates(i).first);
+        }
     }
 };
 
 template <typename ExecSpace, int Dim, class Coordinates>
-struct ProjectToInputCallback
+struct FilterEmptyClustersCallback
 {
-    Kokkos::View<ArborX::Point<Dim, Coordinates>*, ExecSpace> centers;
-    Kokkos::View<size_t, ExecSpace> id;
-    double _radius;
+    using ReturnType = Kokkos::pair<ArborX::Point<Dim, Coordinates>,
+                                    ArborX::Point<Dim, Coordinates>>;
+    Coordinates _squared_radius;
+    Kokkos::View<ArborX::Point<Dim, Coordinates>*, ExecSpace> _out;
+    Kokkos::View<size_t, ExecSpace> _id;
+
     template <typename Predicate, typename Value>
     KOKKOS_FUNCTION void operator()(Predicate predicate,
                                     Value const& value) const
     {
-        if (_NDdistance_without_sqrt(ArborX::getData(predicate), value)
-            > _radius * _radius)
+        auto distance = _NDdistance_without_sqrt<Dim, Coordinates>(
+            ArborX::getData(predicate), value);
+        if (distance < 0.0 || distance > this->_squared_radius)
         {
             return;
         }
-        size_t idd = Kokkos::atomic_fetch_inc(&(id()));
-        centers(idd) = value;
+        const size_t index = Kokkos::atomic_fetch_inc(&(this->_id()));
+        this->_out(index) = ArborX::getData(predicate);
     }
 };
 
 template <typename ExecSpace, int Dim, class Coordinates>
-struct ProjectToNearest
+struct RemoveDuplicates
 {
-    Kokkos::View<ArborX::Point<Dim, Coordinates>*, ExecSpace> centers;
-    Coordinates radius;
+    Kokkos::View<ArborX::Point<Dim, Coordinates>*, ExecSpace> _centers;
+    Coordinates _threshold;
+    RemoveDuplicates(
+        Kokkos::View<ArborX::Point<Dim, Coordinates>*, ExecSpace>& centers,
+        Coordinates distances[Dim])
+        : _centers(centers)
+    {
+        Coordinates min = std::numeric_limits<Coordinates>::max();
+        for (int axis = 0; axis < Dim; ++axis)
+        {
+            if (distances[axis] < min)
+            {
+                min = distances[axis];
+            }
+        }
+        // clang-format off
+        // threshold formula from precice::CreateClustering.hpp:L478
+        // clang-format on
+        this->_threshold = 0.4 * min;
+        std::cout << "threshold = " << std::setprecision(17) << this->_threshold
+                  << std::endl;
+        // To avoid sqrt during comparisons
+        this->_threshold *= this->_threshold;
+    }
 };
 
 template <typename ExecSpace, int Dim, class Coordinates>
-struct ArborX::AccessTraits<ProjectToNearest<ExecSpace, Dim, Coordinates>>
+struct ArborX::AccessTraits<RemoveDuplicates<ExecSpace, Dim, Coordinates>>
 {
     using memory_space = ExecSpace::memory_space;
-    static KOKKOS_FUNCTION std::size_t
-    size(const ProjectToNearest<ExecSpace, Dim, Coordinates>& ccp)
+    static KOKKOS_FUNCTION size_t
+    size(const RemoveDuplicates<ExecSpace, Dim, Coordinates>& obj)
     {
-        return ccp.centers.extent(0);
+        return obj._centers.extent(0);
     }
     static KOKKOS_FUNCTION auto
-    get(const ProjectToNearest<ExecSpace, Dim, Coordinates>& ccp, std::size_t i)
+    get(const RemoveDuplicates<ExecSpace, Dim, Coordinates>& obj, size_t i)
     {
-        return ArborX::attach(
-            ArborX::intersects(
-                ArborX::Sphere<Dim, Coordinates>(ccp.centers(i), ccp.radius)),
-            ccp.centers(i));
+        return ArborX::attach(ArborX::nearest(obj._centers(i), 2), i);
     }
 };
 
 template <typename ExecSpace, int Dim, class Coordinates>
-struct ProjectToNearestCallback
+struct RemoveDuplicatesCallback
 {
-    template <typename Predicate, typename Value, typename OutputFunctor>
-    KOKKOS_FUNCTION void operator()(Predicate predicate, Value const& value,
-                                    OutputFunctor const& out) const
+    Kokkos::View<ArborX::Point<Dim, Coordinates>*, ExecSpace> centers;
+    Kokkos::View<bool*, ExecSpace> destroy_list;
+    Coordinates _threshold;
+    template <typename Predicate, typename Value>
+    KOKKOS_FUNCTION void operator()(Predicate predicate,
+                                    Value const& value) const
     {
-        out(Kokkos::make_pair<ArborX::Point<Dim, Coordinates>,
-                              ArborX::Point<Dim, Coordinates>>(
-            ArborX::getData(predicate), value));
+        const Coordinates distance = _NDdistance_without_sqrt<Dim, Coordinates>(
+            centers(ArborX::getData(predicate)), value);
+        if (distance > 0.0 && distance < this->_threshold)
+        {
+            Kokkos::atomic_store(&(destroy_list(ArborX::getData(predicate))),
+                                 true);
+        }
     }
 };
 
@@ -333,6 +309,113 @@ struct ProjectionCallback
         out(Kokkos::make_pair<ArborX::Point<Dim, Coordinates>,
                               ArborX::Point<Dim, Coordinates>>(
             ArborX::getData(predicate), value));
+    }
+};
+
+template <typename ExecSpace, int Dim, class Coordinates>
+struct GetClustersValues
+{
+    Kokkos::View<ArborX::Point<Dim, Coordinates>*, ExecSpace> _centers;
+    Coordinates _radius;
+};
+
+template <typename ExecSpace, int Dim, class Coordinates>
+struct ArborX::AccessTraits<GetClustersValues<ExecSpace, Dim, Coordinates>>
+{
+    using memory_space = ExecSpace::memory_space;
+    static KOKKOS_FUNCTION size_t
+    size(const GetClustersValues<ExecSpace, Dim, Coordinates>& obj)
+    {
+        return obj._centers.extent(0);
+    }
+    static KOKKOS_FUNCTION auto
+    get(const GetClustersValues<ExecSpace, Dim, Coordinates>& obj, size_t i)
+    {
+        if (obj._centers(i)[0] != obj._centers(i)[0])
+        {
+            auto center = obj._centers(i);
+            center[0] = 0.0;
+            return ArborX::attach(
+                ArborX::intersects(
+                    ArborX::Sphere<Dim, Coordinates>(center, -1000.0)),
+                obj._centers(i));
+        }
+        return ArborX::attach(
+            ArborX::intersects(
+                ArborX::Sphere<Dim, Coordinates>(obj._centers(i), obj._radius)),
+            obj._centers(i));
+    }
+};
+
+template <typename ExecSpace, int Dim, class Coordinates>
+struct GetClustersValuesCallback
+{
+    using ReturnType = Kokkos::pair<ArborX::Point<Dim, Coordinates>,
+                                    ArborX::Point<Dim, Coordinates>>;
+    template <typename Predicate, typename Value, typename OutputFunctor>
+    KOKKOS_FUNCTION void operator()(Predicate predicate, Value const& value,
+                                    OutputFunctor const out) const
+    {
+        const ArborX::Point<Dim, Coordinates> center =
+            ArborX::getData(predicate);
+        out(ReturnType{ center, value });
+    }
+};
+
+template <typename ExecSpace, int Dim, class Coordinates>
+struct FilterClustersPostProcess
+{
+    Kokkos::View<ArborX::Point<Dim, Coordinates>*, ExecSpace> _centers;
+};
+
+template <typename ExecSpace, int Dim, class Coordinates>
+struct ArborX::AccessTraits<
+    FilterClustersPostProcess<ExecSpace, Dim, Coordinates>>
+{
+    using memory_space = ExecSpace::memory_space;
+    static KOKKOS_FUNCTION size_t
+    size(const FilterClustersPostProcess<ExecSpace, Dim, Coordinates>& obj)
+    {
+        return obj._centers.extent(0);
+    }
+    static KOKKOS_FUNCTION auto
+    get(const FilterClustersPostProcess<ExecSpace, Dim, Coordinates>& obj,
+        size_t i)
+    {
+        if (obj._centers(i)[0] != obj._centers(i)[0])
+        {
+            // clang-format off
+            // center variable is required to avoid modifying the centers (potential kind of race condition)
+            // The ArborX::attach call is useless to the process but ensures a consistent return type
+            // clang-format on
+            auto center = obj._centers(i);
+            center[0] = 0.0;
+            return ArborX::attach(ArborX::nearest(center, 0), center);
+        }
+        return ArborX::attach(ArborX::nearest(obj._centers(i), 1),
+                              obj._centers(i));
+    }
+};
+
+template <typename ExecSpace, int Dim, class Coordinates>
+struct FilterClustersPostProcessCallback
+{
+    Coordinates _squared_radius;
+    Kokkos::View<ArborX::Point<Dim, Coordinates>*, ExecSpace> _out;
+    Kokkos::View<size_t, ExecSpace> _id;
+
+    template <typename Predicate, typename Value>
+    KOKKOS_FUNCTION void operator()(Predicate predicate,
+                                    Value const& value) const
+    {
+        auto distance = _NDdistance_without_sqrt<Dim, Coordinates>(
+            ArborX::getData(predicate), value);
+        if (distance < 0.0 || distance > this->_squared_radius)
+        {
+            return;
+        }
+        const size_t index = Kokkos::atomic_fetch_inc(&(this->_id()));
+        this->_out(index) = ArborX::getData(predicate);
     }
 };
 

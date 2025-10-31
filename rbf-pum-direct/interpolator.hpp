@@ -56,20 +56,15 @@ TEMPLATED_CLASSNAME::RbfPumInterpolator(
                                       "this->_target"),
                    target.extent(0));
     Kokkos::deep_copy(_target, target);
-
     this->_radius = 0;
     this->_source_bvh =
         ArborX::BoundingVolumeHierarchy{ execspace, this->_source };
-
     this->_target_bvh =
         ArborX::BoundingVolumeHierarchy{ execspace, this->_target };
-
     this->_polynomial = polynomial;
     this->_rbf_function = rbf_function;
     this->_weighting_function = WendlandC2<Coordinates>{};
-
     this->no_data = Point{};
-
     find_radius();
     this->_rbf_function.set_r_inv(1.0 / this->_radius);
     this->_weighting_function.set_r_inv(1.0 / this->_radius);

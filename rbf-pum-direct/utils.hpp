@@ -9,6 +9,20 @@
 #include <iostream>
 #include <sstream>
 
+#define DEBUG_INT(var)                                                         \
+    std::cout << "[DEBUG] " << #var << " = " << (var) << std::endl;
+
+#define DEBUG_FLOAT(var)                                                       \
+    std::cout << "[DEBUG] " << #var << " = " << static_cast<double>(var)       \
+              << std::endl;
+
+#define DEBUG_STR(var)                                                         \
+    std::cout << "[DEBUG] " << #var << " = \"" << (var) << "\"" << std::endl;
+
+#define DEBUG_VIEW(view) print_view(view);
+
+#define PRINT_STRING(string) std::cout << string << std::endl;
+
 template <int Dim, class Coordinates>
 std::string point_to_str(const ArborX::Point<Dim, Coordinates>& point)
 {
@@ -40,6 +54,10 @@ _NDdistance_without_sqrt(const ArborX::Point<Dim, Coordinates>& lhs,
     Coordinates s = 0;
     for (int i = 0; i < Dim; i++)
     {
+        if (rhs[i] != rhs[i] || lhs[i] != lhs[i])
+        {
+            return -1; // NaN
+        }
         s += (rhs[i] - lhs[i]) * (rhs[i] - lhs[i]);
     }
     return s;
@@ -50,7 +68,12 @@ KOKKOS_INLINE_FUNCTION Coordinates
 NDdistance(const ArborX::Point<Dim, Coordinates>& lhs,
            const ArborX::Point<Dim, Coordinates>& rhs)
 {
-    return Kokkos::sqrt(_NDdistance_without_sqrt<Dim, Coordinates>(lhs, rhs));
+    auto d = _NDdistance_without_sqrt<Dim, Coordinates>(lhs, rhs);
+    if (d < 0)
+    {
+        return -1;
+    }
+    return Kokkos::sqrt(d);
 }
 
 template <typename ExecSpace, int Dim, class Coordinates>
@@ -70,6 +93,8 @@ void print_clusters_view(
                       << std::endl;
         }
     }
+    std::cout << "nb_clusters: " << clusters_h.extent(0) << std::endl;
+    std::cout << "nodes: " << clusters_h.extent(1) << std::endl;
 }
 
 void print_cuda_memory_usage()
