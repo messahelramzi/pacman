@@ -1,139 +1,114 @@
 #ifndef CACHE_DATA_HPP
 #define CACHE_DATA_HPP
 
-#include <KokkosBlas.hpp>
-#include <Kokkos_ArithTraits.hpp>
+#include <KokkosBlas2_serial_gemv.hpp>
 #include <Kokkos_Core.hpp>
 #include <Kokkos_Profiling_ScopedRegion.hpp>
 #include <misc/ArborX_SymmetricSVD.hpp>
 
 #include "interpolator.hxx"
 
+#define XOR(A, B) (((A) && !(B)) || (!(A) && (B)))
+
 template <typename AViewType, typename diagViewType, typename unitViewType,
           typename bViewType, typename outViewType>
 void KOKKOS_FUNCTION solve(AViewType& A, diagViewType& diag, unitViewType& unit,
                            bViewType& b, outViewType& out);
 
-FULL_TEMPLATE void TEMPLATED_CLASSNAME::prepare_interpolation(void)
+FULL_TEMPLATE
+void TEMPLATED_CLASSNAME::prepare_interpolation(void)
 {
-    assert(this->_clusters.extent(0) > 0 && this->_clusters.extent(1) > 0);
-    const ExecSpace execspace{};
-    const size_t N = _clusters.extent(1) - 1;
-    const size_t M = _clusters.extent(0);
-    const size_t Pn = Dim + 1;
-    Kokkos::View<Coordinates***, ExecSpace> all_lhs(
-        Kokkos::view_alloc(
-            execspace, Kokkos::WithoutInitializing,
-            "RbfPumInterpolator::prepare_interpolation::all_lhs"),
-        M, N + Pn, N + Pn);
-    Kokkos::View<Coordinates**, ExecSpace> all_rhs(
-        Kokkos::view_alloc(
-            execspace, Kokkos::WithoutInitializing,
-            "RbfPumInterpolator::prepare_interpolation::all_rhs"),
-        M, N + Pn);
-    auto f = this->_rbf_function;
+    ExecSpace execspace{};
+    using TensorType = Kokkos::View<Coordinates***, ExecSpace>;
+    using MatrixType = Kokkos::View<Coordinates**, ExecSpace>;
+    using VectorType = Kokkos::View<Coordinates**, ExecSpace>;
+
+    // NB clusters
+    const size_t K = this->_clusters.extent(0);
+    // Size of the square matrix NxN
+    const size_t N = this->_clusters.extent(1) - 1;
+    // Total number of source nodes
+    const size_t M = this->_source.extent(0);
+
+    TensorType As("As", K, N, N);
+    MatrixType bs("bs", K, N);
+
+    // clang-format off
+    /* We copy explicitly the data from *this into the execspace to avoid using a KOKKOS_CLASS_LAMBDA in the kernel below.
+     *
+     * clusters: A KxN matrix, which contains for each cluster clusters(k,:),
+     * the center in clusters(k, 0) and the associated values within the sphere range in clusters(k, 1::)
+     *
+     * values: A 1xM vector, which contains the values associated to the source points.
+     *
+     * bounds: A 1xK vector, which contains in bounds(k) the number of nodes to use in the cluster k
+     *
+     * source: A 1xM vector, which contains the points of the source mesh (used to find the associated value)
+     */
+    // clang-format on
     auto clusters =
         Kokkos::create_mirror_view_and_copy(execspace, this->_clusters);
+    auto source = Kokkos::create_mirror_view_and_copy(execspace, this->_source);
     auto values = Kokkos::create_mirror_view_and_copy(execspace, this->_values);
-    auto nb_nodes = Kokkos::create_mirror_view_and_copy(
+    auto bounds = Kokkos::create_mirror_view_and_copy(
         execspace, this->_nb_values_per_cluster);
+    auto rbf_function = this->_rbf_function;
+
     Kokkos::parallel_for(
-        "RbfPumInterpolator::prepare_interpolation::p_for fill all_lhs rbf "
-        "values (A)",
-        Kokkos::MDRangePolicy(ExecSpace{}, { 0x0LU, 0x0LU, 0x0LU },
-                              { N, N, M }),
-        KOKKOS_LAMBDA(const size_t& i, const size_t& j, const size_t& k) {
-            if (i < nb_nodes(k) && j < nb_nodes(k))
+        "fill rbf system",
+        Kokkos::MDRangePolicy(execspace, { 0, 0, 0 }, { K, N, N }),
+        KOKKOS_LAMBDA(const size_t& k, const size_t& i, const size_t& j) {
+            if (i + 1 < bounds(k) && j + 1 < bounds(k))
             {
-                auto rbf_val = f(NDdistance<Dim, Coordinates>(
-                    clusters(k, i + 1), clusters(k, j + 1)));
-                all_lhs(k, i, j) = rbf_val;
-                all_rhs(k, i) = values(i);
-            }
-            else
-            {
-                all_lhs(k, i, j) = 0.0;
-                all_rhs(k, i) = 0.0;
-            }
-        });
-    Kokkos::parallel_for(
-        "RbfPumInterpolator::prepare_interpolation::p_for fill all_lhs poly "
-        "values (P/Pt)",
-        Kokkos::MDRangePolicy(ExecSpace{}, { 0x0LU, 0x0LU }, { N, M }),
-        KOKKOS_LAMBDA(const size_t& j, const size_t& k) {
-            if (j < nb_nodes(k))
-            {
-                // Constant contribution
-                all_lhs(k, j, N) = 1.0;
-                all_lhs(k, N, j) = 1.0;
-                for (int axis = 0; axis < Dim; ++axis)
+                const Point center1 = clusters(k, i + 1);
+                const Point center2 = clusters(k, j + 1);
+                const Coordinates distance = NDdistance(center1, center2);
+                As(k, i, j) = rbf_function(distance);
+
+                size_t value_index = 0;
+                for (; value_index < M; ++value_index)
                 {
-                    all_lhs(k, j, N + 1 + axis) = clusters(k, j)[axis];
-                    all_lhs(k, N + 1 + axis, j) = clusters(k, j)[axis];
+                    if (source(value_index) == center1)
+                    {
+                        bs(k, i) = values(value_index);
+                        break;
+                    }
+                    if (source(value_index) == center2)
+                    {
+                        bs(k, j) = values(value_index);
+                        break;
+                    }
                 }
             }
-            else
-            {
-                all_lhs(k, j, N) = 0.0;
-                all_lhs(k, N, j) = 0.0;
-                for (int axis = 0; axis < Dim; ++axis)
-                {
-                    all_lhs(k, j, N + 1 + axis) = 0.0;
-                    all_lhs(k, N + 1 + axis, j) = 0.0;
-                }
-            }
-        });
-    Kokkos::parallel_for(
-        "RbfPumInterpolator::prepare_interpolation::p_for fill all_rhs padding "
-        "zeros (0)",
-        Kokkos::MDRangePolicy(execspace, { N, N, 0x0LU },
-                              { N + Pn, N + Pn, M }),
-        KOKKOS_LAMBDA(const size_t& i, const size_t& j, const size_t& k) {
-            all_lhs(k, i, j) = 0.0;
-            all_rhs(k, i) = 0.0;
         });
     Kokkos::fence();
 
-    auto m1 = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{}, all_lhs);
-    auto m2 = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{}, all_rhs);
-    for (size_t i = 0; i < M; ++i)
-    {
-        auto mat = Kokkos::subview(m1, i, Kokkos::ALL(), Kokkos::ALL());
-        auto val = Kokkos::subview(m2, i, Kokkos::ALL());
-        print_2d_view(mat);
-        print_view(val);
-    }
-
-    Kokkos::View<Coordinates**, ExecSpace> coeffs(
-        Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing, "coeffs"), M,
-        N + Pn);
-
-    Kokkos::View<Coordinates**, ExecSpace> all_diag(
-        Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing, "all_diag"),
-        M, N + Pn);
-    Kokkos::View<Coordinates***, ExecSpace> all_unit(
-        Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing, "all_unit"),
-        M, N + Pn, N + Pn);
+    MatrixType coeffs("coeffs", K, N);
+    MatrixType diags(
+        Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing, "diags"), K,
+        N);
+    TensorType units(
+        Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing, "units"), K,
+        N, N);
 
     Kokkos::parallel_for(
-        "solve all systems", Kokkos::RangePolicy(execspace, 0, M),
-        KOKKOS_LAMBDA(const size_t& i) {
-            // clang-format off
-            auto    A = Kokkos::subview(all_lhs, i, Kokkos::ALL(), Kokkos::ALL());
-            auto    b = Kokkos::subview(all_rhs, i, Kokkos::ALL());
-            auto diag = Kokkos::subview(all_diag, i, Kokkos::ALL());
-            auto unit = Kokkos::subview(all_unit, i, Kokkos::ALL(), Kokkos::ALL());
-            auto  out = Kokkos::subview(coeffs, i, Kokkos::ALL());
+        "solve systems", Kokkos::RangePolicy(execspace, 0, K),
+        KOKKOS_LAMBDA(const size_t& k) {
+            auto A = Kokkos::subview(As, k, Kokkos::ALL(), Kokkos::ALL());
+            auto b = Kokkos::subview(bs, k, Kokkos::ALL());
+            auto diag = Kokkos::subview(diags, k, Kokkos::ALL());
+            auto unit = Kokkos::subview(units, k, Kokkos::ALL(), Kokkos::ALL());
+            auto out = Kokkos::subview(coeffs, k, Kokkos::ALL());
+
             solve(A, diag, unit, b, out);
-            // clang-format on
         });
     Kokkos::fence();
-    this->_coeffs = Kokkos::View<Coordinates**, ExecSpace>(
-        Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
-                           "this->_coeffs"),
-        M, N + Pn);
+
+    this->_coeffs =
+        MatrixType(Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
+                                      "this->_coeffs"),
+                   K, N);
     Kokkos::deep_copy(this->_coeffs, coeffs);
-    print_2d_view(this->_coeffs, "\n");
 }
 
 /* Solves Au=b for u

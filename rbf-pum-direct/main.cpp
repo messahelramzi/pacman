@@ -10,7 +10,8 @@
 #include "interpolator.hpp"
 
 template <class scalar_type>
-scalar_type franke_function(ArborX::Point<3, scalar_type> point)
+KOKKOS_INLINE_FUNCTION scalar_type
+franke_function(ArborX::Point<3, scalar_type> point)
 {
     scalar_type x = point[0];
     scalar_type y = point[1];
@@ -134,15 +135,26 @@ int main(int argc, char* argv[])
                 source, values, target, polynomial, rbf_function);
         auto t2 = std::chrono::high_resolution_clock::now().time_since_epoch();
 
-        std::vector<scalar_type> target_output;
-        target_output.reserve(target_h.extent(0));
-        std::vector<scalar_type> reference;
-        reference.reserve(target_h.extent(0));
-        for (size_t i = 0; i < target_h.extent(0); ++i)
-        {
-            target_output.push_back(interpolator.interpolate_at(target_h(i)));
-            reference.push_back(franke_function<scalar_type>(target_h(i)));
-        }
+        // Kokkos::View<scalar_type*, execution_space> interpolated_data(
+        //     Kokkos::view_alloc(execution_space{},
+        //     Kokkos::WithoutInitializing,
+        //                        "interpolated_data"),
+        //     target.extent(0));
+        // Kokkos::View<scalar_type*, execution_space> reference(
+        //     Kokkos::view_alloc(execution_space{},
+        //     Kokkos::WithoutInitializing,
+        //                        "reference"),
+        //     target.extent(0));
+
+        // Kokkos::parallel_for(
+        //     "interpolate data",
+        //     Kokkos::RangePolicy(execution_space{}, 0, target.extent(0)),
+        //     KOKKOS_LAMBDA(const size_t& i) {
+        //         interpolated_data(i) =
+        //         interpolator.interpolate_at(target(i)); reference(i) =
+        //         franke_function(target(i));
+        //     });
+        // Kokkos::fence();
 
         std::cout << "Source mesh: " << argv[1] << "(points: " << N << ")\n";
         std::cout << "Target mesh: " << argv[2] << "(points: " << M << ")\n";
@@ -150,13 +162,17 @@ int main(int argc, char* argv[])
                   << "\n";
         std::cout << interpolator.get_interpolator_details() << std::endl;
 
-        for (size_t i = 0; i < target_h.extent(0); ++i)
-        {
-            std::cout << "interpolated: " << target_output[i]
-                      << ", expected: " << reference[i] << ", difference: "
-                      << std::fabs(reference[i] - target_output[i])
-                      << std::endl;
-        }
+        // double diff_sum;
+        // Kokkos::parallel_reduce(
+        //     "compute average abs error",
+        //     Kokkos::RangePolicy(execution_space{}, 0, target.extent(0)),
+        //     KOKKOS_LAMBDA(const size_t& i, double& lsum) {
+        //         lsum += Kokkos::fabs(reference(i) - interpolated_data(i));
+        //     },
+        //     diff_sum);
+
+        // std::cout << "average abs error: " << diff_sum / target_h.extent(0)
+        //           << std::endl;
 
         free(source_grid);
         free(target_grid);

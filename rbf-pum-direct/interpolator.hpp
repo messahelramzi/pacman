@@ -110,7 +110,6 @@ Coordinates TEMPLATED_CLASSNAME::interpolate_at(const Point& target) const
         },
         weights_sum);
     Kokkos::fence();
-    DEBUG_FLOAT(weights_sum);
     if (weights_sum == 0.0)
     {
         std::cerr << "/!\\ Target Point" << point_to_str(target)
@@ -138,21 +137,20 @@ Coordinates TEMPLATED_CLASSNAME::interpolate_at(const Point& target) const
             {
                 Coordinates rbf = rbf_function(
                     NDdistance(__clusters(clusters_index(i), 1 + ii), target));
-                Coordinates poly = 0.0;
-                for (int d = 0; d < Dim; ++d)
-                {
-                    poly += coeffs(clusters_index(i),
-                                   coeffs.extent(1) - (Dim + 1) - 1 + d)
-                        * target[d];
-                }
                 Coordinates local_interpolant =
-                    coeffs(clusters_index(i), 1 + ii) * rbf + poly;
+                    coeffs(clusters_index(i), ii) * rbf;
                 lsum += (weights(i) / weights_sum) * local_interpolant;
             }
         },
         interpolated_value);
 
     return interpolated_value;
+}
+
+FULL_TEMPLATE
+void TEMPLATED_CLASSNAME::interpolate(PointsView& target) const
+{
+    ExecSpace execspace{};
 }
 
 FULL_TEMPLATE

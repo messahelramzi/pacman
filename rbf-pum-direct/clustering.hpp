@@ -110,8 +110,8 @@ void TEMPLATED_CLASSNAME::create_clusters(void)
 
     /* We must ensure the sequential order of the comparison/tagging of centers
      * to have a deterministic clustering.
-     * Random order of tagging we lead to the removal of different nodes
-     * and thus lead to undeterministic clustering.
+     * Random order of tagging leads to the removal of different nodes
+     * and thus leads to undeterministic clustering.
      */
     auto clusters_centers_host = Kokkos::create_mirror_view_and_copy(
         Kokkos::HostSpace{}, clusters_centers);

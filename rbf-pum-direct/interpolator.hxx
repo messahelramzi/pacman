@@ -36,6 +36,7 @@ public:
     void create_clusters(void);
     void prepare_interpolation(void);
     Coordinates interpolate_at(const Point& target) const;
+    void interpolate(PointsView& target) const;
     std::string get_interpolator_details(void) const;
 
 private:
