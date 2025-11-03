@@ -5,120 +5,128 @@
 
 #include "utils.hpp"
 
-template <class ftype>
+template <class scalar_type>
 class RbfFunctionBasis
 {
 public:
-  virtual KOKKOS_INLINE_FUNCTION ftype operator()(const ftype r) const = 0;
+    virtual KOKKOS_INLINE_FUNCTION scalar_type
+    operator()(const scalar_type r) const = 0;
 
 private:
-  Kokkos::View<ftype*> _params;
+    Kokkos::View<scalar_type*> _params;
 };
 
-template <class ftype>
-class WendlandC0 : public RbfFunctionBasis<ftype>
+template <class scalar_type>
+class WendlandC0 : public RbfFunctionBasis<scalar_type>
 {
 public:
-  KOKKOS_INLINE_FUNCTION ftype operator()(const ftype r) const
-  {
-    const ftype p = r * _r_inv;
-    if (p >= 1 || Kokkos::isnan(r))
+    KOKKOS_INLINE_FUNCTION scalar_type operator()(const scalar_type r) const
     {
-      return (ftype)0.0;
+        const scalar_type p = r * _r_inv;
+        if (p >= 1)
+        {
+            return (scalar_type)0.0;
+        }
+        return (1.0 - p) * (1.0 - p);
     }
-    return (1.0 - p) * (1.0 - p);
-  }
 
 private:
-  ftype _r_inv;
+    scalar_type _r_inv;
 };
 
-template <class ftype>
-class WendlandC2 : public RbfFunctionBasis<ftype>
+template <class scalar_type>
+class WendlandC2 : public RbfFunctionBasis<scalar_type>
 {
 public:
-  KOKKOS_INLINE_FUNCTION ftype operator()(const ftype r) const
-  {
-    const ftype p = r * _r_inv;
-    if (p >= 1 || Kokkos::isnan(r))
+    KOKKOS_INLINE_FUNCTION scalar_type operator()(const scalar_type r) const
     {
-      return (ftype)0.0;
+        if (r < 0)
+        {
+            return (scalar_type)0.0;
+        }
+        const scalar_type p = r * _r_inv;
+        if (p >= 1)
+        {
+            return (scalar_type)0.0;
+        }
+        return Kokkos::pow(1.0 - p, 4) * (4 * p + 1);
     }
-    return Kokkos::pow(1.0 - p, 4) * (4 * p + 1);
-  }
-  void set_r_inv(ftype r_inv)
-  {
-    this->_r_inv = r_inv;
-  }
+    void set_r_inv(scalar_type r_inv)
+    {
+        this->_r_inv = r_inv;
+    }
 
 private:
-  ftype _r_inv;
+    scalar_type _r_inv;
 };
 
-template <class ftype>
-class WendlandC4 : public RbfFunctionBasis<ftype>
+template <class scalar_type>
+class WendlandC4 : public RbfFunctionBasis<scalar_type>
 {
 public:
-  KOKKOS_INLINE_FUNCTION ftype operator()(const ftype r) const
-  {
-    const ftype p = r * _r_inv;
-    if (p >= 1 || Kokkos::isnan(r))
+    KOKKOS_INLINE_FUNCTION scalar_type operator()(const scalar_type r) const
     {
-      return (ftype)0.0;
+        const scalar_type p = r * _r_inv;
+        if (p >= 1)
+        {
+            return (scalar_type)0.0;
+        }
+        return Kokkos::pow(1.0 - p, 6) * (35.0 * p * p + 18 * p + 3);
     }
-    return Kokkos::pow(1.0 - p, 6) * (35.0 * p * p + 18 * p + 3);
-  }
-  void set_r_inv(ftype r_inv)
-  {
-    this->_r_inv = r_inv;
-  }
+    void set_r_inv(scalar_type r_inv)
+    {
+        this->_r_inv = r_inv;
+    }
 
 private:
-  ftype _r_inv;
+    scalar_type _r_inv;
 };
 
-template <class ftype>
-class WendlandC6 : public RbfFunctionBasis<ftype>
+template <class scalar_type>
+class WendlandC6 : public RbfFunctionBasis<scalar_type>
 {
 public:
-  KOKKOS_INLINE_FUNCTION ftype operator()(const ftype r) const
-  {
-    const ftype p = r * _r_inv;
-    if (p >= 1 || Kokkos::isnan(r))
+    KOKKOS_INLINE_FUNCTION scalar_type operator()(const scalar_type r) const
     {
-      return (ftype)0.0;
+        const scalar_type p = r * _r_inv;
+        if (p >= 1)
+        {
+            return (scalar_type)0.0;
+        }
+        return Kokkos::pow(1.0 - p, 8)
+            * (32.0 * p * p * p + 25.0 * p * p + 8 * p + 1);
     }
-    return Kokkos::pow(1.0 - p, 8) * (32.0 * p * p * p + 25.0 * p * p + 8 * p + 1);
-  }
-  void set_r_inv(ftype r_inv)
-  {
-    this->_r_inv = r_inv;
-  }
+    void set_r_inv(scalar_type r_inv)
+    {
+        this->_r_inv = r_inv;
+    }
 
 private:
-  ftype _r_inv;
+    scalar_type _r_inv;
 };
 
-template <class ftype>
-class WendlandC8 : public RbfFunctionBasis<ftype>
+template <class scalar_type>
+class WendlandC8 : public RbfFunctionBasis<scalar_type>
 {
 public:
-  KOKKOS_INLINE_FUNCTION ftype operator()(const ftype r) const
-  {
-    const ftype p = r * _r_inv;
-    if (p >= 1 || Kokkos::isnan(r))
+    KOKKOS_INLINE_FUNCTION scalar_type operator()(const scalar_type r) const
     {
-      return (ftype)0.0;
+        const scalar_type p = r * _r_inv;
+        if (p >= 1)
+        {
+            return (scalar_type)0.0;
+        }
+        return Kokkos::pow(1.0 - p, 10)
+            * (1287.0 * p * p * p * p + 1350.0 * p * p * p + 630.0 * p * p
+               + 150.0 * p + 15);
     }
-    return Kokkos::pow(1.0 - p, 10) * (1287.0 * p * p * p * p + 1350.0 * p * p * p + 630.0 * p * p + 150.0 * p + 15);
-  }
-  void set_r_inv(ftype r_inv)
-  {
-    this->_r_inv = r_inv;
-  }
+    void set_r_inv(scalar_type r_inv)
+    {
+        this->_r_inv = r_inv;
+    }
 
 private:
-  ftype _r_inv;
+    scalar_type _r_inv;
 };
 
 #endif /* ! RBF_FUNCTIONS_HPP */

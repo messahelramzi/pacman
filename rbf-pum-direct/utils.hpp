@@ -6,6 +6,7 @@
 #include <Kokkos_Core.hpp>
 #include <cuda.h>
 #include <cuda_runtime_api.h>
+#include <iomanip>
 #include <iostream>
 #include <sstream>
 
@@ -19,7 +20,7 @@
 #define DEBUG_STR(var)                                                         \
     std::cout << "[DEBUG] " << #var << " = \"" << (var) << "\"" << std::endl;
 
-#define DEBUG_VIEW(view) print_view(view);
+#define DEBUG_VIEW(view) print_view(view, "\n");
 
 #define PRINT_STRING(string) std::cout << string << std::endl;
 
@@ -157,11 +158,12 @@ template <typename ViewType>
 void print_2d_view(ViewType& v, std::string sep = " ")
 {
     auto m = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{}, v);
+    std::cout << std::fixed << std::setprecision(6);
     for (size_t i = 0; i < m.extent(0); ++i)
     {
         for (size_t j = 0; j < m.extent(1); ++j)
         {
-            std::cout << m(i, j) << sep;
+            std::cout << std::setw(12) << m(i, j) << sep;
         }
         std::cout << std::endl;
     }

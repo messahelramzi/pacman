@@ -69,7 +69,7 @@ TEMPLATED_CLASSNAME::RbfPumInterpolator(
     this->_rbf_function.set_r_inv(1.0 / this->_radius);
     this->_weighting_function.set_r_inv(1.0 / this->_radius);
     create_clusters();
-    // prepare_interpolation();
+    prepare_interpolation();
     Kokkos::Profiling::popRegion(); // ! RbfPumInterpolator::RbfPumInterpolator
 }
 
@@ -79,9 +79,7 @@ Coordinates TEMPLATED_CLASSNAME::interpolate_at(const Point& target) const
     ExecSpace execspace{};
     size_t N = this->_clusters.extent(0);
     Kokkos::View<Coordinates*, ExecSpace> weights(
-        Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
-                           "RbfPumInterpolator::interpolate_at::weights"),
-        N);
+        "RbfPumInterpolator::interpolate_at::weights", N);
     Kokkos::View<size_t*, ExecSpace> clusters_index(
         Kokkos::view_alloc(
             execspace, Kokkos::WithoutInitializing,
@@ -112,6 +110,7 @@ Coordinates TEMPLATED_CLASSNAME::interpolate_at(const Point& target) const
         },
         weights_sum);
     Kokkos::fence();
+    DEBUG_FLOAT(weights_sum);
     if (weights_sum == 0.0)
     {
         std::cerr << "/!\\ Target Point" << point_to_str(target)
@@ -142,8 +141,8 @@ Coordinates TEMPLATED_CLASSNAME::interpolate_at(const Point& target) const
                 Coordinates poly = 0.0;
                 for (int d = 0; d < Dim; ++d)
                 {
-                    poly +=
-                        coeffs(clusters_index(i), coeffs.extent(1) - 4 - 1 + d)
+                    poly += coeffs(clusters_index(i),
+                                   coeffs.extent(1) - (Dim + 1) - 1 + d)
                         * target[d];
                 }
                 Coordinates local_interpolant =
