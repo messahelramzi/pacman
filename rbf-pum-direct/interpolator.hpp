@@ -16,6 +16,7 @@
 #include "polynomial.hpp"
 #include "rbf_functions.hpp"
 #include "utils.hpp"
+#include "batched_operations.hpp"
 
 /* Constructor for the RBF PUM Interpolator:
 ** Once it returns from the constructor, the interpolator is ready to use, with
@@ -149,98 +150,28 @@ Coordinates TEMPLATED_CLASSNAME::interpolate_at(const Point& target) const
     return interpolated_value;
 }
 
+#define MIN(A, B) ((A) < (B)) ? (A) : (B)
+
 FULL_TEMPLATE
 void TEMPLATED_CLASSNAME::interpolate(
     PointsView& target, Kokkos::View<Coordinates*, ExecSpace>& out) const
 {
     const std::string _region_name = "RbfPumInterpolator::interpolate";
     Kokkos::Profiling::pushRegion(_region_name);
-    ExecSpace execspace{};
-    const size_t N = this->_clusters.extent(0);
-    const size_t K = target.extent(0);
-    Kokkos::View<Coordinates**, ExecSpace> weights(_region_name + "::weights",
-                                                   K, N);
-    Kokkos::View<bool**, ExecSpace> indices(_region_name + "::indices", K, N);
+    const size_t BATCH_SIZE = 16384;
+    size_t index = 0;
+    const size_t upper_bound = target.extent(0);
 
-    auto clusters =
-        Kokkos::create_mirror_view_and_copy(execspace, this->_clusters);
-    auto weight_function = this->_weighting_function;
+    Kokkos::realloc(out, upper_bound);
 
-    Kokkos::View<Coordinates*, ExecSpace> weight_sums(
-        _region_name + "::weight_sums", K);
-
-    using team_policy = Kokkos::TeamPolicy<>;
-    using member_type = team_policy::member_type;
-    Kokkos::parallel_for(
-        _region_name
-            + "::p_for compute intersecting clusters and their weights",
-        team_policy(execspace, K, Kokkos::AUTO),
-        KOKKOS_LAMBDA(const member_type& member) {
-            const size_t k = member.league_rank();
-            Coordinates weight_sum;
-            Kokkos::parallel_reduce(
-                Kokkos::TeamThreadRange(member, N),
-                [&](const size_t& i, Coordinates& lsum) {
-                    const Coordinates w =
-                        weight_function(NDdistance(target(k), clusters(i, 0)));
-                    if (w > 0)
-                    {
-                        lsum += w;
-                        weights(k, i) = w;
-                        indices(k, i) = true;
-                    }
-                },
-                weight_sum);
-            Kokkos::single(Kokkos::PerTeam(member),
-                           [=]() { weight_sums(k) = weight_sum; });
-        });
-    Kokkos::fence();
-
-    Kokkos::View<Coordinates*, ExecSpace> interpolated_values(
-        Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
-                           _region_name + "::interpolated values"),
-        K);
-
-    auto rbf_function = this->_rbf_function;
-    auto coeffs = Kokkos::create_mirror_view_and_copy(execspace, this->_coeffs);
-    auto bounds = Kokkos::create_mirror_view_and_copy(
-        execspace, this->_nb_values_per_cluster);
-
-    Kokkos::parallel_for(
-        _region_name + "::p_for build global interpolant",
-        team_policy(execspace, K, Kokkos::AUTO),
-        KOKKOS_LAMBDA(const member_type& member) {
-            const size_t k = member.league_rank();
-            Coordinates interpolated_value;
-            Kokkos::parallel_reduce(
-                Kokkos::TeamThreadRange(member, N),
-                [&](const size_t& i, Coordinates& lsum) {
-                    if (indices(k, i))
-                    {
-                        for (size_t ii = 0; ii < bounds(i); ++ii)
-                        {
-                            lsum += (weights(k, i) / weight_sums(k))
-                                * (coeffs(i, ii)
-                                   * (rbf_function(NDdistance(
-                                       clusters(i, 1 + ii), target(k)))));
-                        }
-                    }
-                },
-                interpolated_value);
-            Kokkos::single(Kokkos::PerTeam(member), [=]() {
-                interpolated_values(k) = interpolated_value;
-            });
-        });
-
-    Kokkos::fence();
-
-    out = decltype(interpolated_values)(
-        Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
-                           _region_name + "::out"),
-        interpolated_values.extent(0));
-    Kokkos::deep_copy(out, interpolated_values);
-
-    Kokkos::Profiling::popRegion(); // ! Interpolate
+    while (index < upper_bound) {
+        auto index_range = Kokkos::make_pair(index,  MIN(index + BATCH_SIZE, upper_bound));
+        auto batch = Kokkos::subview(target, index_range);
+        auto batch_out = Kokkos::subview(out, index_range);
+        batched_interpolate(batch, batch_out);
+        index = index_range.second;
+    }
+    Kokkos::Profiling::popRegion(); // ! interpolate
 }
 
 FULL_TEMPLATE

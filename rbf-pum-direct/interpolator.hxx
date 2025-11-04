@@ -40,6 +40,12 @@ public:
                      Kokkos::View<Coordinates*, ExecSpace>& out) const;
     std::string get_interpolator_details(void) const;
 
+    /* Batched routines */
+    template <class BatchView, class OutView>
+    inline void batched_interpolate(BatchView &batch, OutView &out) const;
+    //template <class BatchView, class DiagView, class UnitView>
+    //inline void batched_pseudo_inverse_svd(BatchView &As, DiagView &diags, UnitView &units);
+
 private:
     double _radius;
     const int _nodes_per_cluster = 50;
