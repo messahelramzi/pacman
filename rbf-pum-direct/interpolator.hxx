@@ -36,7 +36,8 @@ public:
     void create_clusters(void);
     void prepare_interpolation(void);
     Coordinates interpolate_at(const Point& target) const;
-    void interpolate(PointsView& target) const;
+    void interpolate(PointsView& target,
+                     Kokkos::View<Coordinates*, ExecSpace>& out) const;
     std::string get_interpolator_details(void) const;
 
 private:

@@ -25,7 +25,6 @@ void TEMPLATED_CLASSNAME::create_clusters(void)
 {
     assert(this->_radius > 0);
     assert(this->_relative_overlap > 0 && this->_relative_overlap < 1);
-    PRINT_STRING("Entering create_clusters");
     const std::string _region_name = "RbfPumInterpolator::create_clusters";
     Kokkos::Profiling::pushRegion(_region_name);
     ExecSpace execspace{};
@@ -113,6 +112,7 @@ void TEMPLATED_CLASSNAME::create_clusters(void)
      * Random order of tagging leads to the removal of different nodes
      * and thus leads to undeterministic clustering.
      */
+    Kokkos::Profiling::pushRegion(_region_name + "::remove duplicates");
     auto clusters_centers_host = Kokkos::create_mirror_view_and_copy(
         Kokkos::HostSpace{}, clusters_centers);
     for (size_t i = 0; i < M(); ++i)
@@ -128,13 +128,13 @@ void TEMPLATED_CLASSNAME::create_clusters(void)
         }
     }
     Kokkos::deep_copy(clusters_centers, clusters_centers_host);
-
     Kokkos::sort(clusters_centers);
     auto last = Kokkos::Experimental::unique(execspace, clusters_centers);
     Kokkos::resize(clusters_centers,
                    clusters_centers.extent(0)
                        - Kokkos::Experimental::distance(
                            last, Kokkos::Experimental::end(clusters_centers)));
+    Kokkos::Profiling::popRegion(); // ! Remove Duplicates
 
     PointsView final_clusters_centers(
         Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
@@ -244,6 +244,7 @@ void TEMPLATED_CLASSNAME::create_clusters(void)
                            "this->_nb_values_per_cluster"),
         ext0);
     Kokkos::deep_copy(_nb_values_per_cluster, nb_values_per_cluster);
+    Kokkos::Profiling::popRegion(); // ! create_clusters
 }
 
 #endif /* ! CLUSTERING_HPP */

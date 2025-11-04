@@ -8,16 +8,18 @@
 
 #include "interpolator.hxx"
 
-#define XOR(A, B) (((A) && !(B)) || (!(A) && (B)))
-
-template <typename AViewType, typename diagViewType, typename unitViewType,
-          typename bViewType, typename outViewType>
-void KOKKOS_FUNCTION solve(AViewType& A, diagViewType& diag, unitViewType& unit,
-                           bViewType& b, outViewType& out);
+template <typename member_type, typename AViewType, typename bViewType,
+          typename outViewType>
+void KOKKOS_INLINE_FUNCTION matrix_vector_product(const member_type& member,
+                                                  AViewType& A, bViewType& b,
+                                                  outViewType& out);
 
 FULL_TEMPLATE
 void TEMPLATED_CLASSNAME::prepare_interpolation(void)
 {
+    const std::string _region_name =
+        "RbfPumInterpolator::prepare_interpolation";
+    Kokkos::Profiling::pushRegion(_region_name);
     ExecSpace execspace{};
     using TensorType = Kokkos::View<Coordinates***, ExecSpace>;
     using MatrixType = Kokkos::View<Coordinates**, ExecSpace>;
@@ -30,6 +32,7 @@ void TEMPLATED_CLASSNAME::prepare_interpolation(void)
     // Total number of source nodes
     const size_t M = this->_source.extent(0);
 
+    Kokkos::Profiling::pushRegion(_region_name + "::allocate systems data");
     TensorType As("As", K, N, N);
     MatrixType bs("bs", K, N);
 
@@ -53,37 +56,58 @@ void TEMPLATED_CLASSNAME::prepare_interpolation(void)
     auto bounds = Kokkos::create_mirror_view_and_copy(
         execspace, this->_nb_values_per_cluster);
     auto rbf_function = this->_rbf_function;
+    Kokkos::Profiling::popRegion(); // ! Allocate Systems Data
+
+    using team_policy = Kokkos::TeamPolicy<>;
+    using member_type = team_policy::member_type;
+    using ScratchView =
+        Kokkos::View<Point*, typename ExecSpace::scratch_memory_space>;
+    size_t scratch_size = ScratchView::shmem_size(N);
+    int level = 0;
 
     Kokkos::parallel_for(
-        "fill rbf system",
-        Kokkos::MDRangePolicy(execspace, { 0, 0, 0 }, { K, N, N }),
-        KOKKOS_LAMBDA(const size_t& k, const size_t& i, const size_t& j) {
-            if (i + 1 < bounds(k) && j + 1 < bounds(k))
-            {
-                const Point center1 = clusters(k, i + 1);
-                const Point center2 = clusters(k, j + 1);
-                const Coordinates distance = NDdistance(center1, center2);
-                As(k, i, j) = rbf_function(distance);
-
-                size_t value_index = 0;
-                for (; value_index < M; ++value_index)
-                {
-                    if (source(value_index) == center1)
-                    {
-                        bs(k, i) = values(value_index);
-                        break;
-                    }
-                    if (source(value_index) == center2)
-                    {
-                        bs(k, j) = values(value_index);
-                        break;
-                    }
-                }
-            }
+        "fill rbf system team policy",
+        team_policy(ExecSpace{}, K, Kokkos::AUTO)
+            .set_scratch_size(level, Kokkos::PerTeam(scratch_size)),
+        KOKKOS_LAMBDA(member_type const& member) {
+            const size_t k = member.league_rank();
+            ScratchView local_centers(member.team_scratch(level), N);
+            Kokkos::parallel_for(Kokkos::TeamVectorRange(member, N),
+                                 [=](const size_t& p) {
+                                     local_centers(p) = clusters(k, p + 1);
+                                 });
+            member.team_barrier();
+            Kokkos::parallel_for(Kokkos::TeamThreadMDRange(member, N, N),
+                                 [=](const size_t& i, const size_t& j) {
+                                     As(k, i, j) = rbf_function(NDdistance(
+                                         local_centers(i), local_centers(j)));
+                                 });
+        });
+    Kokkos::parallel_for(
+        "fill rbf rhs team policy",
+        team_policy(ExecSpace{}, K, Kokkos::AUTO)
+            .set_scratch_size(level, Kokkos::PerTeam(scratch_size)),
+        KOKKOS_LAMBDA(member_type const& member) {
+            const size_t k = member.league_rank();
+            ScratchView local_centers(member.team_scratch(level), N);
+            Kokkos::parallel_for(Kokkos::TeamVectorRange(member, N),
+                                 [=](const size_t& p) {
+                                     local_centers(p) = clusters(k, p + 1);
+                                 });
+            member.team_barrier();
+            Kokkos::parallel_for(Kokkos::TeamThreadMDRange(member, N, M),
+                                 [=](const size_t& i, const size_t& j) {
+                                     if (local_centers(i) == source(j))
+                                     {
+                                         bs(k, i) = values(j);
+                                     }
+                                 });
         });
     Kokkos::fence();
 
-    MatrixType coeffs("coeffs", K, N);
+    MatrixType coeffs(
+        Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing, "coeffs"), K,
+        N);
     MatrixType diags(
         Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing, "diags"), K,
         N);
@@ -92,15 +116,25 @@ void TEMPLATED_CLASSNAME::prepare_interpolation(void)
         N, N);
 
     Kokkos::parallel_for(
-        "solve systems", Kokkos::RangePolicy(execspace, 0, K),
+        "compute inverse with svd", Kokkos::RangePolicy(execspace, 0, K),
         KOKKOS_LAMBDA(const size_t& k) {
             auto A = Kokkos::subview(As, k, Kokkos::ALL(), Kokkos::ALL());
-            auto b = Kokkos::subview(bs, k, Kokkos::ALL());
             auto diag = Kokkos::subview(diags, k, Kokkos::ALL());
             auto unit = Kokkos::subview(units, k, Kokkos::ALL(), Kokkos::ALL());
-            auto out = Kokkos::subview(coeffs, k, Kokkos::ALL());
 
-            solve(A, diag, unit, b, out);
+            // 1. We compute the pseudo inverse of A.
+            ArborX::Details::symmetricPseudoInverseSVDKernel(A, diag, unit);
+        });
+    Kokkos::fence();
+
+    Kokkos::parallel_for(
+        "matrix vector products",
+        Kokkos::RangePolicy(execspace, 0, K),
+        KOKKOS_LAMBDA(const size_t &k) {
+            auto A = Kokkos::subview(As, k, Kokkos::ALL(), Kokkos::ALL());
+            auto b = Kokkos::subview(bs, k, Kokkos::ALL());
+            auto out = Kokkos::subview(coeffs, k, Kokkos::ALL());
+            KokkosBlas::Experimental::serial_gemv('N', 1.0, A, b, 0.0, out);
         });
     Kokkos::fence();
 
@@ -109,25 +143,7 @@ void TEMPLATED_CLASSNAME::prepare_interpolation(void)
                                       "this->_coeffs"),
                    K, N);
     Kokkos::deep_copy(this->_coeffs, coeffs);
-}
-
-/* Solves Au=b for u
- * @warning ALL OF THE PARAMS CAN BE MODIFIED DURING THE CALL
- * @param A: [in] NxN matrix, symmetric, can be singular
- * @param diag: [in] Nx1 vector, the values can be anything
- * @param unit: [in] Nx1 vector, output param, solution of the system
- * @param b: [in] NxN matrix, left singular vectors in cols
- * @param out: [out] NxN matrix, right singular vectors in rows
- */
-template <typename AViewType, typename diagViewType, typename unitViewType,
-          typename bViewType, typename outViewType>
-void KOKKOS_FUNCTION solve(AViewType& A, diagViewType& diag, unitViewType& unit,
-                           bViewType& b, outViewType& out)
-{
-    // 1. We compute the pseudo inverse of A.
-    ArborX::Details::symmetricPseudoInverseSVDKernel(A, diag, unit);
-    // 2. We compute u = A^{-1}b
-    KokkosBlas::Experimental::serial_gemv(0x4E, 1.0, A, b, 0.0, out);
+    Kokkos::Profiling::popRegion(); // ! Prepare Interpolation
 }
 
 #endif /* ! CACHE_DATA_HPP */

@@ -39,7 +39,8 @@ TEMPLATED_CLASSNAME::RbfPumInterpolator(
     PointsView target, PolynomialType polynomial,
     RbfFunctionBasisType rbf_function)
 {
-    Kokkos::Profiling::pushRegion("RbfPumInterpolator::RbfPumInterpolator");
+    const std::string _region_name = "RbfPumInterpolator::RbfPumInterpolator";
+    Kokkos::Profiling::pushRegion(_region_name);
     const ExecSpace execspace{};
     this->_source =
         PointsView(Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
@@ -76,26 +77,26 @@ TEMPLATED_CLASSNAME::RbfPumInterpolator(
 FULL_TEMPLATE
 Coordinates TEMPLATED_CLASSNAME::interpolate_at(const Point& target) const
 {
+    const std::string _region_name = "RbfPumInterpolator::interpolate_at";
+    Kokkos::Profiling::pushRegion(_region_name);
     ExecSpace execspace{};
     size_t N = this->_clusters.extent(0);
-    Kokkos::View<Coordinates*, ExecSpace> weights(
-        "RbfPumInterpolator::interpolate_at::weights", N);
+    Kokkos::View<Coordinates*, ExecSpace> weights(_region_name + "::weights",
+                                                  N);
     Kokkos::View<size_t*, ExecSpace> clusters_index(
-        Kokkos::view_alloc(
-            execspace, Kokkos::WithoutInitializing,
-            "RbfPumInterpolator::interpolate_at::clusters_index"),
+        Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
+                           _region_name + "::clusters_index"),
         N);
-    Kokkos::View<size_t, ExecSpace> id(
-        "RbfPumInterpolator::interpolate_at::id");
+    Kokkos::View<size_t, ExecSpace> id(_region_name + "::id");
 
     Kokkos::View __clusters =
         Kokkos::create_mirror_view_and_copy(execspace, this->_clusters);
     Coordinates weights_sum = 0.0;
     auto weighting_function = this->_weighting_function;
     Kokkos::parallel_reduce(
-        "RbfPumInterpolator::interpolate_at::p_reduce find intersecting "
-        "clusters "
-        "and their weights",
+        _region_name
+            + "::p_reduce find intersecting "
+              "clusters and their weights",
         Kokkos::RangePolicy(execspace, 0, N),
         KOKKOS_LAMBDA(const size_t& i, Coordinates& lsum) {
             const Coordinates w = weighting_function(
@@ -109,7 +110,7 @@ Coordinates TEMPLATED_CLASSNAME::interpolate_at(const Point& target) const
             }
         },
         weights_sum);
-    Kokkos::fence();
+
     if (weights_sum == 0.0)
     {
         std::cerr << "/!\\ Target Point" << point_to_str(target)
@@ -124,7 +125,7 @@ Coordinates TEMPLATED_CLASSNAME::interpolate_at(const Point& target) const
         execspace, this->_nb_values_per_cluster);
 
     Kokkos::parallel_reduce(
-        "RbfPumInterpolator::interpolate_at::p_reduce sum local interpolants",
+        _region_name + "::p_reduce sum local interpolants",
         Kokkos::RangePolicy(execspace, 0, M),
         KOKKOS_LAMBDA(const size_t& i, Coordinates& lsum) {
             // clang-format off
@@ -144,13 +145,102 @@ Coordinates TEMPLATED_CLASSNAME::interpolate_at(const Point& target) const
         },
         interpolated_value);
 
+    Kokkos::Profiling::popRegion();
     return interpolated_value;
 }
 
 FULL_TEMPLATE
-void TEMPLATED_CLASSNAME::interpolate(PointsView& target) const
+void TEMPLATED_CLASSNAME::interpolate(
+    PointsView& target, Kokkos::View<Coordinates*, ExecSpace>& out) const
 {
+    const std::string _region_name = "RbfPumInterpolator::interpolate";
+    Kokkos::Profiling::pushRegion(_region_name);
     ExecSpace execspace{};
+    const size_t N = this->_clusters.extent(0);
+    const size_t K = target.extent(0);
+    Kokkos::View<Coordinates**, ExecSpace> weights(_region_name + "::weights",
+                                                   K, N);
+    Kokkos::View<bool**, ExecSpace> indices(_region_name + "::indices", K, N);
+
+    auto clusters =
+        Kokkos::create_mirror_view_and_copy(execspace, this->_clusters);
+    auto weight_function = this->_weighting_function;
+
+    Kokkos::View<Coordinates*, ExecSpace> weight_sums(
+        _region_name + "::weight_sums", K);
+
+    using team_policy = Kokkos::TeamPolicy<>;
+    using member_type = team_policy::member_type;
+    Kokkos::parallel_for(
+        _region_name
+            + "::p_for compute intersecting clusters and their weights",
+        team_policy(execspace, K, Kokkos::AUTO),
+        KOKKOS_LAMBDA(const member_type& member) {
+            const size_t k = member.league_rank();
+            Coordinates weight_sum;
+            Kokkos::parallel_reduce(
+                Kokkos::TeamThreadRange(member, N),
+                [&](const size_t& i, Coordinates& lsum) {
+                    const Coordinates w =
+                        weight_function(NDdistance(target(k), clusters(i, 0)));
+                    if (w > 0)
+                    {
+                        lsum += w;
+                        weights(k, i) = w;
+                        indices(k, i) = true;
+                    }
+                },
+                weight_sum);
+            Kokkos::single(Kokkos::PerTeam(member),
+                           [=]() { weight_sums(k) = weight_sum; });
+        });
+    Kokkos::fence();
+
+    Kokkos::View<Coordinates*, ExecSpace> interpolated_values(
+        Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
+                           _region_name + "::interpolated values"),
+        K);
+
+    auto rbf_function = this->_rbf_function;
+    auto coeffs = Kokkos::create_mirror_view_and_copy(execspace, this->_coeffs);
+    auto bounds = Kokkos::create_mirror_view_and_copy(
+        execspace, this->_nb_values_per_cluster);
+
+    Kokkos::parallel_for(
+        _region_name + "::p_for build global interpolant",
+        team_policy(execspace, K, Kokkos::AUTO),
+        KOKKOS_LAMBDA(const member_type& member) {
+            const size_t k = member.league_rank();
+            Coordinates interpolated_value;
+            Kokkos::parallel_reduce(
+                Kokkos::TeamThreadRange(member, N),
+                [&](const size_t& i, Coordinates& lsum) {
+                    if (indices(k, i))
+                    {
+                        for (size_t ii = 0; ii < bounds(i); ++ii)
+                        {
+                            lsum += (weights(k, i) / weight_sums(k))
+                                * (coeffs(i, ii)
+                                   * (rbf_function(NDdistance(
+                                       clusters(i, 1 + ii), target(k)))));
+                        }
+                    }
+                },
+                interpolated_value);
+            Kokkos::single(Kokkos::PerTeam(member), [=]() {
+                interpolated_values(k) = interpolated_value;
+            });
+        });
+
+    Kokkos::fence();
+
+    out = decltype(interpolated_values)(
+        Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
+                           _region_name + "::out"),
+        interpolated_values.extent(0));
+    Kokkos::deep_copy(out, interpolated_values);
+
+    Kokkos::Profiling::popRegion(); // ! Interpolate
 }
 
 FULL_TEMPLATE
