@@ -385,7 +385,7 @@ struct ArborX::AccessTraits<
         if (obj._centers(i)[0] != obj._centers(i)[0])
         {
             // clang-format off
-            // center variable is required to avoid modifying the centers (potential kind of race condition)
+            // the center variable is required to avoid modifying the centers (potential kind of race condition)
             // The ArborX::attach call is useless to the process but ensures a consistent return type
             // clang-format on
             auto center = obj._centers(i);

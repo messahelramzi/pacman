@@ -8,12 +8,6 @@
 
 #include "interpolator.hxx"
 
-template <typename member_type, typename AViewType, typename bViewType,
-          typename outViewType>
-void KOKKOS_INLINE_FUNCTION matrix_vector_product(const member_type& member,
-                                                  AViewType& A, bViewType& b,
-                                                  outViewType& out);
-
 FULL_TEMPLATE
 void TEMPLATED_CLASSNAME::prepare_interpolation(void)
 {
@@ -128,9 +122,8 @@ void TEMPLATED_CLASSNAME::prepare_interpolation(void)
     Kokkos::fence();
 
     Kokkos::parallel_for(
-        "matrix vector products",
-        Kokkos::RangePolicy(execspace, 0, K),
-        KOKKOS_LAMBDA(const size_t &k) {
+        "matrix vector products", Kokkos::RangePolicy(execspace, 0, K),
+        KOKKOS_LAMBDA(const size_t& k) {
             auto A = Kokkos::subview(As, k, Kokkos::ALL(), Kokkos::ALL());
             auto b = Kokkos::subview(bs, k, Kokkos::ALL());
             auto out = Kokkos::subview(coeffs, k, Kokkos::ALL());

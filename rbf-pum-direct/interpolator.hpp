@@ -8,15 +8,14 @@
 #include <iostream>
 #include <sstream>
 
+#include "batched_operations.hpp"
 #include "cache_data.hpp"
 #include "callbacks.hpp"
 #include "clustering.hpp"
 #include "clusters_radius.hpp"
 #include "interpolator.hxx"
-#include "polynomial.hpp"
 #include "rbf_functions.hpp"
 #include "utils.hpp"
-#include "batched_operations.hpp"
 
 /* Constructor for the RBF PUM Interpolator:
 ** Once it returns from the constructor, the interpolator is ready to use, with
@@ -29,16 +28,13 @@
 *the source points of the field. Its size is the same as `source`'s.
 ** @param target: a 1-D `Kokkos::View` which contains the points we want to
 *interpolate at.
-** @param polynomial: A user-defined functor that is used to perform a
-*polynomial augmentation on the rbf matrices.
 ** @param rbf_function: A user-defined functor which is the rbf function used
 *for clusters points evaluation.
 */
 FULL_TEMPLATE
 TEMPLATED_CLASSNAME::RbfPumInterpolator(
     PointsView source, Kokkos::View<Coordinates*, ExecSpace> values,
-    PointsView target, PolynomialType polynomial,
-    RbfFunctionBasisType rbf_function)
+    PointsView target, RbfFunctionBasisType rbf_function)
 {
     const std::string _region_name = "RbfPumInterpolator::RbfPumInterpolator";
     Kokkos::Profiling::pushRegion(_region_name);
@@ -63,19 +59,67 @@ TEMPLATED_CLASSNAME::RbfPumInterpolator(
         ArborX::BoundingVolumeHierarchy{ execspace, this->_source };
     this->_target_bvh =
         ArborX::BoundingVolumeHierarchy{ execspace, this->_target };
-    this->_polynomial = polynomial;
     this->_rbf_function = rbf_function;
     this->_weighting_function = WendlandC2<Coordinates>{};
-    this->no_data = Point{};
+
+    // clang-format off
+    // 1. We search for a good cluster radius that would verify:
+    // avg(nodes per cluster) ~ this->_nodes_per_clusters
+    // To do so, we take the center of the source mesh, and 2 points in each
+    // dimension, all at the same distance of the center.
+    // We compute from these centers the median max radius to intersect
+    // with this->_nodes_per_clusters nodes.
     find_radius();
+
+    // 2. We set the support radius of our RBF functions such as:
+    // support radius = cluster radius
+    // Thus, a point is in the support radius of a cluster if:
+    // norm2(point, cluster center) * _r_inv < 1
+    // Here, the clusters rbf function is user defined, but
+    // the weighting function is fixed (Wendland C2).
     this->_rbf_function.set_r_inv(1.0 / this->_radius);
     this->_weighting_function.set_r_inv(1.0 / this->_radius);
+
+    // 3. We create clusters following this algorithm:
+    //      -> We compute the number of centers that we want to try as clusters centers
+    //      -> Then we keep only the clusters which intersect with the source mesh
+    //      -> Then, we keep only the clusters which intersect with the target mesh
+    //      -> Then, we remove the clusters centers which verify:
+    //             norm2(center1, center2) < 0.4 * ~radius
+    //      -> Then, we keep project the centers on the source mesh if this->_project_to_input is true
+    //      -> We remove one more time the centers that are not intersecting with the target mesh
+    //      -> Finally, we create the clusters, in this->_clusters, a MxN+1 points matrix:
+    //          this->_clusters = [[center1, value1, value2, value3, ..., valuen],
+    //                             [center2, value1, value2, value3, ..., valuen],
+    //                             [...      ...     ...     ...     ...  ...   ],
+    //                             [centerm, value1, value2, value3, ..., valuen]]
+    //   As some clusters contain less values than others, the keep track of the effective
+    //   values of each clusters in this->_bounds.
     create_clusters();
+
+    // 4. We compute the coefficients α and β of each cluster by solving:
+    //
+    // | A   P | | α | = | u |
+    // | P^T 0 | | β |   | 0 |
+    //
+    // With:
+    // A the RBF coefficients matrix
+    // P the linear polynomial augmentation matrix
+    // α the coefficients for the RBF part of the local interpolant
+    // β the coefficients for the polynomial part of the local interpolant
+    // u the values associated of the source nodes
     prepare_interpolation();
+
+    // clang-format on
     Kokkos::Profiling::popRegion(); // ! RbfPumInterpolator::RbfPumInterpolator
 }
 
 FULL_TEMPLATE
+/* Interpolates value for a single point.
+ * @param target: the target point for interpolation.
+ * @warning This method should not be used when we know in advance all
+ * the points we interpolate on. Use interpolate instead.
+ */
 Coordinates TEMPLATED_CLASSNAME::interpolate_at(const Point& target) const
 {
     const std::string _region_name = "RbfPumInterpolator::interpolate_at";
@@ -153,6 +197,13 @@ Coordinates TEMPLATED_CLASSNAME::interpolate_at(const Point& target) const
 #define MIN(A, B) ((A) < (B)) ? (A) : (B)
 
 FULL_TEMPLATE
+/* Interpolates a value for each point of `target` and returns the values in
+ * `out`.
+ * @param target: a 1xN Kokkos::View of Points.
+ * @param out: output parameter, a 1xN Kokkos::View containing the interpolated
+ * values.
+ * @note `out` doesn't need to be pre-allocated as `interpolate` overrides it.
+ */
 void TEMPLATED_CLASSNAME::interpolate(
     PointsView& target, Kokkos::View<Coordinates*, ExecSpace>& out) const
 {
@@ -164,8 +215,10 @@ void TEMPLATED_CLASSNAME::interpolate(
 
     Kokkos::realloc(out, upper_bound);
 
-    while (index < upper_bound) {
-        auto index_range = Kokkos::make_pair(index,  MIN(index + BATCH_SIZE, upper_bound));
+    while (index < upper_bound)
+    {
+        auto index_range =
+            Kokkos::make_pair(index, MIN(index + BATCH_SIZE, upper_bound));
         auto batch = Kokkos::subview(target, index_range);
         auto batch_out = Kokkos::subview(out, index_range);
         batched_interpolate(batch, batch_out);
@@ -175,6 +228,11 @@ void TEMPLATED_CLASSNAME::interpolate(
 }
 
 FULL_TEMPLATE
+/* @return: a string that contains information about the internal state
+ * of the allocator.
+ * @warning this function must not be called before the full initialization
+ * of the clusters of the interpolator object.
+ */
 std::string TEMPLATED_CLASSNAME::get_interpolator_details(void) const
 {
     std::ostringstream strs;
@@ -192,8 +250,6 @@ std::string TEMPLATED_CLASSNAME::get_interpolator_details(void) const
     strs << "    Project to input: " << std::boolalpha
          << this->_project_to_input << "\n";
     strs << "    RBF Function: " << typeid(RbfFunctionBasisType).name() << "\n";
-    strs << "    Polynomial Function: " << typeid(PolynomialType).name()
-         << "\n";
     strs << "Found radius: " << std::setprecision(17) << this->_radius << "\n";
     strs << get_clusters_info(_nb_values_per_cluster);
 

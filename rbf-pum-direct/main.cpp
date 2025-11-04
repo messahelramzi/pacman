@@ -75,7 +75,6 @@ int main(int argc, char* argv[])
     using scalar_type = double;
     using execution_space = Kokkos::DefaultExecutionSpace;
     using RbfFunctionBasisType = WendlandC2<scalar_type>;
-    using PolynomialType = LinearPolynomial<execution_space, dim, scalar_type>;
 
     auto guard = Kokkos::ScopeGuard();
     {
@@ -126,13 +125,12 @@ int main(int argc, char* argv[])
         Kokkos::deep_copy(target, target_h);
 
         RbfFunctionBasisType rbf_function;
-        PolynomialType polynomial;
 
         auto t1 = std::chrono::high_resolution_clock::now().time_since_epoch();
         auto interpolator =
             RbfPumInterpolator<execution_space, dim, scalar_type,
-                               PolynomialType, RbfFunctionBasisType>(
-                source, values, target, polynomial, rbf_function);
+                               RbfFunctionBasisType>(source, values, target,
+                                                     rbf_function);
         auto t2 = std::chrono::high_resolution_clock::now().time_since_epoch();
 
         Kokkos::View<scalar_type*, execution_space> interpolated_data(

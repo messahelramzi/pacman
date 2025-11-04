@@ -1,12 +1,18 @@
 #ifndef BATCHED_OPERATIONS_HPP
 #define BATCHED_OPERATIONS_HPP
 
-#include "interpolator.hxx"
 #include <Kokkos_Core.hpp>
+
+#include "interpolator.hxx"
 
 FULL_TEMPLATE
 template <class BatchView, class OutView>
-inline void TEMPLATED_CLASSNAME::batched_interpolate(BatchView &batch, OutView &out) const
+/* Interpolates values for a batch of target points.
+ * @param batch: a 1xN subview of points.
+ * @param out: output param, a 1xN subview that contains the interpolated values
+ */
+inline void TEMPLATED_CLASSNAME::batched_interpolate(BatchView& batch,
+                                                     OutView& out) const
 {
     // TODO: replace mirror and copies by function arguments to copy once
     const std::string _region_name = "batched_interpolate";

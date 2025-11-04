@@ -6,16 +6,14 @@
 #include <ArborX_Sphere.hpp>
 #include <Kokkos_Core.hpp>
 
-#include "polynomial.hpp"
 #include "rbf_functions.hpp"
 
 #define FULL_TEMPLATE                                                          \
     template <typename ExecSpace, int Dim, class Coordinates,                  \
-              typename PolynomialType, typename RbfFunctionBasisType>
+              typename RbfFunctionBasisType>
 
 #define TEMPLATED_CLASSNAME                                                    \
-    RbfPumInterpolator<ExecSpace, Dim, Coordinates, PolynomialType,            \
-                       RbfFunctionBasisType>
+    RbfPumInterpolator<ExecSpace, Dim, Coordinates, RbfFunctionBasisType>
 
 FULL_TEMPLATE
 class RbfPumInterpolator
@@ -24,27 +22,33 @@ class RbfPumInterpolator
     using Box = ArborX::Box<Dim, Coordinates>;
     using PointsView = Kokkos::View<Point*, ExecSpace>;
     using ClustersView = Kokkos::View<Point**, ExecSpace>;
-    using Polynomial = Polynomial<ExecSpace, Dim, Coordinates>;
     using RbfFunctionBasis = RbfFunctionBasis<Coordinates>;
 
 public:
+    // Constructor
     RbfPumInterpolator(PointsView source,
                        Kokkos::View<Coordinates*, ExecSpace> values,
-                       PointsView target, PolynomialType polynomial,
-                       RbfFunctionBasisType rbf_function);
+                       PointsView target, RbfFunctionBasisType rbf_function);
+
+    // Internal routines
     void find_radius(void);
     void create_clusters(void);
     void prepare_interpolation(void);
+
+    // Interpolation routines
     Coordinates interpolate_at(const Point& target) const;
     void interpolate(PointsView& target,
                      Kokkos::View<Coordinates*, ExecSpace>& out) const;
+
+    // Debug routines
     std::string get_interpolator_details(void) const;
 
-    /* Batched routines */
+    // Batched routines
     template <class BatchView, class OutView>
-    inline void batched_interpolate(BatchView &batch, OutView &out) const;
-    //template <class BatchView, class DiagView, class UnitView>
-    //inline void batched_pseudo_inverse_svd(BatchView &As, DiagView &diags, UnitView &units);
+    inline void batched_interpolate(BatchView& batch, OutView& out) const;
+    // template <class BatchView, class DiagView, class UnitView>
+    // inline void batched_pseudo_inverse_svd(BatchView &As, DiagView &diags,
+    // UnitView &units);
 
 private:
     double _radius;
@@ -58,10 +62,8 @@ private:
         _source_bvh;
     ArborX::BoundingVolumeHierarchy<typename PointsView::memory_space, Point>
         _target_bvh;
-    Point no_data;
     ClustersView _clusters;
     Kokkos::View<size_t*, ExecSpace> _nb_values_per_cluster;
-    PolynomialType _polynomial;
     RbfFunctionBasisType _rbf_function;
     WendlandC2<Coordinates> _weighting_function;
     Kokkos::View<Coordinates**, ExecSpace> _coeffs;
