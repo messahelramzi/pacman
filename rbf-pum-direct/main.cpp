@@ -7,15 +7,15 @@
 #include <vtkUnstructuredGrid.h>
 #include <vtkXMLUnstructuredGridReader.h>
 
-#include "interpolator.hpp"
+#include "src/interpolator.hpp"
 
-template <class scalar_type>
-KOKKOS_INLINE_FUNCTION scalar_type
-franke_function(ArborX::Point<3, scalar_type> point)
+template <class ScalarType>
+KOKKOS_INLINE_FUNCTION ScalarType
+franke_function(ArborX::Point<3, ScalarType> point)
 {
-    scalar_type x = point[0];
-    scalar_type y = point[1];
-    scalar_type z = point[2];
+    ScalarType x = point[0];
+    ScalarType y = point[1];
+    ScalarType z = point[2];
     return 0.75
         * std::exp(-((9.0 * x - 2.0) * (9.0 * x - 2.0)
                      + (9.0 * y - 2.0) * (9.0 * y - 2.0)
@@ -34,9 +34,9 @@ franke_function(ArborX::Point<3, scalar_type> point)
                      + (9.0 * z - 5.0) * (9.0 * z - 5.0)));
 }
 
-template <int Dim, class Coordinates>
-ArborX::Point<Dim, Coordinates>* get_points_from_vtu_grid(char* filename,
-                                                          size_t* out_N)
+template <int Dim, class ScalarType>
+ArborX::Point<Dim, ScalarType>* get_points_from_vtu_grid(char* filename,
+                                                         size_t* out_N)
 {
     vtkNew<vtkXMLUnstructuredGridReader> reader;
     reader->SetFileName(filename);
@@ -44,14 +44,14 @@ ArborX::Point<Dim, Coordinates>* get_points_from_vtu_grid(char* filename,
     vtkUnstructuredGrid* grid = reader->GetOutput();
     vtkPoints* points = grid->GetPoints();
     vtkIdType N = points->GetNumberOfPoints();
-    ArborX::Point<Dim, Coordinates>* ret =
-        (ArborX::Point<Dim, Coordinates>*)malloc(
-            N * sizeof(ArborX::Point<Dim, Coordinates>));
+    ArborX::Point<Dim, ScalarType>* ret =
+        (ArborX::Point<Dim, ScalarType>*)malloc(
+            N * sizeof(ArborX::Point<Dim, ScalarType>));
     for (vtkIdType i = 0; i < N; ++i)
     {
-        Coordinates coords[3];
+        ScalarType coords[3];
         points->GetPoint(i, coords);
-        auto p = ArborX::Point<Dim, Coordinates>{};
+        auto p = ArborX::Point<Dim, ScalarType>{};
         for (int j = 0; j < Dim; ++j)
         {
             p[j] = coords[j];
@@ -73,7 +73,7 @@ int main(int argc, char* argv[])
 
     constexpr const int dim = 3;
     using scalar_type = double;
-    using execution_space = Kokkos::DefaultExecutionSpace;
+    using execution_space = Kokkos::DefaultHostExecutionSpace;
     using RbfFunctionBasisType = WendlandC2<scalar_type>;
 
     auto guard = Kokkos::ScopeGuard();
@@ -124,7 +124,7 @@ int main(int argc, char* argv[])
         Kokkos::deep_copy(values, values_h);
         Kokkos::deep_copy(target, target_h);
 
-        RbfFunctionBasisType rbf_function;
+        RbfFunctionBasisType rbf_function{};
 
         auto t1 = std::chrono::high_resolution_clock::now().time_since_epoch();
         auto interpolator =
@@ -133,10 +133,6 @@ int main(int argc, char* argv[])
                                                      rbf_function);
         auto t2 = std::chrono::high_resolution_clock::now().time_since_epoch();
 
-        Kokkos::View<scalar_type*, execution_space> interpolated_data(
-            Kokkos::view_alloc(execution_space{}, Kokkos::WithoutInitializing,
-                               "interpolated_data"),
-            0);
         Kokkos::View<scalar_type*, execution_space> reference(
             Kokkos::view_alloc(execution_space{}, Kokkos::WithoutInitializing,
                                "reference"),
@@ -148,7 +144,7 @@ int main(int argc, char* argv[])
                   << "\n";
         std::cout << interpolator.get_interpolator_details() << std::endl;
 
-        interpolator.interpolate(target, interpolated_data);
+        const auto interpolated_data = interpolator.out;
 
         Kokkos::parallel_for(
             "interpolate data",
