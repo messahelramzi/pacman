@@ -18,7 +18,6 @@ FULL_TEMPLATE
 class RbfPumInterpolator
 {
     using Point = ArborX::Point<Dim, ScalarType>;
-    using Box = ArborX::Box<Dim, ScalarType>;
 
     template <typename inner_type>
     using VectorView = Kokkos::View<inner_type*, ExecSpace>;
@@ -29,13 +28,12 @@ class RbfPumInterpolator
     template <typename inner_type>
     using TensorView = Kokkos::View<inner_type***, ExecSpace>;
 
-    using PointsView = VectorView<Point>;
-
 public:
     // Constructor
-    RbfPumInterpolator(VectorView<Point> source, VectorView<ScalarType> values,
-                       VectorView<Point> target,
-                       RbfFunctionBasisType rbf_function);
+    RbfPumInterpolator(VectorView<Point>& source,
+                       VectorView<ScalarType>& values,
+                       VectorView<Point>& target,
+                       RbfFunctionBasisType& rbf_function);
 
     // Internal routines
     void find_radius(void);
@@ -43,9 +41,6 @@ public:
     constexpr void solve_systems(void);
     void device_solve_systems(void);
     void host_solve_systems(void);
-
-    void interpolate(VectorView<Point>& target,
-                     VectorView<ScalarType>& out) const;
 
     // Debug routines
     std::string get_interpolator_details(void) const;
@@ -74,7 +69,7 @@ private:
     double _radius;
     const int _nodes_per_cluster = 50;
     const double _relative_overlap = 0.15;
-    double _support_radius = 0.1;
+    const double _support_radius = 0.1;
 
     ArborX::BoundingVolumeHierarchy<typename VectorView<Point>::memory_space,
                                     ArborX::PairValueIndex<Point, unsigned int>>

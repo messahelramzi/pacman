@@ -7,141 +7,118 @@
 #include <KokkosBatched_Trsv_Decl.hpp>
 #include <Kokkos_Core.hpp>
 
-template <typename TeamHandle, typename PsType, typename ValuesType,
-          typename OffsType, typename PointsView>
-KOKKOS_INLINE_FUNCTION auto
-TeamFillPolynomial(const TeamHandle& team, PsType& Ps, const ValuesType& values,
-                   const OffsType& offs, const PointsView& points,
-                   const int stride)
-{
-    using data_type = typename PsType::non_const_value_type;
-
-    const int k = team.league_rank();
-    const int N = offs(k + 1) - offs(k);
-
-    const auto range =
-        Kokkos::make_pair(offs(k) * stride, offs(k + 1) * stride);
-    auto P_data = Kokkos::subview(Ps, range);
-
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(team, N), [&](int i) {
-        const int idx = values(offs(k) + i);
-        const auto p = points(idx);
-
-        P_data(i * stride) = data_type(1.0);
-
-        for (int axis = 1; axis < stride; axis++)
-        {
-            P_data(i * stride + axis) = p[axis - 1];
-        }
-    });
-}
-
-template <typename TeamHandle, typename AsType, typename AsOffType,
-          typename BsOffType>
-KOKKOS_INLINE_FUNCTION auto
-TeamGetSystemA(const TeamHandle& team_handle, const AsType& As,
-               const AsOffType& As_offsets, const BsOffType& bs_offsets)
+template <typename AViewType, typename BViewType, typename TViewType,
+          typename XViewType, typename WViewType>
 /**
- * @brief A_k = As(offsets(k):offsets(k + 1)).reshape(n,n)
+ * @brief Solves AX=B for X using a QR factorization on A
+ *
+ * @param A A rank 2 view of scalars, with the extents (N, M)
+ * @param B A rank 2 view of scalars, with the extents (N, 1)
+ * @param T A rank 1 (non-initialized) view of scalars, of length M
+ * @param X A rank 2 (non-initialized) view of scalars, of length (N, 1), it is
+ * the output parameter (only the M first values are relevant as an output)
+ * @param W A rank 1 (non-initialized) view of scalars, of length max(N, M), it
+ * must be created with the LayoutRight argument
+ * @return nothing
+ * @note `B` is the only parameter which is guaranteed to not be modified
  */
+KOKKOS_FORCEINLINE_FUNCTION auto SerialSolveQR(AViewType& A, const BViewType& B,
+                                               TViewType& T, XViewType& X,
+                                               WViewType& W)
 {
-    using data_type = typename AsType::non_const_value_type;
-    using exec_space = typename AsType::execution_space;
-    const int k = team_handle.league_rank();
-    const int n = bs_offsets(k + 1) - bs_offsets(k);
-    const auto range = Kokkos::make_pair(As_offsets(k), As_offsets(k + 1));
-    auto A_data = Kokkos::subview(As, range);
+    namespace KB = KokkosBatched;
+    using QR = KB::SerialQR<KB::Algo::QR::Unblocked>;
+    using ApplyQ = KB::SerialApplyQ<KB::Side::Left, KB::Trans::Transpose,
+                                    KB::Algo::ApplyQ::Unblocked>;
+    using CopyVector = KB::SerialCopy<KB::Trans::NoTranspose, 2>;
+    using Trsv = KB::SerialTrsv<KB::Uplo::Upper, KB::Trans::NoTranspose,
+                                KB::Diag::NonUnit, KB::Algo::Trsv::Unblocked>;
 
-    Kokkos::View<data_type**, exec_space> A(A_data.data(), n, n);
-    return A;
+    // Computes A=QR (see dgeqp3(...) docs for details)
+    QR::invoke(A, T, W);
+    // Copy B in X because we need B later
+    CopyVector::invoke(B, X);
+    // Ax=B => QRx=B => (Q^T)QRx=(Q^T)B =>Rx=(Q^T)B
+    // We store (Q^T)B in X
+    ApplyQ::invoke(A, T, X, W);
+    // We better use subviews to solve the last system using Trsv (blas2)
+    // instead of Trsm (blas 3)
+    const int M = A.extent_int(1);
+    auto x = Kokkos::subview(X, Kokkos::make_pair(0, M), 0);
+    auto R =
+        Kokkos::subview(A, Kokkos::make_pair(0, M), Kokkos::make_pair(0, M));
+    // Solve Rx=(Q^T)B for x
+    Trsv::invoke(1.0, R, x);
 }
 
-template <typename TeamHandle, typename BsType, typename BsOffType>
-KOKKOS_INLINE_FUNCTION auto TeamGetSystemB(const TeamHandle& team_handle,
-                                           const BsType& bs,
-                                           const BsOffType& bs_offsets)
+template <typename TeamHandle, typename AViewType, typename BViewType,
+          typename TViewType, typename XViewType, typename WViewType>
 /**
- * @brief b_k = bs(offsets(k):offsets(k+1))
+ * @brief Solves AX=B for X using a QR factorization on A. Team version of
+ * `SerialSolveQR`
+ *
+ * @param team_handle A `Kokkos::TeamHandleConcept` object which represent a
+ * team
+ * @param A A rank 2 view of scalars, with the extents (N, M)
+ * @param B A rank 1 view of scalars, of length N
+ * @param T A rank 1 (non-initialized) view of scalars, of length M
+ * @param X A rank 1 (non-initialized) view of scalars, of length N, it is the
+ * output parameter
+ * @param W A rank 1 (non-initialized) view of scalars, of length max(N, M), it
+ * must be created with the LayoutRight argument
+ * @return nothing
+ * @note `B` is the only parameter which is guaranteed to not be modified
+ * @note `T` and `W` can be allocated in the scratch memory space
+ * @warning This function must not be called in an inner parallel loop
  */
+KOKKOS_FORCEINLINE_FUNCTION auto
+TeamSolveQR(const TeamHandle& team_handle, AViewType& A, const BViewType& B,
+            TViewType& T, XViewType& X, WViewType& W)
 {
-    using data_type = typename BsType::non_const_value_type;
-    using exec_space = typename BsType::execution_space;
-    const int k = team_handle.league_rank();
-    const int n = bs_offsets(k + 1) - bs_offsets(k);
-    const auto range = Kokkos::make_pair(bs_offsets(k), bs_offsets(k + 1));
-    auto b_data = Kokkos::subview(bs, range);
+    // TODO: this function must be tested once KokkosBatched::TeamVectorQR will
+    // be working or when a patch will be available
+    namespace KB = KokkosBatched;
+    using QR = KB::TeamVectorQR<TeamHandle, KB::Algo::QR::Unblocked>;
+    using ApplyQ =
+        KB::TeamVectorApplyQ<TeamHandle, KB::Side::Left, KB::Trans::Transpose,
+                             KB::Algo::ApplyQ::Unblocked>;
+    using CopyVector =
+        KB::TeamVectorCopy<TeamHandle, KB::Trans::NoTranspose, 1>;
+    using Trsv =
+        KB::TeamVectorTrsv<TeamHandle, KB::Uplo::Upper, KB::Trans::NoTranspose,
+                           KB::Diag::NonUnit, KB::Algo::Trsv::Unblocked>;
 
-    Kokkos::View<data_type*, exec_space> b(b_data.data(), n);
-    return b;
+    QR::invoke(team_handle, A, T, W);
+    team_handle.team_barrier();
+    CopyVector::invoke(team_handle, B, X);
+    team_handle.team_barrier();
+    ApplyQ::invoke(team_handle, A, T, X, W);
+    team_handle.team_barrier();
+    Trsv::invoke(team_handle, 1.0, A, X);
 }
 
-template <typename TeamHandle, typename WsType, typename WsOffType>
-KOKKOS_INLINE_FUNCTION auto TeamGetSystemW(const TeamHandle& team_handle,
-                                           const WsType& Ws,
-                                           const WsOffType& ws_offsets)
+template <typename AViewType, typename BViewType>
+KOKKOS_FORCEINLINE_FUNCTION void SerialSolveLU(AViewType& A, BViewType& B)
 {
-    using data_type = typename WsType::non_const_value_type;
-    using exec_space = typename WsType::execution_space;
-    const int k = team_handle.league_rank();
-    const int n = ws_offsets(k + 1) - ws_offsets(k);
-    const auto range = Kokkos::make_pair(ws_offsets(k), ws_offsets(k + 1));
-    auto w_data = Kokkos::subview(Ws, range);
+    namespace KB = KokkosBatched;
+    using LU = KB::SerialLU<KB::Algo::LU::Unblocked>;
+    using SolveLU =
+        KB::SerialSolveLU<KB::Trans::NoTranspose, KB::Algo::SolveLU::Unblocked>;
 
-    Kokkos::View<data_type*, Kokkos::LayoutRight, exec_space> w(w_data.data(),
-                                                                n);
-    return w;
+    LU::invoke(A);
+    SolveLU::invoke(A, B);
 }
 
-template <typename TeamHandle, typename PsType, typename OffsType>
-KOKKOS_INLINE_FUNCTION auto
-TeamGetSystemP(const TeamHandle& team_handle, const PsType& Ps,
-               const OffsType& offs, const int stride)
+template <typename TeamHandle, typename AViewType, typename BViewType>
+KOKKOS_FORCEINLINE_FUNCTION void TeamSolveLU(const TeamHandle& team_handle,
+                                             AViewType& A, BViewType& B)
 {
-    using data_type = typename PsType::non_const_value_type;
-    using exec_space = typename PsType::execution_space;
-    const int k = team_handle.league_rank();
-    const auto range =
-        Kokkos::make_pair(offs(k) * stride, offs(k + 1) * stride);
-    auto P_data = Kokkos::subview(Ps, range);
+    namespace KB = KokkosBatched;
+    using LU = KB::TeamLU<TeamHandle, KB::Algo::LU::Unblocked>;
+    using SolveLU = KB::TeamSolveLU<TeamHandle, KB::Trans::NoTranspose,
+                                    KB::Algo::SolveLU::Unblocked>;
 
-    Kokkos::View<data_type**, exec_space> P(P_data.data(),
-                                            offs(k + 1) - offs(k), stride);
-    return P;
-}
-
-template <typename TeamHandle, typename AType, typename BType, typename XType,
-          typename TType, typename WType>
-KOKKOS_INLINE_FUNCTION auto TeamSolveQR(const TeamHandle& team_handle, AType& A,
-                                        BType& b, XType& x, TType& t, WType& w)
-{
-    KokkosBatched::TeamVectorQR<
-        TeamHandle, KokkosBatched::Algo::QR::Unblocked>::invoke(team_handle, A,
-                                                                t, w);
+    LU::invoke(team_handle, A);
     team_handle.team_barrier();
-
-    KokkosBatched::TeamVectorCopy<TeamHandle, KokkosBatched::Trans::NoTranspose,
-                                  1>::invoke(team_handle, b, x);
-    team_handle.team_barrier();
-
-    auto sol = Kokkos::subview(x, Kokkos::make_pair(0, A.extent_int(1)));
-
-    KokkosBatched::TeamVectorApplyQ<
-        TeamHandle, KokkosBatched::Side::Left,
-        KokkosBatched::Trans::NoTranspose,
-        KokkosBatched::Algo::ApplyQ::Unblocked>::invoke(team_handle, A, t, sol,
-                                                        w);
-    team_handle.team_barrier();
-}
-
-template <typename TeamHandle, typename AType, typename BType>
-KOKKOS_INLINE_FUNCTION void TeamSolveLU(const TeamHandle& team_handle, AType& A,
-                                        BType& b)
-{
-    KokkosBatched::TeamLU<
-        TeamHandle, KokkosBatched::Algo::LU::Unblocked>::invoke(team_handle, A);
-    team_handle.team_barrier();
-
-    KokkosBatched::TeamSolveLU<
-        TeamHandle, KokkosBatched::Trans::NoTranspose,
-        KokkosBatched::Algo::SolveLU::Unblocked>::invoke(team_handle, A, b);
+    SolveLU::invoke(team_handle, A, B);
 }

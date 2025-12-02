@@ -17,10 +17,6 @@
 #include "utils/utils.hpp"
 
 /* Constructor for the RBF PUM Interpolator:
-** Once it returns from the constructor, the interpolator is ready to use, with
-*the class member `interpolate_at`.
-** The constructor automatically calls this member with the given `target`
-*points.
 ** @param source: a 1-D `Kokkos::View` which contains source points of the
 *field.
 ** @param values: a 1-D `Kokkos::View` which contains the values associated to
@@ -31,10 +27,10 @@
 *for clusters points evaluation.
 */
 FULL_TEMPLATE
-TEMPLATED_CLASSNAME::RbfPumInterpolator(VectorView<Point> source,
-                                        VectorView<ScalarType> values,
-                                        VectorView<Point> target,
-                                        RbfFunctionBasisType rbf_function)
+TEMPLATED_CLASSNAME::RbfPumInterpolator(VectorView<Point>& source,
+                                        VectorView<ScalarType>& values,
+                                        VectorView<Point>& target,
+                                        RbfFunctionBasisType& rbf_function)
 {
     const std::string _region_name = "RbfPumInterpolator::RbfPumInterpolator";
     Kokkos::Profiling::pushRegion(_region_name);
@@ -78,8 +74,8 @@ TEMPLATED_CLASSNAME::RbfPumInterpolator(VectorView<Point> source,
     // with this->_nodes_per_clusters nodes.
     find_radius();
 
-    this->_rbf_function.set_r_inv(1.0 / this->_support_radius);
-    this->_weighting_function.set_r_inv(1.0 / this->_support_radius);
+    this->_rbf_function.set_r_inv(static_cast<ScalarType>(1.0) / this->_support_radius);
+    this->_weighting_function.set_r_inv(static_cast<ScalarType>(1.0) / this->_radius);
 
     create_clusters();
 
@@ -87,85 +83,6 @@ TEMPLATED_CLASSNAME::RbfPumInterpolator(VectorView<Point> source,
 
     // clang-format on
     Kokkos::Profiling::popRegion(); // ! RbfPumInterpolator::RbfPumInterpolator
-}
-
-FULL_TEMPLATE
-/* Interpolates a value for each point of `target` and returns the values in
- * `out`.
- * @param target: a 1xN Kokkos::View of Points.
- * @param out: output parameter, a 1xN Kokkos::View containing the interpolated
- * values.
- * @note `out` doesn't need to be pre-allocated as `interpolate` overrides it.
- */
-void TEMPLATED_CLASSNAME::interpolate(VectorView<Point>& target,
-                                      VectorView<ScalarType>& out) const
-{
-    assert(this->_radius > 0);
-    assert(this->_clusters.extent(0) > 0);
-    assert(this->_coeffs.size() > 0);
-    const std::string _region_name = "RbfPumInterpolator::interpolate";
-    Kokkos::Profiling::pushRegion(_region_name);
-    ExecSpace execspace{};
-    const size_t N = target.extent(0);
-
-    // 1. On crée une BVH sur les centres des clusters pour pouvoir trouver
-    // efficacement l'appartenance aux clusters sur les points target
-    const VectorView<Point> centers =
-        Kokkos::create_mirror_view_and_copy(execspace, this->_clusters);
-    auto centers_bvh = ArborX::BoundingVolumeHierarchy{
-        execspace, ArborX::Experimental::attach_indices(centers)
-    };
-
-    // 2. Pour chaque point target, on récupère les clusters auxquels il
-    // appartient
-    GetClustersPoints<ExecSpace, Dim, ScalarType> get_clusters_predicate(
-        target, this->_radius);
-    GetClustersPointsCallback<ExecSpace, Dim, ScalarType> get_clusters_callback;
-
-    VectorView<unsigned int> targets_clusters(
-        _region_name + "::targets_clusters", 0);
-    VectorView<int> targets_clusters_offsets(
-        _region_name + "::targets_clusters_offsets", 0);
-
-    centers_bvh.query(execspace, get_clusters_predicate, get_clusters_callback,
-                      targets_clusters, targets_clusters_offsets);
-
-    // 3. Pour chaque cluster de chaque point target, on calcule:
-    // ɸ(norm2(x, x_j)), avec ɸ = this->_weighting_function
-    VectorView<ScalarType> weights(
-        Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
-                           _region_name + "::weights"),
-        targets_clusters.extent(0));
-
-    // fonction WendlandC2
-    auto weighting_function = this->_weighting_function;
-
-    // fonction rbf
-    auto rbf_function = this->_rbf_function;
-
-    Kokkos::parallel_for(
-        _region_name + "::p_for compute weights",
-        Kokkos::RangePolicy(execspace, 0, N), KOKKOS_LAMBDA(const size_t& i) {
-            ScalarType lsum = 0.0;
-            for (int k = targets_clusters_offsets(i);
-                 k < targets_clusters_offsets(i + 1); ++k)
-            {
-                const auto center = centers(targets_clusters(k));
-                ScalarType w =
-                    weighting_function.eval(NDdistance(target(i), center));
-                weights(k) = w;
-                lsum += w;
-            }
-            // 4. On normalise les poids pour que leur somme fasse 1
-            for (int k = targets_clusters_offsets(i);
-                 k < targets_clusters_offsets(i + 1); ++k)
-            {
-                weights(k) /= lsum;
-            }
-        });
-    Kokkos::fence();
-
-    Kokkos::realloc(out, target.extent(0));
 }
 
 FULL_TEMPLATE

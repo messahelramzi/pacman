@@ -118,11 +118,11 @@ template <typename ExecSpace, int Dim, typename ScalarType>
 struct TagEmptyCentersCallback
 {
     Kokkos::View<ArborX::Point<Dim, ScalarType>*, ExecSpace> centers_candidates;
-    double threshold;
+    ScalarType threshold;
 
     TagEmptyCentersCallback(Kokkos::View<ArborX::Point<Dim, ScalarType>*,
                                          ExecSpace>& _centers_candidates,
-                            double _radius)
+                            const ScalarType _radius)
         : centers_candidates(_centers_candidates)
     {
         threshold = _radius * _radius;
@@ -200,11 +200,11 @@ template <typename ExecSpace, int Dim, typename ScalarType>
 struct GetClustersPoints
 {
     Kokkos::View<ArborX::Point<Dim, ScalarType>*, ExecSpace> centers;
-    double radius;
+    ScalarType radius;
 
     GetClustersPoints(
         Kokkos::View<ArborX::Point<Dim, ScalarType>*, ExecSpace> _centers,
-        double _radius)
+        const ScalarType _radius)
         : centers(_centers)
         , radius(_radius)
     {}
@@ -231,7 +231,8 @@ template <typename ExecSpace, int Dim, typename ScalarType>
 struct GetClustersPointsCallback
 {
     template <typename Predicate, typename Value, typename OutputFunctor>
-    KOKKOS_FUNCTION void operator()(Predicate predicate, Value const& value,
+    KOKKOS_FUNCTION void operator()(Predicate /* predicate */,
+                                    Value const& value,
                                     OutputFunctor const& out) const
     {
         out(value.index);
