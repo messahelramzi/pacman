@@ -84,12 +84,12 @@ void TEMPLATED_CLASSNAME::create_clusters(void)
     const Point upper = _source_bvh.bounds().maxCorner();
 
     // 2. calcul de la distance maximale entre 2 centres pour garantir l'overlap
-    const ScalarType spacing =
+    const RbfPumFPType spacing =
         std::sqrt(4.0 / Dim) * this->_radius * (1.0 - this->_relative_overlap);
 
     size_t shape[Dim];
-    ScalarType distances[Dim];
-    ScalarType min_distance = std::numeric_limits<ScalarType>::max();
+    RbfPumFPType distances[Dim];
+    RbfPumFPType min_distance = std::numeric_limits<RbfPumFPType>::max();
     size_t nb_centers = 1;
     for (int axis = 0; axis < Dim; ++axis)
     {
@@ -156,9 +156,9 @@ void TEMPLATED_CLASSNAME::create_clusters(void)
 
     // 6. on tag les clusters qui ne contiennent pas de point source donc ceux
     // pour lesquels: norm2(nearest(center), center) > radius
-    TagEmptyCenters<ExecSpace, Dim, ScalarType> tag_empty_centers(
+    TagEmptyCenters<ExecSpace, Dim, RbfPumFPType> tag_empty_centers(
         centers_candidates);
-    TagEmptyCentersCallback<ExecSpace, Dim, ScalarType>
+    TagEmptyCentersCallback<ExecSpace, Dim, RbfPumFPType>
         tag_empty_centers_callback(centers_candidates, this->_radius);
     this->_source_bvh.query(execspace, tag_empty_centers,
                             tag_empty_centers_callback);
@@ -170,9 +170,9 @@ void TEMPLATED_CLASSNAME::create_clusters(void)
 
     // 8. on projette les centres non taggés sur leur point source respectif le
     // plus proche
-    TransformToNearest<ExecSpace, Dim, ScalarType> transform_to_nearest(
+    TransformToNearest<ExecSpace, Dim, RbfPumFPType> transform_to_nearest(
         centers_candidates);
-    TransformToNearestCallback<ExecSpace, Dim, ScalarType>
+    TransformToNearestCallback<ExecSpace, Dim, RbfPumFPType>
         transform_to_nearest_callback(centers_candidates);
 
     this->_source_bvh.query(execspace, transform_to_nearest,
@@ -180,7 +180,7 @@ void TEMPLATED_CLASSNAME::create_clusters(void)
 
     // 9. on retire les centres qui sont trop proches les uns des autres,
     // threshold = 0.4 * min(distances)
-    ScalarType threshold = 0.4 * min_distance;
+    RbfPumFPType threshold = 0.4 * min_distance;
     threshold *= threshold;
     auto centers_host = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{},
                                                             centers_candidates);

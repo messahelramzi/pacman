@@ -71,6 +71,16 @@ find_package(Kokkos 5.0 REQUIRED)
 find_package(ArborX 2.0 REQUIRED)
 find_package(KokkosKernels 5.0 REQUIRED)
 
+# Required for the Host Solver (Serial/Threads/OpenMP backends)
+find_package(Eigen3 3.4 REQUIRED NO_MODULE)
+
+set(Kokkos_DIR ${CMAKE_SOURCE_DIR}/external/installs/kokkos-5.0.0/lib64/cmake/Kokkos CACHE PATH "")
+set(ArborX_DIR ${CMAKE_SOURCE_DIR}/external/installs/ArborX-2.0.1/share/cmake/ArborX CACHE PATH "")
+set(KokkosKernels_DIR ${CMAKE_SOURCE_DIR}/external/installs/KokkosKernels-5.0.0/lib64/cmake/KokkosKernels CACHE PATH "")
+find_package(Kokkos 5.0 REQUIRED)
+find_package(ArborX 2.0 REQUIRED)
+find_package(KokkosKernels 5.0 REQUIRED)
+
 add_executable(main main.cpp)
 
 target_link_libraries(main PRIVATE

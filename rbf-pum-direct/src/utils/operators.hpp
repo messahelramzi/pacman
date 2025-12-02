@@ -6,10 +6,10 @@
 
 namespace ArborX
 {
-    template <int Dim, class ScalarType>
+    template <int Dim, class RbfPumFPType>
     KOKKOS_INLINE_FUNCTION constexpr bool
-    operator==(const ArborX::Point<Dim, ScalarType>& lhs,
-               const ArborX::Point<Dim, ScalarType>& rhs)
+    operator==(const ArborX::Point<Dim, RbfPumFPType>& lhs,
+               const ArborX::Point<Dim, RbfPumFPType>& rhs)
     {
         for (int i = 0; i < Dim; ++i)
         {
@@ -21,18 +21,18 @@ namespace ArborX
         return true;
     }
 
-    template <int Dim, class ScalarType>
+    template <int Dim, class RbfPumFPType>
     KOKKOS_INLINE_FUNCTION constexpr bool
-    operator!=(const ArborX::Point<Dim, ScalarType>& lhs,
-               const ArborX::Point<Dim, ScalarType>& rhs)
+    operator!=(const ArborX::Point<Dim, RbfPumFPType>& lhs,
+               const ArborX::Point<Dim, RbfPumFPType>& rhs)
     {
         return !(lhs == rhs);
     }
 
-    template <int Dim, class ScalarType>
+    template <int Dim, class RbfPumFPType>
     KOKKOS_INLINE_FUNCTION bool constexpr
-    operator<(const ArborX::Point<Dim, ScalarType>& lhs,
-              const ArborX::Point<Dim, ScalarType>& rhs)
+    operator<(const ArborX::Point<Dim, RbfPumFPType>& lhs,
+              const ArborX::Point<Dim, RbfPumFPType>& rhs)
     {
         // Lexicographic ordering (NaNs are always bigger than non-NaNs)
         // follows strict weak ordering properties
@@ -56,17 +56,17 @@ namespace ArborX
         return false;
     }
 
-    template <int Dim, class ScalarType>
+    template <int Dim, class RbfPumFPType>
     KOKKOS_INLINE_FUNCTION bool constexpr
-    operator>(const ArborX::Point<Dim, ScalarType>& lhs,
-              const ArborX::Point<Dim, ScalarType>& rhs)
+    operator>(const ArborX::Point<Dim, RbfPumFPType>& lhs,
+              const ArborX::Point<Dim, RbfPumFPType>& rhs)
     {
         return !(lhs == rhs) && !(lhs < rhs);
     }
 
-    template <int Dim, class ScalarType>
+    template <int Dim, class RbfPumFPType>
     std::ostream& operator<<(std::ostream& os,
-                             const ArborX::Point<Dim, ScalarType>& point)
+                             const ArborX::Point<Dim, RbfPumFPType>& point)
     {
         std::ostringstream strs;
         strs << std::setprecision(16);
@@ -81,16 +81,16 @@ namespace ArborX
     }
 } // namespace ArborX
 
-template <int Dim, class ScalarType>
-KOKKOS_INLINE_FUNCTION ScalarType
-squared_difference(const ArborX::Point<Dim, ScalarType>& lhs,
-                   const ArborX::Point<Dim, ScalarType>& rhs)
+template <int Dim, class RbfPumFPType>
+KOKKOS_INLINE_FUNCTION RbfPumFPType
+squared_difference(const ArborX::Point<Dim, RbfPumFPType>& lhs,
+                   const ArborX::Point<Dim, RbfPumFPType>& rhs)
 {
     if (rhs[0] != rhs[0] || lhs[0] != lhs[0])
     {
-        return static_cast<ScalarType>(-1);
+        return static_cast<RbfPumFPType>(-1);
     }
-    ScalarType s = 0;
+    RbfPumFPType s = 0;
     for (int i = 0; i < Dim; ++i)
     {
         s += (rhs[i] - lhs[i]) * (rhs[i] - lhs[i]);
@@ -98,29 +98,29 @@ squared_difference(const ArborX::Point<Dim, ScalarType>& lhs,
     return s;
 }
 
-template <int Dim, class ScalarType>
-KOKKOS_INLINE_FUNCTION ScalarType
-NDdistance(const ArborX::Point<Dim, ScalarType>& lhs,
-           const ArborX::Point<Dim, ScalarType>& rhs)
+template <int Dim, class RbfPumFPType>
+KOKKOS_INLINE_FUNCTION RbfPumFPType
+NDdistance(const ArborX::Point<Dim, RbfPumFPType>& lhs,
+           const ArborX::Point<Dim, RbfPumFPType>& rhs)
 {
-    const ScalarType d = squared_difference<Dim, ScalarType>(lhs, rhs);
+    const RbfPumFPType d = squared_difference<Dim, RbfPumFPType>(lhs, rhs);
     if (d < 0)
     {
-        return static_cast<ScalarType>(-1);
+        return static_cast<RbfPumFPType>(-1);
     }
     return Kokkos::sqrt(d);
 }
 
-template <int Dim, class ScalarType>
-KOKKOS_INLINE_FUNCTION ScalarType
-squared_difference_no_check(const ArborX::Point<Dim, ScalarType>& lhs,
-                            const ArborX::Point<Dim, ScalarType>& rhs)
+template <int Dim, class RbfPumFPType>
+KOKKOS_INLINE_FUNCTION RbfPumFPType
+squared_difference_no_check(const ArborX::Point<Dim, RbfPumFPType>& lhs,
+                            const ArborX::Point<Dim, RbfPumFPType>& rhs)
 {
     // clang-format off
-    ScalarType acc = 0;
+    RbfPumFPType acc = 0;
     for (int i = 0; i < Dim; ++i)
     {
-        const ScalarType diff = rhs[i] - lhs[i];
+        const RbfPumFPType diff = rhs[i] - lhs[i];
         #ifdef FP_FAST_FMA
         acc = Kokkos::fma(diff, diff, acc);
         #else
@@ -131,12 +131,13 @@ squared_difference_no_check(const ArborX::Point<Dim, ScalarType>& lhs,
     return acc;
 }
 
-template <int Dim, class ScalarType>
-KOKKOS_INLINE_FUNCTION ScalarType
-NDdistance_no_check(const ArborX::Point<Dim, ScalarType>& lhs,
-                    const ArborX::Point<Dim, ScalarType>& rhs)
+template <int Dim, class RbfPumFPType>
+KOKKOS_INLINE_FUNCTION RbfPumFPType
+NDdistance_no_check(const ArborX::Point<Dim, RbfPumFPType>& lhs,
+                    const ArborX::Point<Dim, RbfPumFPType>& rhs)
 {
-    return Kokkos::sqrt(squared_difference_no_check<Dim, ScalarType>(lhs, rhs));
+    return Kokkos::sqrt(
+        squared_difference_no_check<Dim, RbfPumFPType>(lhs, rhs));
 }
 
 struct OffsetsScanPair

@@ -9,13 +9,13 @@
 
 #include "src/interpolator.hpp"
 
-template <class ScalarType>
-KOKKOS_INLINE_FUNCTION ScalarType
-franke_function(ArborX::Point<3, ScalarType> point)
+template <typename RbfPumFPType>
+KOKKOS_INLINE_FUNCTION RbfPumFPType
+franke_function(ArborX::Point<3, RbfPumFPType> point)
 {
-    ScalarType x = point[0];
-    ScalarType y = point[1];
-    ScalarType z = point[2];
+    RbfPumFPType x = point[0];
+    RbfPumFPType y = point[1];
+    RbfPumFPType z = point[2];
     return 0.75
         * std::exp(-((9.0 * x - 2.0) * (9.0 * x - 2.0)
                      + (9.0 * y - 2.0) * (9.0 * y - 2.0)
@@ -27,16 +27,17 @@ franke_function(ArborX::Point<3, ScalarType> point)
         + 0.5
         * std::exp(-((9.0 * x - 7.0) * (9.0 * x - 7.0)
                      + (9.0 * y - 3.0) * (9.0 * y - 3.0)
-                     + ((9.0 * z - 5.0) * (9.0 * z - 5.0)) / 4.0))
+                     + (9.0 * z - 5.0) * (9.0 * z - 5.0))
+                   / 4.0)
         - 0.2
         * std::exp(-((9.0 * x - 4.0) * (9.0 * x - 4.0)
                      + (9.0 * y - 7.0) * (9.0 * y - 7.0)
                      + (9.0 * z - 5.0) * (9.0 * z - 5.0)));
 }
 
-template <int Dim, class ScalarType>
-ArborX::Point<Dim, ScalarType>* get_points_from_vtu_grid(char* filename,
-                                                         size_t* out_N)
+template <int Dim, typename RbfPumFPType>
+ArborX::Point<Dim, RbfPumFPType>* get_points_from_vtu_grid(char* filename,
+                                                           size_t* out_N)
 {
     vtkNew<vtkXMLUnstructuredGridReader> reader;
     reader->SetFileName(filename);
@@ -44,14 +45,14 @@ ArborX::Point<Dim, ScalarType>* get_points_from_vtu_grid(char* filename,
     vtkUnstructuredGrid* grid = reader->GetOutput();
     vtkPoints* points = grid->GetPoints();
     vtkIdType N = points->GetNumberOfPoints();
-    ArborX::Point<Dim, ScalarType>* ret =
-        (ArborX::Point<Dim, ScalarType>*)malloc(
-            N * sizeof(ArborX::Point<Dim, ScalarType>));
+    ArborX::Point<Dim, RbfPumFPType>* ret =
+        (ArborX::Point<Dim, RbfPumFPType>*)malloc(
+            N * sizeof(ArborX::Point<Dim, RbfPumFPType>));
     for (vtkIdType i = 0; i < N; ++i)
     {
         double coords[3];
         points->GetPoint(i, coords);
-        auto p = ArborX::Point<Dim, ScalarType>{};
+        auto p = ArborX::Point<Dim, RbfPumFPType>{};
         for (int j = 0; j < Dim; ++j)
         {
             p[j] = coords[j];
