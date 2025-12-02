@@ -3,7 +3,7 @@
 ## Get the source code
 
 ```shell
-git clone https://git.cloud.safran/safransa/safrantech/mads/PACMAN.git && cd PACMAN/rbf-pum-interpolator
+git clone https://git.cloud.safran/safransa/safrantech/mads/PACMAN.git && cd PACMAN/rbf-pum-direct
 ```
 
 ## Get the requirements

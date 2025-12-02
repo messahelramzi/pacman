@@ -1,0 +1,27 @@
+spack:
+  definitions:
+    - compilers: [gcc@13.4.0]
+    - packages:
+        - cmake@3.31
+        - ninja
+        - gdb
+        - vtk ~opengl2 ~mpi
+        - py-numpy
+        - gcc-runtime@13.4.0
+        - gmake@4.4.1
+        - hwloc@2.11.1 +cuda cuda_arch=80
+        - numactl@2.0.18
+        - openmpi@5.0.8 +atomics +cuda cuda_arch=80 +vt +wrapper-rpath
+  concretizer:
+    unify: true
+  specs:
+    - gcc@13.4.0 +binutils
+    - compiler-wrapper@1.0
+    - cuda@12.9.0
+    - py-meshio
+    - matrix:
+        - [$packages]
+        - [$%compilers]
+  packages:
+    all:
+      require: arch=linux-rhel8-zen3

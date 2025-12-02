@@ -1,2 +1,11 @@
 .vscode/
 build/
+env/
+external/
+meshes/
+precice-systems/
+.mypy_cache
+tests/
+tests_outputs/
+systems/
+test.cpp
