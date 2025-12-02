@@ -49,7 +49,7 @@ ArborX::Point<Dim, ScalarType>* get_points_from_vtu_grid(char* filename,
             N * sizeof(ArborX::Point<Dim, ScalarType>));
     for (vtkIdType i = 0; i < N; ++i)
     {
-        ScalarType coords[3];
+        double coords[3];
         points->GetPoint(i, coords);
         auto p = ArborX::Point<Dim, ScalarType>{};
         for (int j = 0; j < Dim; ++j)
@@ -74,11 +74,10 @@ int main(int argc, char* argv[])
     constexpr const int dim = 3;
     using scalar_type = double;
     using execution_space = Kokkos::DefaultHostExecutionSpace;
-    using RbfFunctionBasisType = WendlandC2<scalar_type>;
+    using RbfFunctionBasisType = WendlandC6<scalar_type>;
 
     auto guard = Kokkos::ScopeGuard();
     {
-        Kokkos::Profiling::ScopedRegion region("main::main");
         size_t N, M;
         auto source_grid =
             get_points_from_vtu_grid<dim, scalar_type>(argv[1], &N);
@@ -140,31 +139,74 @@ int main(int argc, char* argv[])
 
         std::cout << "Source mesh: " << argv[1] << "(points: " << N << ")\n";
         std::cout << "Target mesh: " << argv[2] << "(points: " << M << ")\n";
-        std::cout << "Time spent: " << (t2 - t1).count() / 1'000'000 << "ms"
+        std::cout << "Time spent: " << (t2 - t1).count() / 1'000'000.0 << "ms"
                   << "\n";
         std::cout << interpolator.get_interpolator_details() << std::endl;
 
         const auto interpolated_data = interpolator.out;
 
         Kokkos::parallel_for(
-            "interpolate data",
-            Kokkos::RangePolicy(execution_space{}, 0, target.extent(0)),
+            "interpolate data", Kokkos::RangePolicy(execution_space{}, 0, M),
             KOKKOS_LAMBDA(const size_t& i) {
                 reference(i) = franke_function(target(i));
             });
         Kokkos::fence();
 
-        double diff_sum;
-        Kokkos::parallel_reduce(
-            "compute average abs error",
-            Kokkos::RangePolicy(execution_space{}, 0, target.extent(0)),
-            KOKKOS_LAMBDA(const size_t& i, double& lsum) {
-                lsum += Kokkos::fabs(reference(i) - interpolated_data(i));
-            },
-            diff_sum);
+        Kokkos::View<scalar_type*, execution_space> errors(
+            Kokkos::view_alloc(execution_space{}, Kokkos::WithoutInitializing,
+                               "main::errors"),
+            reference.extent(0));
 
-        std::cout << "average abs error: " << diff_sum / target_h.extent(0)
-                  << std::endl;
+        Kokkos::parallel_for(
+            "compute abs errors", Kokkos::RangePolicy(execution_space{}, 0, M),
+            KOKKOS_LAMBDA(const size_t& i) {
+                errors(i) = Kokkos::fabs(reference(i) - interpolated_data(i));
+            });
+        Kokkos::fence();
+
+        Kokkos::sort(errors);
+        scalar_type sum = 0.0;
+        Kokkos::parallel_reduce(
+            "sum", Kokkos::RangePolicy<execution_space>(0, M),
+            KOKKOS_LAMBDA(const int i, scalar_type& update) {
+                update += errors(i);
+            },
+            sum);
+        scalar_type mean = sum / M;
+
+        scalar_type min_val, max_val;
+        Kokkos::deep_copy(min_val, Kokkos::subview(errors, 0));
+        Kokkos::deep_copy(max_val,
+                          Kokkos::subview(errors, errors.extent(0) - 1));
+
+        auto worst_idx = [&](double pct) {
+            std::size_t i = static_cast<std::size_t>(pct * M);
+            if (i >= M)
+                i = M - 1;
+            return i;
+        };
+
+        std::size_t i1 = worst_idx(0.99);
+        std::size_t i5 = worst_idx(0.95);
+        std::size_t i10 = worst_idx(0.90);
+        std::size_t i50 = worst_idx(0.50);
+
+        scalar_type worst1, worst5, worst10, worst50;
+        Kokkos::deep_copy(worst1, Kokkos::subview(errors, i1));
+        Kokkos::deep_copy(worst5, Kokkos::subview(errors, i5));
+        Kokkos::deep_copy(worst10, Kokkos::subview(errors, i10));
+        Kokkos::deep_copy(worst50, Kokkos::subview(errors, i50));
+
+        std::cout << std::setprecision(16);
+        std::cout << "\n\n========== STATS ==========\n";
+        std::cout << "avg: " << mean << "\n";
+        std::cout << "min: " << min_val << "\n";
+        std::cout << "max: " << max_val << "\n";
+        std::cout << "med: " << worst50 << "\n";
+        std::cout << "p90: " << worst10 << "\n";
+        std::cout << "p95: " << worst5 << "\n";
+        std::cout << "p99: " << worst1 << "\n";
+        std::cout << "========== STATS ==========\n\n";
 
         free(source_grid);
         free(target_grid);

@@ -5,6 +5,7 @@
 #include <cuda.h>
 #include <cuda_runtime_api.h>
 #include <filesystem>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
@@ -46,6 +47,7 @@ template <typename ViewType>
 void print_view(ViewType& v, std::string sep = " ")
 {
     auto m = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{}, v);
+    std::cout << std::setprecision(16);
     for (size_t i = 0; i < m.extent(0); ++i)
     {
         std::cout << m(i) << sep;
@@ -137,36 +139,6 @@ void export_systems(const ViewType& data, const OffsType& offs,
     }
 }
 
-template <typename ViewType>
-std::string inline get_clusters_info(ViewType& nb_vertices_per_clusters)
-{
-    size_t maximum = 0;
-    size_t minimum = std::numeric_limits<size_t>::max();
-    double average = 0;
-    auto view_h = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{},
-                                                      nb_vertices_per_clusters);
-    for (size_t i = 0; i < view_h.extent(0); ++i)
-    {
-        if (view_h(i) > maximum)
-        {
-            maximum = view_h(i);
-        }
-        if (view_h(i) < minimum)
-        {
-            minimum = view_h(i);
-        }
-        average += view_h(i);
-    }
-    average /= (double)(view_h.extent(0));
-    std::ostringstream strs;
-    strs << "Number of clusters: " << nb_vertices_per_clusters.extent(0)
-         << "\n";
-    strs << "    Maximum: " << maximum << "\n";
-    strs << "    Minimum: " << minimum << "\n";
-    strs << "    Average: " << average;
-    return strs.str();
-}
-
 template <typename ExecSpace>
 KOKKOS_FORCEINLINE_FUNCTION constexpr bool is_host_accessible(void)
 {
@@ -174,5 +146,9 @@ KOKKOS_FORCEINLINE_FUNCTION constexpr bool is_host_accessible(void)
         Kokkos::DefaultHostExecutionSpace,
         typename ExecSpace::memory_space>::accessible;
 }
+
+template <typename T>
+using base_type =
+    typename std::remove_cv<typename std::remove_reference<T>::type>::type;
 
 #endif /* ! UTILS_HPP */

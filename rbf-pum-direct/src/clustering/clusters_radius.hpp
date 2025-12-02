@@ -108,7 +108,7 @@ void TEMPLATED_CLASSNAME::find_radius(void)
         Kokkos::RangePolicy(execspace, 0, 2 * Dim + 1),
         KOKKOS_LAMBDA(const size_t& i) {
             ScalarType n_max = 0;
-            for (size_t ii = squared_distances_offsets(i);
+            for (int ii = squared_distances_offsets(i);
                  ii < squared_distances_offsets(i + 1); ++ii)
             {
                 n_max = (n_max > squared_distances_values(ii))

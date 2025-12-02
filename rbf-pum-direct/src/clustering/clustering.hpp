@@ -196,8 +196,9 @@ void TEMPLATED_CLASSNAME::create_clusters(void)
                 {
                     continue;
                 }
-                long neighbor_id = i + off;
-                if (neighbor_id >= 0 && neighbor_id < centers_host.extent(0))
+                int neighbor_id = i + off;
+                if (neighbor_id >= 0
+                    && neighbor_id < centers_host.extent_int(0))
                 {
                     auto center = centers_host(i);
                     auto neighbor = centers_host(neighbor_id);
