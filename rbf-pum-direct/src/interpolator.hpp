@@ -28,7 +28,7 @@
 */
 FULL_TEMPLATE
 TEMPLATED_CLASSNAME::RbfPumInterpolator(VectorView<Point>& source,
-                                        VectorView<ScalarType>& values,
+                                        VectorView<RbfPumFPType>& values,
                                         VectorView<Point>& target,
                                         RbfFunctionBasisType& rbf_function)
 {
@@ -63,7 +63,7 @@ TEMPLATED_CLASSNAME::RbfPumInterpolator(VectorView<Point>& source,
         execspace, ArborX::Experimental::attach_indices(this->_target)
     };
     this->_rbf_function = rbf_function;
-    this->_weighting_function = WendlandC2<ScalarType>{};
+    this->_weighting_function = WendlandC2<RbfPumFPType>{};
 
     // clang-format off
     // 1. We search for a good cluster radius that would verify:
@@ -74,8 +74,8 @@ TEMPLATED_CLASSNAME::RbfPumInterpolator(VectorView<Point>& source,
     // with this->_nodes_per_clusters nodes.
     find_radius();
 
-    this->_rbf_function.set_r_inv(static_cast<ScalarType>(1.0) / this->_support_radius);
-    this->_weighting_function.set_r_inv(static_cast<ScalarType>(1.0) / this->_radius);
+    this->_rbf_function.set_r_inv(static_cast<RbfPumFPType>(1.0) / this->_support_radius);
+    this->_weighting_function.set_r_inv(static_cast<RbfPumFPType>(1.0) / this->_radius);
 
     create_clusters();
 

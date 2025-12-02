@@ -45,9 +45,9 @@ void TEMPLATED_CLASSNAME::device_solve_systems(void)
         _region_name + "::clusters_source_indices", 0);
     VectorView<int> clusters_source_offsets(
         _region_name + "::clusters_source_offsets", 0);
-    GetClustersPoints<ExecSpace, Dim, ScalarType> get_clusters_points_predicate(
-        this->_clusters, this->_radius);
-    GetClustersPointsCallback<ExecSpace, Dim, ScalarType>
+    GetClustersPoints<ExecSpace, Dim, RbfPumFPType>
+        get_clusters_points_predicate(this->_clusters, this->_radius);
+    GetClustersPointsCallback<ExecSpace, Dim, RbfPumFPType>
         get_clusters_points_callback;
 
     this->_source_bvh.query(execspace, get_clusters_points_predicate,
@@ -96,38 +96,38 @@ void TEMPLATED_CLASSNAME::device_solve_systems(void)
     const int target_size = clusters_target_indices.extent_int(0);
     constexpr int poly_vals = Dim + 1;
 
-    VectorView<ScalarType> As(Kokkos::view_alloc(execspace,
-                                                 Kokkos::WithoutInitializing,
-                                                 _region_name + "::As"),
-                              rbf_mat_size);
-    VectorView<ScalarType> Bs(Kokkos::view_alloc(execspace,
-                                                 Kokkos::WithoutInitializing,
-                                                 _region_name + "::Bs"),
-                              source_size);
-    VectorView<ScalarType> Qs(Kokkos::view_alloc(execspace,
-                                                 Kokkos::WithoutInitializing,
-                                                 _region_name + "::Qs"),
-                              source_size * poly_vals);
-    VectorView<ScalarType> Vs(Kokkos::view_alloc(execspace,
-                                                 Kokkos::WithoutInitializing,
-                                                 _region_name + "::Vs"),
-                              target_size * poly_vals);
+    VectorView<RbfPumFPType> As(Kokkos::view_alloc(execspace,
+                                                   Kokkos::WithoutInitializing,
+                                                   _region_name + "::As"),
+                                rbf_mat_size);
+    VectorView<RbfPumFPType> Bs(Kokkos::view_alloc(execspace,
+                                                   Kokkos::WithoutInitializing,
+                                                   _region_name + "::Bs"),
+                                source_size);
+    VectorView<RbfPumFPType> Qs(Kokkos::view_alloc(execspace,
+                                                   Kokkos::WithoutInitializing,
+                                                   _region_name + "::Qs"),
+                                source_size * poly_vals);
+    VectorView<RbfPumFPType> Vs(Kokkos::view_alloc(execspace,
+                                                   Kokkos::WithoutInitializing,
+                                                   _region_name + "::Vs"),
+                                target_size * poly_vals);
 
     // 2. On remplit le système associé à chaque cluster
     // 2.1 On copie les données de this dont on a besoin
     const VectorView<Point> centers = this->_clusters;
     const VectorView<Point> source = this->_source;
     const VectorView<Point> target = this->_target;
-    const VectorView<ScalarType> values = this->_values;
+    const VectorView<RbfPumFPType> values = this->_values;
     const auto rbf_function = this->_rbf_function;
     const auto weighting_function = this->_weighting_function;
 
     const auto center_bvh = ArborX::BoundingVolumeHierarchy{
         execspace, ArborX::Experimental::attach_indices(centers)
     };
-    GetClustersPoints<ExecSpace, Dim, ScalarType> get_target_clusters(
+    GetClustersPoints<ExecSpace, Dim, RbfPumFPType> get_target_clusters(
         target, this->_radius);
-    GetClustersPointsCallback<ExecSpace, Dim, ScalarType>
+    GetClustersPointsCallback<ExecSpace, Dim, RbfPumFPType>
         get_target_clusters_callback;
     VectorView<unsigned int> weights_indices(_region_name + "::weights_indices",
                                              0);
@@ -136,7 +136,7 @@ void TEMPLATED_CLASSNAME::device_solve_systems(void)
                      get_target_clusters_callback, weights_indices,
                      weights_offsets);
 
-    VectorView<ScalarType> weights(
+    VectorView<RbfPumFPType> weights(
         Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
                            _region_name + "::weights"),
         weights_indices.extent(0));
@@ -146,7 +146,7 @@ void TEMPLATED_CLASSNAME::device_solve_systems(void)
         Kokkos::RangePolicy(execspace, 0, target.extent(0)),
         KOKKOS_LAMBDA(const int& i) {
             const auto target_point = target(i);
-            ScalarType sum_w = static_cast<ScalarType>(0);
+            RbfPumFPType sum_w = static_cast<RbfPumFPType>(0);
             for (int k = weights_offsets(i); k < weights_offsets(i + 1); ++k)
             {
                 const auto center_point = centers(weights_indices(k));
@@ -172,7 +172,7 @@ void TEMPLATED_CLASSNAME::device_solve_systems(void)
         },
         Kokkos::Max<int>(max_cluster_size));
 
-    this->out = VectorView<ScalarType>(
+    this->out = VectorView<RbfPumFPType>(
         Kokkos::view_alloc(execspace, "this->out"), this->_target.extent(0));
     auto output = Kokkos::subview(this->out, Kokkos::ALL());
 
@@ -212,18 +212,18 @@ void TEMPLATED_CLASSNAME::device_solve_systems(void)
         });
     Kokkos::fence();
 
-    VectorView<ScalarType> Ts(Kokkos::view_alloc(execspace,
-                                                 Kokkos::WithoutInitializing,
-                                                 _region_name + "::Ts"),
-                              poly_vals * K);
-    VectorView<ScalarType> Ws(Kokkos::view_alloc(execspace,
-                                                 Kokkos::WithoutInitializing,
-                                                 _region_name + "::Ws"),
-                              source_size);
-    VectorView<ScalarType> Xs(Kokkos::view_alloc(execspace,
-                                                 Kokkos::WithoutInitializing,
-                                                 _region_name + "::Xs"),
-                              source_size);
+    VectorView<RbfPumFPType> Ts(Kokkos::view_alloc(execspace,
+                                                   Kokkos::WithoutInitializing,
+                                                   _region_name + "::Ts"),
+                                poly_vals * K);
+    VectorView<RbfPumFPType> Ws(Kokkos::view_alloc(execspace,
+                                                   Kokkos::WithoutInitializing,
+                                                   _region_name + "::Ws"),
+                                source_size);
+    VectorView<RbfPumFPType> Xs(Kokkos::view_alloc(execspace,
+                                                   Kokkos::WithoutInitializing,
+                                                   _region_name + "::Xs"),
+                                source_size);
 
     // TODO: solve using Serial Solvers
     Kokkos::parallel_for(
@@ -261,11 +261,11 @@ void TEMPLATED_CLASSNAME::device_solve_systems(void)
         });
     Kokkos::fence();
 
-    VectorView<ScalarType> Es(Kokkos::view_alloc(execspace,
-                                                 Kokkos::WithoutInitializing,
-                                                 _region_name + "::Es"),
-                              eval_mat_size);
-    VectorView<ScalarType> tempView(
+    VectorView<RbfPumFPType> Es(Kokkos::view_alloc(execspace,
+                                                   Kokkos::WithoutInitializing,
+                                                   _region_name + "::Es"),
+                                eval_mat_size);
+    VectorView<RbfPumFPType> tempView(
         Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
                            _region_name + "::tempView"),
         target_size);
@@ -348,9 +348,9 @@ void TEMPLATED_CLASSNAME::host_solve_systems(void)
         _region_name + "::clusters_source_indices", 0);
     VectorView<int> clusters_source_offsets(
         _region_name + "::clusters_source_offsets", 0);
-    GetClustersPoints<ExecSpace, Dim, ScalarType> get_clusters_points_predicate(
-        this->_clusters, this->_radius);
-    GetClustersPointsCallback<ExecSpace, Dim, ScalarType>
+    GetClustersPoints<ExecSpace, Dim, RbfPumFPType>
+        get_clusters_points_predicate(this->_clusters, this->_radius);
+    GetClustersPointsCallback<ExecSpace, Dim, RbfPumFPType>
         get_clusters_points_callback;
     this->_source_bvh.query(execspace, get_clusters_points_predicate,
                             get_clusters_points_callback,
@@ -382,9 +382,9 @@ void TEMPLATED_CLASSNAME::host_solve_systems(void)
     const auto center_bvh = ArborX::BoundingVolumeHierarchy{
         execspace, ArborX::Experimental::attach_indices(centers)
     };
-    GetClustersPoints<ExecSpace, Dim, ScalarType> get_target_clusters(
+    GetClustersPoints<ExecSpace, Dim, RbfPumFPType> get_target_clusters(
         target, this->_radius);
-    GetClustersPointsCallback<ExecSpace, Dim, ScalarType>
+    GetClustersPointsCallback<ExecSpace, Dim, RbfPumFPType>
         get_target_clusters_callback;
     VectorView<unsigned int> weights_indices(_region_name + "::weights_indices",
                                              0);
@@ -396,7 +396,7 @@ void TEMPLATED_CLASSNAME::host_solve_systems(void)
 
     Kokkos::Profiling::pushRegion(_region_name
                                   + "::Compute Weights Per Clusters");
-    VectorView<ScalarType> weights(
+    VectorView<RbfPumFPType> weights(
         Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
                            _region_name + "::weights"),
         weights_indices.extent(0));
@@ -404,11 +404,11 @@ void TEMPLATED_CLASSNAME::host_solve_systems(void)
         _region_name + "::p_for compute weights",
         Kokkos::RangePolicy(execspace, 0, target.extent(0)), [=](const int& i) {
             const auto target_point = target(i);
-            ScalarType sum_w = static_cast<ScalarType>(0.0);
+            RbfPumFPType sum_w = static_cast<RbfPumFPType>(0.0);
             for (int k = weights_offsets(i); k < weights_offsets(i + 1); ++k)
             {
                 const auto center_point = centers(weights_indices(k));
-                const ScalarType w = weighting_function.eval_host(
+                const RbfPumFPType w = weighting_function.eval_host(
                     NDdistance_no_check(target_point, center_point));
                 sum_w += w;
                 weights(k) = w;
@@ -421,7 +421,7 @@ void TEMPLATED_CLASSNAME::host_solve_systems(void)
     Kokkos::fence();
     Kokkos::Profiling::popRegion();
 
-    this->out = VectorView<ScalarType>(
+    this->out = VectorView<RbfPumFPType>(
         Kokkos::view_alloc(execspace, "this->out"), this->_target.extent(0));
     auto output = Kokkos::subview(this->out, Kokkos::ALL());
 
@@ -501,7 +501,7 @@ void TEMPLATED_CLASSNAME::host_solve_systems(void)
                     {
                         if (static_cast<int>(weights_indices(t)) == k)
                         {
-                            Kokkos::atomic_add<ScalarType>(
+                            Kokkos::atomic_add<RbfPumFPType>(
                                 &(output(target_sv(i))), weights(t) * out(i));
                         }
                     }

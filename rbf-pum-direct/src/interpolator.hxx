@@ -8,16 +8,16 @@
 #include "solver/rbf_functions.hpp"
 
 #define FULL_TEMPLATE                                                          \
-    template <typename ExecSpace, int Dim, typename ScalarType,                \
+    template <typename ExecSpace, int Dim, typename RbfPumFPType,              \
               typename RbfFunctionBasisType>
 
 #define TEMPLATED_CLASSNAME                                                    \
-    RbfPumInterpolator<ExecSpace, Dim, ScalarType, RbfFunctionBasisType>
+    RbfPumInterpolator<ExecSpace, Dim, RbfPumFPType, RbfFunctionBasisType>
 
 FULL_TEMPLATE
 class RbfPumInterpolator
 {
-    using Point = ArborX::Point<Dim, ScalarType>;
+    using Point = ArborX::Point<Dim, RbfPumFPType>;
 
     template <typename inner_type>
     using VectorView = Kokkos::View<inner_type*, ExecSpace>;
@@ -31,7 +31,7 @@ class RbfPumInterpolator
 public:
     // Constructor
     RbfPumInterpolator(VectorView<Point>& source,
-                       VectorView<ScalarType>& values,
+                       VectorView<RbfPumFPType>& values,
                        VectorView<Point>& target,
                        RbfFunctionBasisType& rbf_function);
 
@@ -63,7 +63,7 @@ public:
         return this->_clusters(i);
     }
 
-    VectorView<ScalarType> out;
+    VectorView<RbfPumFPType> out;
 
 private:
     double _radius;
@@ -81,7 +81,7 @@ private:
     VectorView<Point> _clusters;
     VectorView<Point> _source;
     VectorView<Point> _target;
-    VectorView<ScalarType> _coeffs;
-    VectorView<ScalarType> _values;
-    WendlandC2<ScalarType> _weighting_function;
+    VectorView<RbfPumFPType> _coeffs;
+    VectorView<RbfPumFPType> _values;
+    WendlandC2<RbfPumFPType> _weighting_function;
 };

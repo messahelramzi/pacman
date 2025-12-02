@@ -32,7 +32,7 @@ void TEMPLATED_CLASSNAME::find_radius(void)
     for (int axis = 0; axis < Dim; ++axis)
     {
         Point sample = Point{ center };
-        ScalarType current_axis_length = std::abs(upper[axis] - lower[axis]);
+        RbfPumFPType current_axis_length = std::abs(upper[axis] - lower[axis]);
         sample[axis] -= current_axis_length * 0.25;
         samples_h(axis + 1) = Point{ sample };
         sample[axis] += current_axis_length * 0.5;
@@ -41,11 +41,11 @@ void TEMPLATED_CLASSNAME::find_radius(void)
 
     Kokkos::deep_copy(samples, samples_h);
 
-    Projection<ExecSpace, Dim, ScalarType> project_samples_to_input_predicate{
+    Projection<ExecSpace, Dim, RbfPumFPType> project_samples_to_input_predicate{
         samples
     };
 
-    ProjectionCallback<ExecSpace, Dim, ScalarType>
+    ProjectionCallback<ExecSpace, Dim, RbfPumFPType>
         project_samples_to_input_callback{};
 
     /* The returned values are pairs containing the point and its projection on
@@ -80,12 +80,12 @@ void TEMPLATED_CLASSNAME::find_radius(void)
         });
     Kokkos::fence();
 
-    DistanceToKNearest<ExecSpace, Dim, ScalarType>
+    DistanceToKNearest<ExecSpace, Dim, RbfPumFPType>
         vertices_per_sample_predicate{ this->_nodes_per_cluster, samples };
-    DistanceToKNearestCallback<ExecSpace, Dim, ScalarType>
+    DistanceToKNearestCallback<ExecSpace, Dim, RbfPumFPType>
         vertices_per_sample_callback{};
 
-    VectorView<ScalarType> squared_distances_values(
+    VectorView<RbfPumFPType> squared_distances_values(
         Kokkos::view_alloc(
             execspace, Kokkos::WithoutInitializing,
             "RbfPumInterpolator::find_radius::squared_distances_values"),
@@ -99,7 +99,7 @@ void TEMPLATED_CLASSNAME::find_radius(void)
                   vertices_per_sample_callback, squared_distances_values,
                   squared_distances_offsets);
 
-    VectorView<ScalarType> max_radii(
+    VectorView<RbfPumFPType> max_radii(
         Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
                            "RbfPumInterpolator::find_radius::max_radii"),
         2 * Dim + 1);
@@ -107,7 +107,7 @@ void TEMPLATED_CLASSNAME::find_radius(void)
         "RbfPumInterpolator::find_radius::p_for sum max radius",
         Kokkos::RangePolicy(execspace, 0, 2 * Dim + 1),
         KOKKOS_LAMBDA(const size_t& i) {
-            ScalarType n_max = 0;
+            RbfPumFPType n_max = 0;
             for (int ii = squared_distances_offsets(i);
                  ii < squared_distances_offsets(i + 1); ++ii)
             {
