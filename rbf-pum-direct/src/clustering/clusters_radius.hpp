@@ -1,5 +1,4 @@
-#ifndef CLUSTER_RADIUS_HPP
-#define CLUSTER_RADIUS_HPP
+#pragma once
 
 #include <Kokkos_Core.hpp>
 
@@ -9,19 +8,20 @@
 FULL_TEMPLATE
 void TEMPLATED_CLASSNAME::find_radius(void)
 {
-    Kokkos::Profiling::pushRegion("RbfPumInterpolator::find_radius");
     assert(this->_nodes_per_cluster > 0);
+    const std::string _region_name = "RbfPumInterpolator::find_radius";
+    Kokkos::Profiling::ScopedRegion region(_region_name);
     const ExecSpace execspace{};
 
-    VectorView<Point> samples(
-        Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
-                           "RbfPumInterpolator::find_radius::samples"),
-        2 * Dim + 1);
+    VectorView<Point> samples(Kokkos::view_alloc(execspace,
+                                                 Kokkos::WithoutInitializing,
+                                                 _region_name + "::samples"),
+                              2 * Dim + 1);
     auto samples_h = Kokkos::create_mirror_view(Kokkos::WithoutInitializing,
                                                 Kokkos::HostSpace{}, samples);
 
-    Point lower = this->_source_bvh.bounds().minCorner();
-    Point upper = this->_source_bvh.bounds().maxCorner();
+    const Point lower = this->_source_bvh.bounds().minCorner();
+    const Point upper = this->_source_bvh.bounds().maxCorner();
     Point center{};
     for (int axis = 0; axis < Dim; ++axis)
     {
@@ -32,7 +32,7 @@ void TEMPLATED_CLASSNAME::find_radius(void)
     for (int axis = 0; axis < Dim; ++axis)
     {
         Point sample = Point{ center };
-        RbfPumFPType current_axis_length = std::abs(upper[axis] - lower[axis]);
+        RbfPumFPType current_axis_length = std::fabs(upper[axis] - lower[axis]);
         sample[axis] -= current_axis_length * 0.25;
         samples_h(axis + 1) = Point{ sample };
         sample[axis] += current_axis_length * 0.5;
@@ -41,12 +41,8 @@ void TEMPLATED_CLASSNAME::find_radius(void)
 
     Kokkos::deep_copy(samples, samples_h);
 
-    Projection<ExecSpace, Dim, RbfPumFPType> project_samples_to_input_predicate{
-        samples
-    };
-
-    ProjectionCallback<ExecSpace, Dim, RbfPumFPType>
-        project_samples_to_input_callback{};
+    Projection project_samples_to_input_predicate{ samples };
+    ProjectionCallback project_samples_to_input_callback{};
 
     /* The returned values are pairs containing the point and its projection on
      *  the source mesh.
@@ -54,14 +50,12 @@ void TEMPLATED_CLASSNAME::find_radius(void)
      */
     using ProjectionRet = Kokkos::pair<Point, Point>;
     VectorView<ProjectionRet> projected_samples_values(
-        Kokkos::view_alloc(
-            execspace, Kokkos::WithoutInitializing,
-            "RbfPumInterpolator::find_radius::projected_samples_values"),
+        Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
+                           _region_name + "::projected_samples_values"),
         0);
     VectorView<int> projected_samples_offsets(
-        Kokkos::view_alloc(
-            execspace, Kokkos::WithoutInitializing,
-            "RbfPumInterpolator::find_radius::projected_samples_offsets"),
+        Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
+                           _region_name + "::projected_samples_offsets"),
         0);
 
     this->_source_bvh.query(execspace, project_samples_to_input_predicate,
@@ -71,29 +65,27 @@ void TEMPLATED_CLASSNAME::find_radius(void)
 
     // Each sample matches exactly one projected point
     Kokkos::parallel_for(
-        "RbfPumInterpolator::find_radius::p_for project samples on the source "
-        "mesh",
+        _region_name
+            + "::p_for project samples on the source "
+              "mesh",
         Kokkos::RangePolicy(execspace, 0, 2 * Dim + 1),
-        KOKKOS_LAMBDA(const size_t& i) {
+        KOKKOS_LAMBDA(const int& i) {
             samples(i) =
                 projected_samples_values(projected_samples_offsets(i)).second;
         });
     Kokkos::fence();
 
-    DistanceToKNearest<ExecSpace, Dim, RbfPumFPType>
-        vertices_per_sample_predicate{ this->_nodes_per_cluster, samples };
-    DistanceToKNearestCallback<ExecSpace, Dim, RbfPumFPType>
-        vertices_per_sample_callback{};
+    DistanceToKNearest vertices_per_sample_predicate{ this->_nodes_per_cluster,
+                                                      samples };
+    DistanceToKNearestCallback vertices_per_sample_callback{};
 
     VectorView<RbfPumFPType> squared_distances_values(
-        Kokkos::view_alloc(
-            execspace, Kokkos::WithoutInitializing,
-            "RbfPumInterpolator::find_radius::squared_distances_values"),
+        Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
+                           _region_name + "::squared_distances_values"),
         0);
     VectorView<int> squared_distances_offsets(
-        Kokkos::view_alloc(
-            execspace, Kokkos::WithoutInitializing,
-            "RbfPumInterpolator::find_radius::squared_distances_offsets"),
+        Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
+                           _region_name + "::squared_distances_offsets"),
         0);
     ArborX::query(this->_source_bvh, execspace, vertices_per_sample_predicate,
                   vertices_per_sample_callback, squared_distances_values,
@@ -101,12 +93,12 @@ void TEMPLATED_CLASSNAME::find_radius(void)
 
     VectorView<RbfPumFPType> max_radii(
         Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
-                           "RbfPumInterpolator::find_radius::max_radii"),
+                           _region_name + "::max_radii"),
         2 * Dim + 1);
     Kokkos::parallel_for(
-        "RbfPumInterpolator::find_radius::p_for sum max radius",
+        _region_name + "::p_for sum max radius",
         Kokkos::RangePolicy(execspace, 0, 2 * Dim + 1),
-        KOKKOS_LAMBDA(const size_t& i) {
+        KOKKOS_LAMBDA(const int& i) {
             RbfPumFPType n_max = 0;
             for (int ii = squared_distances_offsets(i);
                  ii < squared_distances_offsets(i + 1); ++ii)
@@ -122,8 +114,4 @@ void TEMPLATED_CLASSNAME::find_radius(void)
     auto max_radii_h =
         Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{}, max_radii);
     this->_radius = std::sqrt(max_radii_h(Dim));
-
-    Kokkos::Profiling::popRegion(); // ! RbfPumInterpolator::find_radius
 }
-
-#endif /* ! CLUSTER_RADIUS_HPP */

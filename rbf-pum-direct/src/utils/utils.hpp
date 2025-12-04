@@ -1,7 +1,7 @@
-#ifndef UTILS_HPP
-#define UTILS_HPP
+#pragma once
 
 #include <Kokkos_Core.hpp>
+#include <cmath>
 #include <cuda.h>
 #include <cuda_runtime_api.h>
 #include <filesystem>
@@ -9,6 +9,36 @@
 #include <iomanip>
 #include <iostream>
 #include <sstream>
+
+template <typename T>
+KOKKOS_FORCEINLINE_FUNCTION T rbfpum_fma(T a, T x, T b)
+{
+#if defined(KOKKOS_ENABLE_CUDA)
+    return Kokkos::fma(a, x, b);
+#elif defined(FP_FAST_FMA)
+    return std::fma(a, x, b);
+#else
+    return a * x + b;
+#endif
+}
+
+template <typename RbfPumFPType>
+__forceinline__ auto auto_fp_format(void)
+{
+    return std::setprecision(std::numeric_limits<RbfPumFPType>::max_digits10);
+}
+
+template <typename ExecSpace>
+KOKKOS_FORCEINLINE_FUNCTION constexpr bool is_host_accessible(void)
+{
+    return Kokkos::SpaceAccessibility<
+        Kokkos::DefaultHostExecutionSpace,
+        typename ExecSpace::memory_space>::accessible;
+}
+
+template <typename T>
+using base_type =
+    typename std::remove_cv<typename std::remove_reference<T>::type>::type;
 
 void print_cuda_memory_usage()
 {
@@ -46,8 +76,9 @@ void print_size_of_view(ViewType& v)
 template <typename ViewType>
 void print_view(ViewType& v, std::string sep = " ")
 {
+    using data_type = typename ViewType::non_const_value_type;
+    std::cout << auto_fp_format<data_type>();
     auto m = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{}, v);
-    std::cout << std::setprecision(16);
     for (size_t i = 0; i < m.extent(0); ++i)
     {
         std::cout << m(i) << sep;
@@ -60,6 +91,8 @@ template <typename ViewType, typename OffsView>
 void export_coeffs(const ViewType& coeffs, const OffsView& offs,
                    const std::string& folder)
 {
+    using data_type = typename ViewType::non_const_value_type;
+    std::cout << auto_fp_format<data_type>();
     auto coeffs_host =
         Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{}, coeffs);
     auto offs_host =
@@ -79,7 +112,7 @@ void export_coeffs(const ViewType& coeffs, const OffsView& offs,
             std::cerr << strerror(errno) << "\n";
             continue;
         }
-        file << std::fixed << std::setprecision(16);
+        file << std::fixed << auto_fp_format<data_type>();
         for (int i = 0; i < n - 1; ++i)
         {
             file << coeffs_host(access_index + i) << ",";
@@ -92,6 +125,8 @@ template <typename ViewType>
 void export_matrix(const ViewType& matrix, const int& n,
                    const std::string& name)
 {
+    using data_type = typename ViewType::non_const_value_type;
+    std::cout << auto_fp_format<data_type>();
     std::fstream file{ name, file.in | file.out | file.trunc | file.binary };
     if (!file.is_open())
     {
@@ -99,7 +134,7 @@ void export_matrix(const ViewType& matrix, const int& n,
         std::cerr << strerror(errno) << "\n";
         return;
     }
-    file << std::fixed << std::setprecision(16);
+    file << std::fixed << auto_fp_format<data_type>();
     double sum = 0.0;
     for (size_t i = 0; i < n; ++i)
     {
@@ -115,8 +150,7 @@ void export_matrix(const ViewType& matrix, const int& n,
     }
     file.close();
     std::cout << "Wrote a matrix to " << name << std::endl;
-    std::cout << "Matrix norm: " << std::setprecision(16) << std::sqrt(sum)
-              << std::endl;
+    std::cout << "Matrix norm: " << std::sqrt(sum) << std::endl;
 }
 
 template <typename ViewType, typename OffsType>
@@ -138,17 +172,3 @@ void export_systems(const ViewType& data, const OffsType& offs,
                       name.string());
     }
 }
-
-template <typename ExecSpace>
-KOKKOS_FORCEINLINE_FUNCTION constexpr bool is_host_accessible(void)
-{
-    return Kokkos::SpaceAccessibility<
-        Kokkos::DefaultHostExecutionSpace,
-        typename ExecSpace::memory_space>::accessible;
-}
-
-template <typename T>
-using base_type =
-    typename std::remove_cv<typename std::remove_reference<T>::type>::type;
-
-#endif /* ! UTILS_HPP */

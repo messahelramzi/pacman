@@ -11,11 +11,11 @@
 
 template <typename RbfPumFPType>
 KOKKOS_INLINE_FUNCTION RbfPumFPType
-franke_function(ArborX::Point<3, RbfPumFPType> point)
+franke_function(ArborX::Point<3, RbfPumFPType>& point)
 {
-    RbfPumFPType x = point[0];
-    RbfPumFPType y = point[1];
-    RbfPumFPType z = point[2];
+    const RbfPumFPType x = point[0];
+    const RbfPumFPType y = point[1];
+    const RbfPumFPType z = point[2];
     return 0.75
         * std::exp(-((9.0 * x - 2.0) * (9.0 * x - 2.0)
                      + (9.0 * y - 2.0) * (9.0 * y - 2.0)
@@ -33,6 +33,28 @@ franke_function(ArborX::Point<3, RbfPumFPType> point)
         * std::exp(-((9.0 * x - 4.0) * (9.0 * x - 4.0)
                      + (9.0 * y - 7.0) * (9.0 * y - 7.0)
                      + (9.0 * z - 5.0) * (9.0 * z - 5.0)));
+}
+
+template <typename RbfPumFPType>
+KOKKOS_INLINE_FUNCTION RbfPumFPType
+franke_function(ArborX::Point<2, RbfPumFPType>& point)
+{
+    const RbfPumFPType x = point[0];
+    const RbfPumFPType y = point[1];
+    return 0.75
+        * std::exp(-((9.0 * x - 2.0) * (9.0 * x - 2.0)
+                     + (9.0 * y - 2.0) * (9.0 * y - 2.0))
+                   / 4.0)
+        + 0.75
+        * std::exp(-(((9.0 * x + 1.0) * (9.0 * x + 1.0)) / 49.0
+                     + (9.0 * y + 1.0) / 10.0))
+        + 0.5
+        * std::exp(-((9.0 * x - 7.0) * (9.0 * x - 7.0)
+                     + (9.0 * y - 3.0) * (9.0 * y - 3.0))
+                   / 4.0)
+        - 0.2
+        * std::exp(-((9.0 * x - 4.0) * (9.0 * x - 4.0)
+                     + (9.0 * y - 7.0) * (9.0 * y - 7.0)));
 }
 
 template <int Dim, typename RbfPumFPType>
@@ -198,7 +220,7 @@ int main(int argc, char* argv[])
         Kokkos::deep_copy(worst10, Kokkos::subview(errors, i10));
         Kokkos::deep_copy(worst50, Kokkos::subview(errors, i50));
 
-        std::cout << std::setprecision(16);
+        std::cout << auto_fp_format<scalar_type>();
         std::cout << "\n\n========== STATS ==========\n";
         std::cout << "avg: " << mean << "\n";
         std::cout << "min: " << min_val << "\n";

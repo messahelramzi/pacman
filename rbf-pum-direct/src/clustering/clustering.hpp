@@ -5,7 +5,7 @@
 #include "utils/operators.hpp"
 
 template <int X, int N>
-constexpr size_t constexpr_pow()
+constexpr size_t constexpr_pow(void)
 {
     size_t prod = 1;
     for (size_t i = 0; i < N; ++i)
@@ -76,8 +76,8 @@ void TEMPLATED_CLASSNAME::create_clusters(void)
     assert(this->_relative_overlap > 0 && this->_relative_overlap < 1);
 
     const std::string _region_name = "RbfPumInterpolator::create_clusters";
-    Kokkos::Profiling::pushRegion(_region_name);
-    ExecSpace execspace{};
+    Kokkos::Profiling::ScopedRegion region(_region_name);
+    const ExecSpace execspace{};
 
     // 1. calcul de la BB sur les points source
     const Point lower = _source_bvh.bounds().minCorner();
@@ -97,7 +97,7 @@ void TEMPLATED_CLASSNAME::create_clusters(void)
         edge_length = (edge_length < 0) ? (-edge_length) : (edge_length);
 
         // 3-1. calcul du nombre de centres effectifs dans chaque direction
-        shape[axis] = std::ceil(max(1.0, edge_length / spacing));
+        shape[axis] = std::ceil(std::fmax(1.0, edge_length / spacing));
 
         // 4. calcul des distances dx, dy, dz (en d dimensions)
         distances[axis] = edge_length / shape[axis];
@@ -112,10 +112,11 @@ void TEMPLATED_CLASSNAME::create_clusters(void)
     }
 
     // 5. création des centres candidats
-    VectorView<Point> centers_candidates(
+    this->_clusters = decltype(this->_clusters)(
         Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
-                           _region_name + "::centers_candidates"),
+                           "this->clusters"),
         nb_centers);
+    auto centers_candidates = Kokkos::subview(this->_clusters, Kokkos::ALL());
 
     Kokkos::parallel_for(
         _region_name + "::p_for fill centers candidates",
@@ -156,10 +157,10 @@ void TEMPLATED_CLASSNAME::create_clusters(void)
 
     // 6. on tag les clusters qui ne contiennent pas de point source donc ceux
     // pour lesquels: norm2(nearest(center), center) > radius
-    TagEmptyCenters<ExecSpace, Dim, RbfPumFPType> tag_empty_centers(
-        centers_candidates);
-    TagEmptyCentersCallback<ExecSpace, Dim, RbfPumFPType>
-        tag_empty_centers_callback(centers_candidates, this->_radius);
+    TagEmptyCenters tag_empty_centers{ centers_candidates };
+    TagEmptyCentersCallback tag_empty_centers_callback{
+        centers_candidates, this->_radius * this->_radius
+    };
     this->_source_bvh.query(execspace, tag_empty_centers,
                             tag_empty_centers_callback);
 
@@ -170,10 +171,10 @@ void TEMPLATED_CLASSNAME::create_clusters(void)
 
     // 8. on projette les centres non taggés sur leur point source respectif le
     // plus proche
-    TransformToNearest<ExecSpace, Dim, RbfPumFPType> transform_to_nearest(
-        centers_candidates);
-    TransformToNearestCallback<ExecSpace, Dim, RbfPumFPType>
-        transform_to_nearest_callback(centers_candidates);
+    TransformToNearest transform_to_nearest{ centers_candidates };
+    TransformToNearestCallback transform_to_nearest_callback{
+        centers_candidates
+    };
 
     this->_source_bvh.query(execspace, transform_to_nearest,
                             transform_to_nearest_callback);
@@ -217,9 +218,10 @@ void TEMPLATED_CLASSNAME::create_clusters(void)
 
     // 10. on tag les clusters qui ne contiennent pas de point target
     // donc ceux pour lesquels: norm2(nearest(center), center) > radius
-    tag_empty_centers = decltype(tag_empty_centers)(centers_candidates);
+    tag_empty_centers = decltype(tag_empty_centers){ centers_candidates };
     tag_empty_centers_callback =
-        decltype(tag_empty_centers_callback)(centers_candidates, this->_radius);
+        decltype(tag_empty_centers_callback){ centers_candidates,
+                                              this->_radius * this->_radius };
     this->_target_bvh.query(execspace, tag_empty_centers,
                             tag_empty_centers_callback);
 
@@ -229,15 +231,5 @@ void TEMPLATED_CLASSNAME::create_clusters(void)
         remove_tagged<Point>{});
     const int dist = Kokkos::Experimental::distance(
         Kokkos::Experimental::begin(centers_candidates), end);
-    Kokkos::resize(centers_candidates, dist);
-
-    // 12. on stocke les centres qui ont passé tous les filtres, ce sont nos
-    // centres de clusters
-    this->_clusters = decltype(this->_clusters)(
-        Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
-                           "this->clusters"),
-        centers_candidates.extent(0));
-    Kokkos::deep_copy(this->_clusters, centers_candidates);
-
-    Kokkos::Profiling::popRegion(); // ! create_clusters
+    Kokkos::resize(this->_clusters, dist);
 }

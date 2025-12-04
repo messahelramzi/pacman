@@ -35,8 +35,9 @@ GetPolyMatrix(const int& k, const PsViewType& Ps, const OffsViewType& offs,
     {
         Kokkos::abort("GetPolyMatrix: Invalid subview size!\n");
     }
-    return Kokkos::View<data_type**, Kokkos::LayoutLeft, memory_space>(
-        P_data.data(), n, m);
+    return Kokkos::View<data_type**, Kokkos::LayoutLeft, memory_space,
+                        Kokkos::MemoryTraits<Kokkos::Unmanaged>>(P_data.data(),
+                                                                 n, m);
 }
 
 template <typename BsViewType, typename OffsViewType>
@@ -70,8 +71,9 @@ TeamFillMatrixA(const TeamHandle& team_handle, const AViewType& A,
             const auto source_point = X(XOffs(i));
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(team_handle, i, M),
                                  [&](const int& j) {
-                                     const auto val = func.eval(
-                                         NDdistance(source_point, X(XOffs(j))));
+                                     const auto val =
+                                         func.eval(NDdistance_no_check(
+                                             source_point, X(XOffs(j))));
                                      A(i, j) = val;
                                      A(j, i) = val;
                                  });
@@ -91,7 +93,7 @@ KOKKOS_FORCEINLINE_FUNCTION void SerialFillPoly(PViewType& P, const XType& X,
         for (int j = 0; j < M; ++j)
         {
             char mask = static_cast<char>(j != 0);
-            P(i, j) = !mask * 1.0 + mask * source_point[j - mask * 1];
+            P(i, j) = !mask * 1.0 + mask * source_point[j - mask];
         }
     }
 }
@@ -108,7 +110,7 @@ KOKKOS_FORCEINLINE_FUNCTION void TeamFillPoly(const TeamHandle& team_handle,
         Kokkos::TeamVectorMDRange(team_handle, N, M),
         KOKKOS_LAMBDA(const int& i, const int& j) {
             char mask = static_cast<char>(j != 0);
-            P(i, j) = !mask * 1.0 + mask * X(XOffs(i))[j - mask * 1];
+            P(i, j) = !mask * 1.0 + mask * X(XOffs(i))[j - mask];
         });
 }
 
@@ -135,11 +137,12 @@ TeamFillEvalMat(const TeamHandle& team_handle, AViewType& A, const XType& X,
     const auto N = A.extent_int(0);
     const auto M = A.extent_int(1);
     Kokkos::parallel_for(
-        Kokkos::TeamVectorRange(team_handle, N), KOKKOS_LAMBDA(const int& i) {
+        Kokkos::TeamThreadRange(team_handle, N), KOKKOS_LAMBDA(const int& i) {
             const auto target_point = Y(YOffs(i));
             Kokkos::parallel_for(
                 Kokkos::ThreadVectorRange(team_handle, M), [&](const int& j) {
-                    A(i, j) = func.eval(NDdistance(target_point, X(XOffs(j))));
+                    A(i, j) = func.eval(
+                        NDdistance_no_check(target_point, X(XOffs(j))));
                 });
         });
 }

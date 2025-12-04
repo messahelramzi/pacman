@@ -3,6 +3,7 @@ import os
 import RbfPumInterpolator
 import meshio
 from time import time_ns
+from scipy.spatial import Delaunay
 
 def franke_2d(x, y):
     return (
@@ -68,6 +69,15 @@ def generate_2d_grid(xmin, xmax, ymin, ymax, nx, ny):
     pts = np.column_stack((X.ravel(), Y.ravel()))
     return pts
 
+def generate_2d_rd_points(N):
+    return np.random.rand(N, 2)
+
+def write_mesh(points, values, name="mesh.vtu"):
+    triangles = Delaunay(points[:, :2])
+    cells = [("triangle", triangles.simplices)]
+    mesh = meshio.Mesh(points=points, cells=cells, point_data={"data":values})
+    meshio.write(name, mesh)
+
 def test_2d(source_bbox, target_bbox, source_n, target_n):
     sxmin, sxmax, symin, symax = source_bbox
     txmin, txmax, tymin, tymax = target_bbox
@@ -93,7 +103,50 @@ def test_2d(source_bbox, target_bbox, source_n, target_n):
     print(f"mean abs error: {np.mean(errors)}")
     print(f"max abs error:  {np.max(errors)}")
 
-def test_3d(source_mesh_file, target_mesh_file):
+def test_2d_rd_points(N_source, N_target, export_as_mesh=False):
+    source_pts = generate_2d_rd_points(N_source)
+    target_pts = generate_2d_rd_points(N_target)
+    source_values = franke_2d(source_pts[:, 0], source_pts[:, 1])
+    reference = franke_2d(target_pts[:, 0], target_pts[:, 1])
+
+    t1 = time_ns()
+    out = RbfPumInterpolator.interpolate(source_pts, source_values, target_pts)
+    t2 = time_ns()
+
+    errors = np.abs(reference - out)
+
+    if (export_as_mesh):
+        write_mesh(source_pts, source_values, "source.vtu")
+        write_mesh(target_pts, reference, "target.vtu")
+        write_mesh(target_pts, errors, "errors.vtu")
+
+    print(f"Total Python time (rd 2d case): {(t2 - t1) / 1000000.0} ms")
+    print(f"mean abs error: {np.mean(errors)}")
+    print(f"max abs error:  {np.max(errors)}")
+
+def true_test_2d(N_source, N_target, export_as_mesh=False):
+    source_pts = generate_2d_rd_points(N_source)
+    target_pts = generate_2d_rd_points(N_target)
+    source_values = franke_2d(source_pts[:, 0], source_pts[:, 1])
+    reference = franke_2d(target_pts[:, 0], target_pts[:, 1])
+
+    t1 = time_ns()
+    out = RbfPumInterpolator.interpolate_2d(source_pts, source_values, target_pts)
+    t2 = time_ns()
+
+    errors = np.abs(reference - out)
+
+    if (export_as_mesh):
+        write_mesh(source_pts, source_values, "source_2d.vtu")
+        write_mesh(target_pts, reference, "target_2d.vtu")
+        write_mesh(target_pts, errors, "errors_2d.vtu")
+
+    print(f"Total Python time (rd 2d case): {(t2 - t1) / 1000000.0} ms")
+    print(f"mean abs error: {np.mean(errors)}")
+    print(f"max abs error:  {np.max(errors)}")
+
+
+def test_3d(source_mesh_file, target_mesh_file, export_as_mesh=False):
     source_pts, _ = read_mesh(source_mesh_file)
     target_pts, _ = read_mesh(target_mesh_file)
     source_values = franke_3d(source_pts[:,0], source_pts[:,1], source_pts[:,2])
@@ -107,15 +160,13 @@ def test_3d(source_mesh_file, target_mesh_file):
     print(f'mean abs error: {np.mean(errors)}\nmax abs error:  {np.max(errors)}')
 
 def main():
-    source_bb = (0.0, 1.0, 0.0, 1.0)
-    target_bb = (0.0, 1.0, 0.0, 1.0)
-    ds = (100, 100)
-    dt = (1000, 1000)
-    test_2d(source_bb, target_bb, ds, dt)
+    # N = 21283
+    # M = 1354274
+    # true_test_2d(N, M, True)
 
-    source_mesh_file = "./meshes/0.01.vtu"
-    target_mesh_file = "./meshes/0.001.vtu"
-    test_3d(source_mesh_file, target_mesh_file)
+    source_file = "/data/ssa/users/d647795/preCICE_lectures/preCICE_ASTE/tutorials/aste-turbine/meshes/0.004.vtk"
+    target_file = "/data/ssa/users/d647795/preCICE_lectures/preCICE_ASTE/tutorials/aste-turbine/meshes/0.0005.vtk"
+    test_3d(source_file, target_file)
 
 if __name__ == "__main__":
     main()

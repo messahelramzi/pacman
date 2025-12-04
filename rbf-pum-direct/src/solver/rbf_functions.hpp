@@ -1,7 +1,8 @@
-#ifndef RBF_FUNCTIONS_HPP
-#define RBF_FUNCTIONS_HPP
+#pragma once
 
 #include <Kokkos_Core.hpp>
+
+#include "utils/utils.hpp"
 
 template <class RbfPumFPType>
 class WendlandC0
@@ -15,6 +16,21 @@ public:
         return static_cast<RbfPumFPType>(mask)
             * ((static_cast<RbfPumFPType>(1.0) - p)
                * (static_cast<RbfPumFPType>(1.0) - p));
+    }
+    __forceinline__
+        RbfPumFPType constexpr eval_host(const RbfPumFPType& r) const
+    {
+        const RbfPumFPType p = r * _r_inv;
+        if (p >= 1 || p < 0)
+        {
+            return 0.0;
+        }
+        return std::pow(1.0 - p, 2);
+    }
+
+    __forceinline__ void set_r_inv(const RbfPumFPType& r_inv)
+    {
+        this->_r_inv = r_inv;
     }
 
 private:
@@ -32,19 +48,22 @@ public:
         char mask = static_cast<char>(r >= 0.0 && p < 1.0 && p >= 0.0);
         return static_cast<RbfPumFPType>(mask)
             * (Kokkos::pow(static_cast<RbfPumFPType>(1.0) - p, 4)
-               * Kokkos::fma(static_cast<RbfPumFPType>(4.0), p,
-                             static_cast<RbfPumFPType>(1.0)));
+               * rbfpum_fma(static_cast<RbfPumFPType>(4.0), p,
+                            static_cast<RbfPumFPType>(1.0)));
     }
-    RbfPumFPType constexpr eval_host(const RbfPumFPType& r) const
+
+    __forceinline__
+        RbfPumFPType constexpr eval_host(const RbfPumFPType& r) const
     {
         const RbfPumFPType p = r * _r_inv;
         if (p >= 1 || p < 0)
         {
             return 0.0;
         }
-        return std::pow(1.0 - p, 4) * std::fma(4, p, 1);
+        return std::pow(1.0 - p, 4) * rbfpum_fma(4.0, p, 1.0);
     }
-    void set_r_inv(RbfPumFPType r_inv)
+
+    __forceinline__ void set_r_inv(const RbfPumFPType& r_inv)
     {
         this->_r_inv = r_inv;
     }
@@ -65,10 +84,12 @@ public:
         return static_cast<RbfPumFPType>(mask)
             * (Kokkos::pow(static_cast<RbfPumFPType>(1.0) - p, 6)
                * (static_cast<RbfPumFPType>(35.0) * Kokkos::pow(p, 2)
-                  + Kokkos::fma(static_cast<RbfPumFPType>(18.0), p,
-                                static_cast<RbfPumFPType>(3.0))));
+                  + rbfpum_fma(static_cast<RbfPumFPType>(18.0), p,
+                               static_cast<RbfPumFPType>(3.0))));
     }
-    RbfPumFPType constexpr eval_host(const RbfPumFPType& r) const
+
+    __forceinline__
+        RbfPumFPType constexpr eval_host(const RbfPumFPType& r) const
     {
         const RbfPumFPType p = r * _r_inv;
         if (p >= 1 || p < 0)
@@ -76,9 +97,10 @@ public:
             return 0.0;
         }
         return std::pow(1.0 - p, 6)
-            * (35 * std::pow(p, 2) + std::fma(18, p, 3));
+            * (35 * std::pow(p, 2) + rbfpum_fma(18.0, p, 3.0));
     }
-    void set_r_inv(RbfPumFPType r_inv)
+
+    __forceinline__ void set_r_inv(const RbfPumFPType& r_inv)
     {
         this->_r_inv = r_inv;
     }
@@ -100,21 +122,25 @@ public:
             * (Kokkos::pow(static_cast<RbfPumFPType>(1.0) - p, 8)
                * (static_cast<RbfPumFPType>(32.0) * Kokkos::pow(p, 3)
                   + static_cast<RbfPumFPType>(25.0) * Kokkos::pow(p, 2)
-                  + Kokkos::fma(static_cast<RbfPumFPType>(8.0), p,
-                                static_cast<RbfPumFPType>(1.0))));
+                  + rbfpum_fma(static_cast<RbfPumFPType>(8.0), p,
+                               static_cast<RbfPumFPType>(1.0))));
     }
-    RbfPumFPType constexpr eval_host(const RbfPumFPType& r) const
+
+    __forceinline__
+        RbfPumFPType constexpr eval_host(const RbfPumFPType& r) const
     {
         const RbfPumFPType p = r * _r_inv;
         if (p >= 1 || p < 0)
         {
             return 0.0;
         }
+
         return std::pow(1.0 - p, 8)
             * (32.0 * std::pow(p, 3) + 25.0 * std::pow(p, 2)
-               + std::fma(8.0, p, 1.0));
+               + rbfpum_fma(8.0, p, 1.0));
     }
-    void set_r_inv(RbfPumFPType r_inv)
+
+    __forceinline__ void set_r_inv(const RbfPumFPType& r_inv)
     {
         this->_r_inv = r_inv;
     }
@@ -137,10 +163,12 @@ public:
                    * (static_cast<RbfPumFPType>(1287.0) * Kokkos::pow(p, 4)
                       + static_cast<RbfPumFPType>(1350.0) * Kokkos::pow(p, 3)
                       + static_cast<RbfPumFPType>(630.0) * Kokkos::pow(p, 2))
-               + Kokkos::fma(static_cast<RbfPumFPType>(150.0), p,
-                             static_cast<RbfPumFPType>(15.0)));
+               + rbfpum_fma(static_cast<RbfPumFPType>(150.0), p,
+                            static_cast<RbfPumFPType>(15.0)));
     }
-    RbfPumFPType constexpr eval_host(const RbfPumFPType& r) const
+
+    __forceinline__
+        RbfPumFPType constexpr eval_host(const RbfPumFPType& r) const
     {
         const RbfPumFPType p = r * _r_inv;
         if (p >= 1 || p < 0)
@@ -149,9 +177,10 @@ public:
         }
         return std::pow(1.0 - p, 10)
             * (1287.0 * std::pow(p, 4) + 1350.0 * std::pow(p, 3)
-               + 630.0 * std::pow(p, 2) + std::fma(150, p, 15));
+               + 630.0 * std::pow(p, 2) + rbfpum_fma(150.0, p, 15.0));
     }
-    void set_r_inv(RbfPumFPType r_inv)
+
+    __forceinline__ void set_r_inv(const RbfPumFPType& r_inv)
     {
         this->_r_inv = r_inv;
     }
@@ -159,5 +188,3 @@ public:
 private:
     RbfPumFPType _r_inv;
 };
-
-#endif /* ! RBF_FUNCTIONS_HPP */

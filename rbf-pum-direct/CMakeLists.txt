@@ -14,6 +14,10 @@ find_package(VTK COMPONENTS
     REQUIRED)
 # Required for the Host Solver (Serial/Threads/OpenMP backends) and Device Solver (Cuda backend)
 find_package(Eigen3 3.4 REQUIRED NO_MODULE)
+
+set(Kokkos_DIR ${CMAKE_SOURCE_DIR}/external/installs/kokkos-5.0.0/lib64/cmake/Kokkos CACHE PATH "")
+set(ArborX_DIR ${CMAKE_SOURCE_DIR}/external/installs/ArborX-2.0.1/share/cmake/ArborX CACHE PATH "")
+set(KokkosKernels_DIR ${CMAKE_SOURCE_DIR}/external/installs/KokkosKernels-5.0.0/lib64/cmake/KokkosKernels CACHE PATH "")
 find_package(Kokkos 4.7 REQUIRED)
 find_package(ArborX 2.0 REQUIRED)
 find_package(KokkosKernels 4.7 REQUIRED)
@@ -31,7 +35,7 @@ target_link_libraries(main PRIVATE
 target_include_directories(main PRIVATE "src/")
 
 target_compile_features(main PRIVATE cxx_std_20)
-target_compile_definitions(main PRIVATE KOKKOS_ENABLE_CUDA)
+target_compile_definitions(main PRIVATE Kokkos_ENABLE_CUDA)
 target_compile_options(main PRIVATE
     -m64
 )

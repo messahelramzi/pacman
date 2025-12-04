@@ -19,8 +19,9 @@ inline void TeamHostFillMatrixA(const TeamHandle& team_handle,
             const auto source_point = X(XOffs(i));
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(team_handle, i, M),
                                  [&](const int& j) {
-                                     const data_type val = func.eval_host(
-                                         NDdistance(source_point, X(XOffs(j))));
+                                     const data_type val =
+                                         func.eval_host(NDdistance_no_check(
+                                             source_point, X(XOffs(j))));
                                      A(i, j) = val;
                                      A(j, i) = val;
                                  });
@@ -32,7 +33,7 @@ inline void HostFillPoly(Eigen::MatrixXd& P, const XType& X,
                          const XOffsType& XOffs)
 {
     using data_type = typename base_type<decltype(P)>::Scalar;
-    const data_type one = 1.0;
+    constexpr data_type one = 1.0;
     const auto N = static_cast<int>(P.rows());
     const auto M = static_cast<int>(P.cols());
     for (auto i = 0; i < N; ++i)
@@ -51,14 +52,14 @@ inline void TeamHostFillPoly(const TeamHandle& team_handle, Eigen::MatrixXd& P,
                              const XType& X, const XOffsType& XOffs)
 {
     using data_type = typename base_type<decltype(P)>::Scalar;
-    const data_type one = static_cast<data_type>(1.0);
+    constexpr data_type one = static_cast<data_type>(1.0);
     const auto N = static_cast<int>(P.rows());
     const auto M = static_cast<int>(P.cols());
     Kokkos::parallel_for(Kokkos::TeamVectorMDRange(team_handle, N, M),
                          [&](const int& i, const int& j) {
                              char mask = static_cast<char>(j != 0);
                              P(i, j) =
-                                 !mask * one + mask * X(XOffs(i))[j - mask * 1];
+                                 !mask * one + mask * X(XOffs(i))[j - mask];
                          });
 }
 

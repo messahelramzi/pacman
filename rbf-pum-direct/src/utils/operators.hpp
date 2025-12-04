@@ -3,13 +3,14 @@
 #include <ArborX_Point.hpp>
 #include <Kokkos_Core.hpp>
 #include <iomanip>
+#include <utils/utils.hpp>
 
 namespace ArborX
 {
     template <int Dim, class RbfPumFPType>
     KOKKOS_INLINE_FUNCTION constexpr bool
     operator==(const ArborX::Point<Dim, RbfPumFPType>& lhs,
-               const ArborX::Point<Dim, RbfPumFPType>& rhs)
+               const ArborX::Point<Dim, RbfPumFPType>& rhs) noexcept
     {
         for (int i = 0; i < Dim; ++i)
         {
@@ -24,7 +25,7 @@ namespace ArborX
     template <int Dim, class RbfPumFPType>
     KOKKOS_INLINE_FUNCTION constexpr bool
     operator!=(const ArborX::Point<Dim, RbfPumFPType>& lhs,
-               const ArborX::Point<Dim, RbfPumFPType>& rhs)
+               const ArborX::Point<Dim, RbfPumFPType>& rhs) noexcept
     {
         return !(lhs == rhs);
     }
@@ -32,7 +33,7 @@ namespace ArborX
     template <int Dim, class RbfPumFPType>
     KOKKOS_INLINE_FUNCTION bool constexpr
     operator<(const ArborX::Point<Dim, RbfPumFPType>& lhs,
-              const ArborX::Point<Dim, RbfPumFPType>& rhs)
+              const ArborX::Point<Dim, RbfPumFPType>& rhs) noexcept
     {
         // Lexicographic ordering (NaNs are always bigger than non-NaNs)
         // follows strict weak ordering properties
@@ -59,7 +60,7 @@ namespace ArborX
     template <int Dim, class RbfPumFPType>
     KOKKOS_INLINE_FUNCTION bool constexpr
     operator>(const ArborX::Point<Dim, RbfPumFPType>& lhs,
-              const ArborX::Point<Dim, RbfPumFPType>& rhs)
+              const ArborX::Point<Dim, RbfPumFPType>& rhs) noexcept
     {
         return !(lhs == rhs) && !(lhs < rhs);
     }
@@ -69,7 +70,7 @@ namespace ArborX
                              const ArborX::Point<Dim, RbfPumFPType>& point)
     {
         std::ostringstream strs;
-        strs << std::setprecision(16);
+        strs << auto_fp_format<RbfPumFPType>();
         strs << "ArborX::Point(";
         for (int i = 0; i < Dim - 1; i++)
         {
@@ -84,18 +85,18 @@ namespace ArborX
 template <int Dim, class RbfPumFPType>
 KOKKOS_INLINE_FUNCTION RbfPumFPType
 squared_difference(const ArborX::Point<Dim, RbfPumFPType>& lhs,
-                   const ArborX::Point<Dim, RbfPumFPType>& rhs)
+                   const ArborX::Point<Dim, RbfPumFPType>& rhs) noexcept
 {
     if (rhs[0] != rhs[0] || lhs[0] != lhs[0])
     {
-        return static_cast<RbfPumFPType>(-1);
+        return static_cast<RbfPumFPType>(-1.0);
     }
-    RbfPumFPType s = 0;
+    RbfPumFPType acc = 0.0;
     for (int i = 0; i < Dim; ++i)
     {
-        s += (rhs[i] - lhs[i]) * (rhs[i] - lhs[i]);
+        acc += (rhs[i] - lhs[i]) * (rhs[i] - lhs[i]);
     }
-    return s;
+    return acc;
 }
 
 template <int Dim, class RbfPumFPType>
@@ -103,10 +104,10 @@ KOKKOS_INLINE_FUNCTION RbfPumFPType
 NDdistance(const ArborX::Point<Dim, RbfPumFPType>& lhs,
            const ArborX::Point<Dim, RbfPumFPType>& rhs)
 {
-    const RbfPumFPType d = squared_difference<Dim, RbfPumFPType>(lhs, rhs);
+    const RbfPumFPType d = squared_difference(lhs, rhs);
     if (d < 0)
     {
-        return static_cast<RbfPumFPType>(-1);
+        return static_cast<RbfPumFPType>(-1.0);
     }
     return Kokkos::sqrt(d);
 }
@@ -116,18 +117,11 @@ KOKKOS_INLINE_FUNCTION RbfPumFPType
 squared_difference_no_check(const ArborX::Point<Dim, RbfPumFPType>& lhs,
                             const ArborX::Point<Dim, RbfPumFPType>& rhs)
 {
-    // clang-format off
-    RbfPumFPType acc = 0;
+    RbfPumFPType acc = 0.0;
     for (int i = 0; i < Dim; ++i)
     {
-        const RbfPumFPType diff = rhs[i] - lhs[i];
-        #ifdef FP_FAST_FMA
-        acc = Kokkos::fma(diff, diff, acc);
-        #else
-        acc += diff * diff;
-        #endif
+        acc += (rhs[i] - lhs[i]) * (rhs[i] - lhs[i]);
     }
-    // clang-format on
     return acc;
 }
 
@@ -136,8 +130,7 @@ KOKKOS_INLINE_FUNCTION RbfPumFPType
 NDdistance_no_check(const ArborX::Point<Dim, RbfPumFPType>& lhs,
                     const ArborX::Point<Dim, RbfPumFPType>& rhs)
 {
-    return Kokkos::sqrt(
-        squared_difference_no_check<Dim, RbfPumFPType>(lhs, rhs));
+    return Kokkos::sqrt(squared_difference_no_check(lhs, rhs));
 }
 
 struct OffsetsScanPair

@@ -1,134 +1,109 @@
 #pragma once
 
-#include <ArborX_Box.hpp>
-#include <ArborX_LinearBVH.hpp>
+#include <ArborX_Point.hpp>
 #include <ArborX_Sphere.hpp>
 
 #include "utils/operators.hpp"
 
-template <typename ExecSpace, int Dim, class RbfPumFPType>
+template <typename ViewType>
 struct DistanceToKNearest
 {
-    const int _k;
-    Kokkos::View<ArborX::Point<Dim, RbfPumFPType>*, ExecSpace> _samples;
+    const int k;
+    ViewType samples;
 };
 
-template <typename ExecSpace, int Dim, class RbfPumFPType>
-struct ArborX::AccessTraits<DistanceToKNearest<ExecSpace, Dim, RbfPumFPType>>
+template <typename ViewType>
+struct ArborX::AccessTraits<DistanceToKNearest<ViewType>>
 {
-    using memory_space = ExecSpace::memory_space;
-    static KOKKOS_FUNCTION std::size_t
-    size(const DistanceToKNearest<ExecSpace, Dim, RbfPumFPType>& obj)
+    using memory_space = typename ViewType::memory_space;
+    using Self = DistanceToKNearest<ViewType>;
+    static KOKKOS_FUNCTION size_t size(const Self& self)
     {
-        return obj._samples.extent(0);
+        return self.samples.extent(0);
     }
-    static KOKKOS_FUNCTION auto
-    get(const DistanceToKNearest<ExecSpace, Dim, RbfPumFPType>& obj,
-        std::size_t i)
+    static KOKKOS_FUNCTION auto get(const Self& self, size_t i)
     {
-        return ArborX::attach(ArborX::nearest(obj._samples(i), obj._k),
-                              obj._samples(i));
+        return ArborX::attach(ArborX::nearest(self.samples(i), self.k),
+                              self.samples(i));
     }
 };
 
-template <typename ExecSpace, int Dim, class RbfPumFPType>
 struct DistanceToKNearestCallback
 {
     template <typename Predicate, typename Value, typename OutputFunctor>
     KOKKOS_FUNCTION void operator()(Predicate predicate, Value const& value,
                                     OutputFunctor const& out) const
     {
-        out(squared_difference<Dim, RbfPumFPType>(ArborX::getData(predicate),
-                                                  value.value));
+        out(squared_difference(ArborX::getData(predicate), value.value));
     }
 };
 
-template <typename ExecSpace, int Dim, class RbfPumFPType>
+template <typename ViewType>
 struct Projection
 {
-    Kokkos::View<ArborX::Point<Dim, RbfPumFPType>*, ExecSpace> centers;
+    ViewType centers;
 };
 
-template <typename ExecSpace, int Dim, class RbfPumFPType>
-struct ArborX::AccessTraits<Projection<ExecSpace, Dim, RbfPumFPType>>
+template <typename ViewType>
+struct ArborX::AccessTraits<Projection<ViewType>>
 {
-    using memory_space = ExecSpace::memory_space;
-    static KOKKOS_FUNCTION std::size_t
-    size(const Projection<ExecSpace, Dim, RbfPumFPType>& obj)
+    using memory_space = typename ViewType::memory_space;
+    using Self = Projection<ViewType>;
+    static KOKKOS_FUNCTION size_t size(const Self& self)
     {
-        return obj.centers.extent(0);
+        return self.centers.extent(0);
     }
-    static KOKKOS_FUNCTION auto
-    get(const Projection<ExecSpace, Dim, RbfPumFPType>& obj, std::size_t i)
+    static KOKKOS_FUNCTION auto get(const Self& self, size_t i)
     {
-        return ArborX::attach(ArborX::nearest(obj.centers(i), 1),
-                              obj.centers(i));
+        return ArborX::attach(ArborX::nearest(self.centers(i), 1),
+                              self.centers(i));
     }
 };
 
-template <typename ExecSpace, int Dim, class RbfPumFPType>
 struct ProjectionCallback
 {
     template <typename Predicate, typename Value, typename OutputFunctor>
     KOKKOS_FUNCTION void operator()(Predicate predicate, Value const& value,
                                     OutputFunctor const& out) const
     {
-        // <center, projection>
-        out(Kokkos::make_pair<ArborX::Point<Dim, RbfPumFPType>,
-                              ArborX::Point<Dim, RbfPumFPType>>(
-            ArborX::getData(predicate), value.value));
+        // <centre, projection>
+        out(Kokkos::make_pair(ArborX::getData(predicate), value.value));
     }
 };
 
-template <typename ExecSpace, int Dim, typename RbfPumFPType>
+template <typename ViewType>
 struct TagEmptyCenters
 {
-    Kokkos::View<ArborX::Point<Dim, RbfPumFPType>*, ExecSpace>
-        centers_candidates;
-
-    TagEmptyCenters(Kokkos::View<ArborX::Point<Dim, RbfPumFPType>*, ExecSpace>&
-                        _centers_candidates)
-        : centers_candidates(_centers_candidates)
-    {}
+    ViewType centers_candidates;
 };
 
-template <typename ExecSpace, int Dim, typename RbfPumFPType>
-struct ArborX::AccessTraits<TagEmptyCenters<ExecSpace, Dim, RbfPumFPType>>
+template <typename ViewType>
+struct ArborX::AccessTraits<TagEmptyCenters<ViewType>>
 {
-    using memory_space = ExecSpace::memory_space;
-    static KOKKOS_FUNCTION std::size_t
-    size(const TagEmptyCenters<ExecSpace, Dim, RbfPumFPType>& obj)
+    using memory_space = typename ViewType::memory_space;
+    using Self = TagEmptyCenters<ViewType>;
+    using Point = typename ViewType::non_const_value_type;
+    static KOKKOS_FUNCTION size_t size(const Self& self)
     {
-        return obj.centers_candidates.extent(0);
+        return self.centers_candidates.extent(0);
     }
-    static KOKKOS_FUNCTION auto
-    get(const TagEmptyCenters<ExecSpace, Dim, RbfPumFPType>& obj, size_t i)
+    static KOKKOS_FUNCTION auto get(const Self& self, size_t i)
     {
-        if (obj.centers_candidates(i)[0]
-            != obj.centers_candidates(i)[0]) // isnan / taggé
+        // isNaN
+        if (self.centers_candidates(i)[0] != self.centers_candidates(i)[0])
         {
-            return ArborX::attach(
-                ArborX::nearest(ArborX::Point<Dim, RbfPumFPType>{}, 0), -1);
+            return ArborX::attach(ArborX::nearest(Point{}, 0), -1);
         }
-        return ArborX::attach(ArborX::nearest(obj.centers_candidates(i), 1),
+        return ArborX::attach(ArborX::nearest(self.centers_candidates(i), 1),
                               (int)i);
     }
 };
 
-template <typename ExecSpace, int Dim, typename RbfPumFPType>
+template <typename ViewType, typename RbfPumFPType>
 struct TagEmptyCentersCallback
 {
-    Kokkos::View<ArborX::Point<Dim, RbfPumFPType>*, ExecSpace>
-        centers_candidates;
+    ViewType centers_candidates;
     RbfPumFPType threshold;
-
-    TagEmptyCentersCallback(Kokkos::View<ArborX::Point<Dim, RbfPumFPType>*,
-                                         ExecSpace>& _centers_candidates,
-                            const RbfPumFPType _radius)
-        : centers_candidates(_centers_candidates)
-    {
-        threshold = _radius * _radius;
-    }
 
     template <typename Predicate, typename Value>
     KOKKOS_FUNCTION void operator()(Predicate predicate,
@@ -147,50 +122,38 @@ struct TagEmptyCentersCallback
     }
 };
 
-template <typename ExecSpace, int Dim, typename RbfPumFPType>
+template <typename ViewType>
 struct TransformToNearest
 {
-    Kokkos::View<ArborX::Point<Dim, RbfPumFPType>*, ExecSpace>
-        centers_candidates;
-
-    TransformToNearest(Kokkos::View<ArborX::Point<Dim, RbfPumFPType>*,
-                                    ExecSpace>& _centers_candidates)
-        : centers_candidates(_centers_candidates)
-    {}
+    ViewType centers_candidates;
 };
 
-template <typename ExecSpace, int Dim, typename RbfPumFPType>
-struct ArborX::AccessTraits<TransformToNearest<ExecSpace, Dim, RbfPumFPType>>
+template <typename ViewType>
+struct ArborX::AccessTraits<TransformToNearest<ViewType>>
 {
-    using memory_space = ExecSpace::memory_space;
-    static KOKKOS_FUNCTION std::size_t
-    size(const TransformToNearest<ExecSpace, Dim, RbfPumFPType>& obj)
+    using memory_space = typename ViewType::memory_space;
+    using Self = TransformToNearest<ViewType>;
+    using Point = typename ViewType::non_const_value_type;
+    static KOKKOS_FUNCTION size_t size(const Self& self)
     {
-        return obj.centers_candidates.extent(0);
+        return self.centers_candidates.extent(0);
     }
-    static KOKKOS_FUNCTION auto
-    get(const TransformToNearest<ExecSpace, Dim, RbfPumFPType>& obj, size_t i)
+    static KOKKOS_FUNCTION auto get(const Self& self, size_t i)
     {
-        if (obj.centers_candidates(i)[0]
-            != obj.centers_candidates(i)[0]) // isnan / taggé
+        // isNaN
+        if (self.centers_candidates(i)[0] != self.centers_candidates(i)[0])
         {
-            return ArborX::attach(
-                ArborX::nearest(ArborX::Point<Dim, RbfPumFPType>{}, 0), -1);
+            return ArborX::attach(ArborX::nearest(Point{}, 0), -1);
         }
-        return ArborX::attach(ArborX::nearest(obj.centers_candidates(i), 1),
+        return ArborX::attach(ArborX::nearest(self.centers_candidates(i), 1),
                               (int)i);
     }
 };
 
-template <typename ExecSpace, int Dim, typename RbfPumFPType>
+template <typename ViewType>
 struct TransformToNearestCallback
 {
-    Kokkos::View<ArborX::Point<Dim, RbfPumFPType>*, ExecSpace>
-        centers_candidates;
-    TransformToNearestCallback(Kokkos::View<ArborX::Point<Dim, RbfPumFPType>*,
-                                            ExecSpace>& _centers_candidates)
-        : centers_candidates(_centers_candidates)
-    {}
+    ViewType centers_candidates;
     template <typename Predicate, typename Value>
     KOKKOS_FUNCTION void operator()(Predicate predicate,
                                     Value const& value) const
@@ -200,38 +163,28 @@ struct TransformToNearestCallback
     }
 };
 
-template <typename ExecSpace, int Dim, typename RbfPumFPType>
+template <typename ViewType, typename RbfPumFPType>
 struct GetClustersPoints
 {
-    Kokkos::View<ArborX::Point<Dim, RbfPumFPType>*, ExecSpace> centers;
+    ViewType centers;
     RbfPumFPType radius;
-
-    GetClustersPoints(
-        Kokkos::View<ArborX::Point<Dim, RbfPumFPType>*, ExecSpace> _centers,
-        const RbfPumFPType _radius)
-        : centers(_centers)
-        , radius(_radius)
-    {}
 };
 
-template <typename ExecSpace, int Dim, typename RbfPumFPType>
-struct ArborX::AccessTraits<GetClustersPoints<ExecSpace, Dim, RbfPumFPType>>
+template <typename ViewType, typename RbfPumFPType>
+struct ArborX::AccessTraits<GetClustersPoints<ViewType, RbfPumFPType>>
 {
-    using memory_space = ExecSpace::memory_space;
-    static KOKKOS_FUNCTION size_t
-    size(const GetClustersPoints<ExecSpace, Dim, RbfPumFPType>& obj)
+    using memory_space = typename ViewType::memory_space;
+    using Self = GetClustersPoints<ViewType, RbfPumFPType>;
+    static KOKKOS_FUNCTION size_t size(const Self& self)
     {
-        return obj.centers.extent(0);
+        return self.centers.extent(0);
     }
-    static KOKKOS_FUNCTION auto
-    get(const GetClustersPoints<ExecSpace, Dim, RbfPumFPType>& obj, size_t i)
+    static KOKKOS_FUNCTION auto get(const Self& self, size_t i)
     {
-        return ArborX::intersects(
-            ArborX::Sphere<Dim, RbfPumFPType>(obj.centers(i), obj.radius));
+        return ArborX::intersects(ArborX::Sphere(self.centers(i), self.radius));
     }
 };
 
-template <typename ExecSpace, int Dim, typename RbfPumFPType>
 struct GetClustersPointsCallback
 {
     template <typename Predicate, typename Value, typename OutputFunctor>

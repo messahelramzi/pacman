@@ -16,7 +16,7 @@ FULL_TEMPLATE
 constexpr void TEMPLATED_CLASSNAME::solve_systems(void)
 {
     const std::string _region_name = "RbfPumInterpolator::solve_systems";
-    Kokkos::Profiling::pushRegion(_region_name);
+    Kokkos::Profiling::ScopedRegion region(_region_name);
 
     if constexpr (is_host_accessible<ExecSpace>())
     {
@@ -26,15 +26,13 @@ constexpr void TEMPLATED_CLASSNAME::solve_systems(void)
     {
         device_solve_systems();
     }
-
-    Kokkos::Profiling::popRegion();
 }
 
 FULL_TEMPLATE
 void TEMPLATED_CLASSNAME::device_solve_systems(void)
 {
     const std::string _region_name = "RbfPumInterpolator::device_solve_systems";
-    ExecSpace execspace{};
+    const ExecSpace execspace{};
 
     constexpr double epsilon = 1.0e-14;
 
@@ -45,10 +43,9 @@ void TEMPLATED_CLASSNAME::device_solve_systems(void)
         _region_name + "::clusters_source_indices", 0);
     VectorView<int> clusters_source_offsets(
         _region_name + "::clusters_source_offsets", 0);
-    GetClustersPoints<ExecSpace, Dim, RbfPumFPType>
-        get_clusters_points_predicate(this->_clusters, this->_radius);
-    GetClustersPointsCallback<ExecSpace, Dim, RbfPumFPType>
-        get_clusters_points_callback;
+    GetClustersPoints get_clusters_points_predicate{ this->_clusters,
+                                                     this->_radius };
+    GetClustersPointsCallback get_clusters_points_callback;
 
     this->_source_bvh.query(execspace, get_clusters_points_predicate,
                             get_clusters_points_callback,
@@ -125,10 +122,8 @@ void TEMPLATED_CLASSNAME::device_solve_systems(void)
     const auto center_bvh = ArborX::BoundingVolumeHierarchy{
         execspace, ArborX::Experimental::attach_indices(centers)
     };
-    GetClustersPoints<ExecSpace, Dim, RbfPumFPType> get_target_clusters(
-        target, this->_radius);
-    GetClustersPointsCallback<ExecSpace, Dim, RbfPumFPType>
-        get_target_clusters_callback;
+    GetClustersPoints get_target_clusters{ target, this->_radius };
+    GetClustersPointsCallback get_target_clusters_callback;
     VectorView<unsigned int> weights_indices(_region_name + "::weights_indices",
                                              0);
     VectorView<int> weights_offsets(_region_name + "::weights_offsets", 0);
@@ -146,7 +141,7 @@ void TEMPLATED_CLASSNAME::device_solve_systems(void)
         Kokkos::RangePolicy(execspace, 0, target.extent(0)),
         KOKKOS_LAMBDA(const int& i) {
             const auto target_point = target(i);
-            RbfPumFPType sum_w = static_cast<RbfPumFPType>(0);
+            RbfPumFPType sum_w = static_cast<RbfPumFPType>(0.0);
             for (int k = weights_offsets(i); k < weights_offsets(i + 1); ++k)
             {
                 const auto center_point = centers(weights_indices(k));
@@ -337,6 +332,7 @@ FULL_TEMPLATE
 void TEMPLATED_CLASSNAME::host_solve_systems(void)
 {
     const std::string _region_name = "RbfPumInterpolator::host_solve_systems";
+    Kokkos::Profiling::ScopedRegion region(_region_name);
     const ExecSpace execspace{};
     constexpr double epsilon = 1.0e-14;
     const size_t K = this->_clusters.extent(0);
@@ -348,10 +344,9 @@ void TEMPLATED_CLASSNAME::host_solve_systems(void)
         _region_name + "::clusters_source_indices", 0);
     VectorView<int> clusters_source_offsets(
         _region_name + "::clusters_source_offsets", 0);
-    GetClustersPoints<ExecSpace, Dim, RbfPumFPType>
-        get_clusters_points_predicate(this->_clusters, this->_radius);
-    GetClustersPointsCallback<ExecSpace, Dim, RbfPumFPType>
-        get_clusters_points_callback;
+    GetClustersPoints get_clusters_points_predicate{ this->_clusters,
+                                                     this->_radius };
+    GetClustersPointsCallback get_clusters_points_callback;
     this->_source_bvh.query(execspace, get_clusters_points_predicate,
                             get_clusters_points_callback,
                             clusters_source_indices, clusters_source_offsets);
@@ -382,10 +377,8 @@ void TEMPLATED_CLASSNAME::host_solve_systems(void)
     const auto center_bvh = ArborX::BoundingVolumeHierarchy{
         execspace, ArborX::Experimental::attach_indices(centers)
     };
-    GetClustersPoints<ExecSpace, Dim, RbfPumFPType> get_target_clusters(
-        target, this->_radius);
-    GetClustersPointsCallback<ExecSpace, Dim, RbfPumFPType>
-        get_target_clusters_callback;
+    GetClustersPoints get_target_clusters{ target, this->_radius };
+    GetClustersPointsCallback get_target_clusters_callback;
     VectorView<unsigned int> weights_indices(_region_name + "::weights_indices",
                                              0);
     VectorView<int> weights_offsets(_region_name + "::weights_offsets", 0);
@@ -432,7 +425,7 @@ void TEMPLATED_CLASSNAME::host_solve_systems(void)
                                            Eigen::DontAlignCols, ",", "\n");
 
     Kokkos::parallel_for(
-        _region_name + "::p_for solve systems",
+        _region_name + "::p_for fill and solve systems",
         team_policy(execspace, K, Kokkos::AUTO), [=](const member_type& team) {
             const int k = team.league_rank();
             const int n =
@@ -484,10 +477,10 @@ void TEMPLATED_CLASSNAME::host_solve_systems(void)
             //                     };
             // file5 << evalMat.format(CSVFormat);
 
-            const auto polynomialContribution = HostSolveQR(Q, B);
+            Eigen::VectorXd polynomialContribution = HostSolveQR(Q, B);
             B -= (Q * polynomialContribution);
 
-            const auto p = HostSolveLDLT(A, B);
+            Eigen::VectorXd p = HostSolveLDLT(A, B);
 
             Eigen::VectorXd out = evalMat * p;
 
@@ -496,15 +489,18 @@ void TEMPLATED_CLASSNAME::host_solve_systems(void)
             Kokkos::parallel_for(
                 Kokkos::TeamThreadRange(team, m), [&](const int& i) {
                     const auto target_indice = target_sv(i);
-                    for (auto t = weights_offsets(target_indice);
-                         t < weights_offsets(target_indice + 1); ++t)
-                    {
-                        if (static_cast<int>(weights_indices(t)) == k)
-                        {
-                            Kokkos::atomic_add<RbfPumFPType>(
-                                &(output(target_sv(i))), weights(t) * out(i));
-                        }
-                    }
+                    Kokkos::parallel_for(
+                        Kokkos::ThreadVectorRange(
+                            team, weights_offsets(target_indice),
+                            weights_offsets(target_indice + 1)),
+                        [&](const int& t) {
+                            if (static_cast<int>(weights_indices(t)) == k)
+                            {
+                                Kokkos::atomic_add<RbfPumFPType>(
+                                    &(output(target_sv(i))),
+                                    weights(t) * out(i));
+                            }
+                        });
                 });
         });
     Kokkos::fence();

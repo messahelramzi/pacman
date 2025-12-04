@@ -1,4 +1,5 @@
 #pragma once
+
 #include <KokkosBatched_ApplyQ_Decl.hpp>
 #include <KokkosBatched_Copy_Decl.hpp>
 #include <KokkosBatched_LU_Decl.hpp>

@@ -16,6 +16,7 @@
 #include "utils/operators.hpp"
 #include "utils/utils.hpp"
 
+FULL_TEMPLATE
 /* Constructor for the RBF PUM Interpolator:
 ** @param source: a 1-D `Kokkos::View` which contains source points of the
 *field.
@@ -26,33 +27,31 @@
 ** @param rbf_function: A user-defined functor which is the rbf function used
 *for clusters points evaluation.
 */
-FULL_TEMPLATE
 TEMPLATED_CLASSNAME::RbfPumInterpolator(VectorView<Point>& source,
                                         VectorView<RbfPumFPType>& values,
                                         VectorView<Point>& target,
                                         RbfFunctionBasisType& rbf_function)
 {
     const std::string _region_name = "RbfPumInterpolator::RbfPumInterpolator";
-    Kokkos::Profiling::pushRegion(_region_name);
+    Kokkos::Profiling::ScopedRegion region(_region_name);
 
-    ExecSpace execspace{};
+    const ExecSpace execspace{};
 
     this->_source = decltype(this->_source)(
         Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
                            "this->_source"),
         source.extent(0));
-    Kokkos::deep_copy(_source, source);
-
     this->_values = decltype(this->_values)(
         Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
                            "this->_values"),
         values.extent(0));
-    Kokkos::deep_copy(_values, values);
-
     this->_target = decltype(this->_target)(
         Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
                            "this->_target"),
         target.extent(0));
+
+    Kokkos::deep_copy(_source, source);
+    Kokkos::deep_copy(_values, values);
     Kokkos::deep_copy(_target, target);
 
     this->_radius = 0.0;
@@ -80,9 +79,7 @@ TEMPLATED_CLASSNAME::RbfPumInterpolator(VectorView<Point>& source,
     create_clusters();
 
     solve_systems();
-
     // clang-format on
-    Kokkos::Profiling::popRegion(); // ! RbfPumInterpolator::RbfPumInterpolator
 }
 
 FULL_TEMPLATE
@@ -94,6 +91,7 @@ FULL_TEMPLATE
 std::string TEMPLATED_CLASSNAME::get_interpolator_details(void) const
 {
     std::ostringstream strs;
+    strs << auto_fp_format<RbfPumFPType>();
     strs << "#Source points: " << this->_source.extent(0) << "\n";
     strs << "#Values: " << this->_values.extent(0) << "\n";
     strs << "#Target points: " << this->_target.extent(0) << "\n";
@@ -104,7 +102,7 @@ std::string TEMPLATED_CLASSNAME::get_interpolator_details(void) const
     strs << "    #Points per cluster: " << this->_nodes_per_cluster << "\n";
     strs << "    Relative overlap: " << this->_relative_overlap << "\n";
     strs << "    RBF Function: " << typeid(RbfFunctionBasisType).name() << "\n";
-    strs << "Found radius: " << std::setprecision(16) << this->_radius << "\n";
+    strs << "Found radius: " << this->_radius << "\n";
     strs << "Number of clusters: " << this->_clusters.extent(0);
 
     return strs.str();
