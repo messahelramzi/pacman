@@ -364,13 +364,13 @@ void TEMPLATED_CLASSNAME::host_solve_systems(void)
                             clusters_target_indices, clusters_target_offsets);
     Kokkos::Profiling::popRegion();
 
-    constexpr int poly_vals = Dim + 1;
     const auto source = this->_source;
     const auto target = this->_target;
     const auto values = this->_values;
     const auto centers = this->_clusters;
     const auto f = this->_rbf_function;
     const auto weighting_function = this->_weighting_function;
+    const auto bb = this->_source_bvh.bounds();
 
     Kokkos::Profiling::pushRegion(_region_name
                                   + "::Get Centers Per Target Point");
@@ -418,16 +418,12 @@ void TEMPLATED_CLASSNAME::host_solve_systems(void)
         Kokkos::view_alloc(execspace, "this->out"), this->_target.extent(0));
     auto output = Kokkos::subview(this->out, Kokkos::ALL());
 
-    using team_policy = Kokkos::TeamPolicy<ExecSpace>;
-    using member_type = team_policy::member_type;
-
     const static Eigen::IOFormat CSVFormat(Eigen::FullPrecision,
                                            Eigen::DontAlignCols, ",", "\n");
 
     Kokkos::parallel_for(
-        _region_name + "::p_for fill and solve systems",
-        team_policy(execspace, K, Kokkos::AUTO), [=](const member_type& team) {
-            const int k = team.league_rank();
+        _region_name + "::p_for fill and solve",
+        Kokkos::RangePolicy(execspace, 0, K), [&](const int& k) {
             const int n =
                 clusters_source_offsets(k + 1) - clusters_source_offsets(k);
             const int m =
@@ -441,67 +437,53 @@ void TEMPLATED_CLASSNAME::host_solve_systems(void)
                 Kokkos::make_pair(clusters_target_offsets(k),
                                   clusters_target_offsets(k + 1)));
 
-            Eigen::MatrixXd A(n, n);
-            TeamHostFillMatrixA(team, A, source, source_sv, f);
+            Eigen::MatrixXd A = HostBuildSymmetricMatrix(source, source_sv, f);
+            Eigen::MatrixXd E =
+                HostBuildRbfMatrix(source, source_sv, target, target_sv, f);
+            Eigen::VectorXd B = HostBuildRbfVector(values, source_sv);
+            Kokkos::Array<bool, Dim> active_axis;
+            Eigen::MatrixXd Q =
+                HostBuildSourcePoly(source, source_sv, active_axis);
+            Eigen::MatrixXd V =
+                HostBuildTargetPoly(target, target_sv, active_axis);
+
             // std::fstream file{ "./A_" + std::to_string(k) + ".csv",
-            //                    file.binary | file.trunc | file.in | file.out
-            //                    };
+            //                    file.binary | file.trunc | file.in | file.out };
             // file << A.format(CSVFormat);
-
-            Eigen::MatrixXd Q(n, poly_vals);
-            TeamHostFillPoly(team, Q, source, source_sv);
             // std::fstream file2{ "./Q_" + std::to_string(k) + ".csv",
-            //                     file.binary | file.trunc | file.in | file.out
-            //                     };
+            //                     file.binary | file.trunc | file.in | file.out };
             // file2 << Q.format(CSVFormat);
-
-            Eigen::MatrixXd V(m, poly_vals);
-            TeamHostFillPoly(team, V, target, target_sv);
             // std::fstream file3{ "./V_" + std::to_string(k) + ".csv",
-            //                     file.binary | file.trunc | file.in | file.out
-            //                     };
+            //                     file.binary | file.trunc | file.in | file.out };
             // file3 << V.format(CSVFormat);
-
-            Eigen::VectorXd B(n);
-            TeamHostFillVec(team, B, values, source_sv);
             // std::fstream file4{ "./B_" + std::to_string(k) + ".csv",
-            //                     file.binary | file.trunc | file.in | file.out
-            //                     };
+            //                     file.binary | file.trunc | file.in | file.out };
             // file4 << B.format(CSVFormat);
-
-            Eigen::MatrixXd evalMat(m, n);
-            TeamHostFillEvalMat(team, evalMat, source, source_sv, target,
-                                target_sv, f);
             // std::fstream file5{ "./E_" + std::to_string(k) + ".csv",
-            //                     file.binary | file.trunc | file.in | file.out
-            //                     };
-            // file5 << evalMat.format(CSVFormat);
+            //                     file.binary | file.trunc | file.in | file.out };
+            // file5 << E.format(CSVFormat);
 
             Eigen::VectorXd polynomialContribution = HostSolveQR(Q, B);
             B -= (Q * polynomialContribution);
 
             Eigen::VectorXd p = HostSolveLDLT(A, B);
 
-            Eigen::VectorXd out = evalMat * p;
+            Eigen::VectorXd out = E * p;
 
             out += (V * polynomialContribution);
 
-            Kokkos::parallel_for(
-                Kokkos::TeamThreadRange(team, m), [&](const int& i) {
-                    const auto target_indice = target_sv(i);
-                    Kokkos::parallel_for(
-                        Kokkos::ThreadVectorRange(
-                            team, weights_offsets(target_indice),
-                            weights_offsets(target_indice + 1)),
-                        [&](const int& t) {
-                            if (static_cast<int>(weights_indices(t)) == k)
-                            {
-                                Kokkos::atomic_add<RbfPumFPType>(
-                                    &(output(target_sv(i))),
-                                    weights(t) * out(i));
-                            }
-                        });
-                });
+            for (int i = 0; i < m; ++i)
+            {
+                const auto tgt_i = target_sv(i);
+                for (int t = weights_offsets(tgt_i);
+                     t < weights_offsets(tgt_i + 1); ++t)
+                {
+                    if (static_cast<int>(weights_indices(t)) == k)
+                    {
+                        Kokkos::atomic_add(&(output(tgt_i)),
+                                           weights(t) * out(i));
+                    }
+                }
+            }
         });
-    Kokkos::fence();
 }

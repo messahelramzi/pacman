@@ -3,6 +3,8 @@
 #include <Eigen/Dense>
 #include <iostream>
 
+#include "utils/utils.hpp"
+
 inline Eigen::VectorXd HostSolveLDLT(const Eigen::MatrixXd& A,
                                      const Eigen::VectorXd& b)
 {

@@ -1,124 +1,175 @@
 #pragma once
 
 #include <Eigen/Dense>
+#include <Kokkos_Core.hpp>
 
 #include "utils/operators.hpp"
 #include "utils/utils.hpp"
 
-template <typename TeamHandle, typename XType, typename XOffsType,
-          typename RbfFuncType>
-inline void TeamHostFillMatrixA(const TeamHandle& team_handle,
-                                Eigen::MatrixXd& A, const XType& X,
-                                const XOffsType& XOffs, const RbfFuncType& func)
+template <typename SourceType, typename OffsType, typename RbfFuncType>
+Eigen::MatrixXd HostBuildSymmetricMatrix(const SourceType& src,
+                                         const OffsType& offs,
+                                         const RbfFuncType& func)
 {
-    using data_type = typename base_type<decltype(A)>::Scalar;
-    const auto N = static_cast<int>(A.rows());
-    const auto M = static_cast<int>(A.cols());
-    Kokkos::parallel_for(
-        Kokkos::TeamThreadRange(team_handle, N), [&](const int& i) {
-            const auto source_point = X(XOffs(i));
-            Kokkos::parallel_for(Kokkos::ThreadVectorRange(team_handle, i, M),
-                                 [&](const int& j) {
-                                     const data_type val =
-                                         func.eval_host(NDdistance_no_check(
-                                             source_point, X(XOffs(j))));
-                                     A(i, j) = val;
-                                     A(j, i) = val;
-                                 });
-        });
-}
-
-template <typename XType, typename XOffsType>
-inline void HostFillPoly(Eigen::MatrixXd& P, const XType& X,
-                         const XOffsType& XOffs)
-{
-    using data_type = typename base_type<decltype(P)>::Scalar;
-    constexpr data_type one = 1.0;
-    const auto N = static_cast<int>(P.rows());
-    const auto M = static_cast<int>(P.cols());
-    for (auto i = 0; i < N; ++i)
+    const int n = offs.extent_int(0);
+    Eigen::MatrixXd M(n, n);
+    for (int i = 0; i < n; ++i)
     {
-        const auto target = X(XOffs(i));
-        P(i, 0) = one;
-        for (auto j = 1; j < M; ++j)
+        const auto x = src(offs(i));
+        for (int j = i; j < n; ++j)
         {
-            P(i, j) = target[j - 1];
+            const auto val =
+                func.eval_host(NDdistance_no_check(x, src(offs(j))));
+            M(i, j) = val;
+            M(j, i) = val;
         }
     }
+    return M;
 }
 
-template <typename TeamHandle, typename XType, typename XOffsType>
-inline void TeamHostFillPoly(const TeamHandle& team_handle, Eigen::MatrixXd& P,
-                             const XType& X, const XOffsType& XOffs)
+template <typename SourceType, typename SourceOffsType, typename TargetType,
+          typename TargetOffsType, typename RbfFuncType>
+Eigen::MatrixXd
+HostBuildRbfMatrix(const SourceType& src, const SourceOffsType& src_offs,
+                   const TargetType& tgt, const TargetOffsType& tgt_offs,
+                   const RbfFuncType& func)
 {
-    using data_type = typename base_type<decltype(P)>::Scalar;
-    constexpr data_type one = static_cast<data_type>(1.0);
-    const auto N = static_cast<int>(P.rows());
-    const auto M = static_cast<int>(P.cols());
-    Kokkos::parallel_for(Kokkos::TeamVectorMDRange(team_handle, N, M),
-                         [&](const int& i, const int& j) {
-                             char mask = static_cast<char>(j != 0);
-                             P(i, j) =
-                                 !mask * one + mask * X(XOffs(i))[j - mask];
-                         });
-}
-
-template <typename XType, typename XOffsType>
-inline void HostFillVec(Eigen::VectorXd& V, const XType& X,
-                        const XOffsType& XOffs)
-{
-    const auto N = static_cast<int>(V.size());
-    for (auto i = 0; i < N; ++i)
+    const int n = src_offs.extent_int(0);
+    const int m = tgt_offs.extent_int(0);
+    Eigen::MatrixXd M(m, n);
+    for (int i = 0; i < m; ++i)
     {
-        V(i) = X(XOffs(i));
-    }
-}
-
-template <typename TeamHandle, typename XType, typename XOffsType>
-inline void TeamHostFillVec(const TeamHandle& team_handle, Eigen::VectorXd& V,
-                            const XType& X, const XOffsType& XOffs)
-{
-    const auto N = static_cast<int>(V.size());
-    Kokkos::parallel_for(Kokkos::TeamVectorRange(team_handle, N),
-                         [&](const int& i) { V(i) = X(XOffs(i)); });
-}
-
-template <typename XType, typename XOffsType, typename YType,
-          typename YOffsType, typename RbfFuncType>
-inline void HostFillEvalMat(Eigen::MatrixXd& A, const XType& X,
-                            const XOffsType& XOffs, const YType& Y,
-                            const YOffsType& YOffs, const RbfFuncType& func)
-{
-    const auto N = static_cast<int>(A.rows());
-    const auto M = static_cast<int>(A.cols());
-
-    for (auto i = 0; i < N; ++i)
-    {
-        const auto target_point = Y(YOffs(i));
-        for (auto j = 0; j < M; ++j)
+        const auto x = tgt(tgt_offs(i));
+        for (int j = 0; j < n; ++j)
         {
-            A(i, j) =
-                func.eval_host(NDdistance_no_check(target_point, X(XOffs(j))));
+            M(i, j) = func.eval_host(NDdistance_no_check(x, src(src_offs(j))));
         }
     }
+    return M;
 }
 
-template <typename TeamHandle, typename XType, typename XOffsType,
-          typename YType, typename YOffsType, typename RbfFuncType>
-inline void TeamHostFillEvalMat(const TeamHandle& team_handle,
-                                Eigen::MatrixXd& A, const XType& X,
-                                const XOffsType& XOffs, const YType& Y,
-                                const YOffsType& YOffs, const RbfFuncType& func)
+template <typename ValuesType, typename OffsType>
+Eigen::VectorXd HostBuildRbfVector(const ValuesType& values,
+                                   const OffsType& offs)
 {
-    const auto N = static_cast<int>(A.rows());
-    const auto M = static_cast<int>(A.cols());
-    Kokkos::parallel_for(
-        Kokkos::TeamThreadRange(team_handle, N), [&](const int& i) {
-            const auto target_point = Y(YOffs(i));
-            Kokkos::parallel_for(
-                Kokkos::ThreadVectorRange(team_handle, M), [&](const int& j) {
-                    A(i, j) = func.eval_host(
-                        NDdistance_no_check(target_point, X(XOffs(j))));
-                });
-        });
+    const int n = offs.extent_int(0);
+    Eigen::VectorXd V(n);
+    for (int i = 0; i < n; ++i)
+    {
+        V(i) = values(offs(i));
+    }
+    return V;
+}
+
+template <typename SourceType, typename OffsType, typename AxisType>
+__forceinline__ int DeactivateOneAxis(const SourceType& src,
+                                      const OffsType& offs,
+                                      AxisType& active_axis)
+{
+    using ExecSpace = typename base_type<SourceType>::execution_space;
+    constexpr int m = active_axis.size();
+    int min_axis = 0;
+    double min_distance = std::numeric_limits<double>::max();
+    for (int i = 0; i < m; ++i)
+    {
+        if (!active_axis[i])
+        {
+            continue;
+        }
+        else
+        {
+            auto span = MyMinMax(offs, [&](const int& a, const int& b) {
+                return src(a)[i] < src(b)[i];
+            });
+            const auto dist =
+                Kokkos::abs(src(span.second)[i] - src(span.first)[i]);
+            if (dist < min_distance)
+            {
+                min_distance = dist;
+                min_axis = i;
+            }
+        }
+    }
+    active_axis[min_axis] = false;
+    return min_axis;
+}
+
+template <typename SourceType, typename OffsType, typename AxisType>
+Eigen::MatrixXd HostBuildSourcePoly(const SourceType& src, const OffsType& offs,
+                                    AxisType& active_axis)
+{
+    const int n = offs.extent_int(0);
+    constexpr int dim = active_axis.size();
+    int poly_vals = dim + 1;
+    for (int i = 0; i < dim; ++i)
+    {
+        active_axis[i] = true;
+    }
+
+    Eigen::MatrixXd P(n, poly_vals);
+    do
+    {
+        P.conservativeResize(Eigen::NoChange, poly_vals);
+        for (int i = 0; i < n; ++i)
+        {
+            const auto x = src(offs(i));
+            P(i, 0) = 1.0;
+            int k = 0;
+            for (int j = 0; j < dim; ++j)
+            {
+                if (active_axis[j])
+                {
+                    P(i, 1 + k) = x[j];
+                    ++k;
+                }
+            }
+        }
+
+        Eigen::JacobiSVD<Eigen::MatrixXd> svd(P);
+        const double condition = svd.singularValues()(0)
+            / std::max(svd.singularValues()(svd.singularValues().size() - 1),
+                       1.0e-14);
+        if (condition > 1e5)
+        {
+            DeactivateOneAxis(src, offs, active_axis);
+            --poly_vals;
+        }
+        else
+        {
+            break;
+        }
+    } while (true);
+    return P;
+}
+
+template <typename TargetView, typename OffsView, typename AxisView>
+Eigen::MatrixXd HostBuildTargetPoly(const TargetView& tgt, const OffsView& offs,
+                                    const AxisView& active_axis)
+{
+    const int n = offs.extent_int(0);
+    constexpr int dim = active_axis.size();
+    int poly_vals = 1;
+    for (int i = 0; i < dim; ++i)
+    {
+        if (active_axis[i])
+        {
+            ++poly_vals;
+        }
+    }
+    Eigen::MatrixXd P(n, poly_vals);
+    for (int i = 0; i < n; ++i)
+    {
+        const auto y = tgt(offs(i));
+        P(i, 0) = 1.0;
+        int k = 0;
+        for (int j = 0; j < dim; ++j)
+        {
+            if (active_axis[j])
+            {
+                P(i, 1 + k) = y[j];
+                ++k;
+            }
+        }
+    }
+    return P;
 }

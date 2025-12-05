@@ -172,3 +172,26 @@ void export_systems(const ViewType& data, const OffsType& offs,
                       name.string());
     }
 }
+
+template <typename ViewType, typename Comparator>
+inline auto MyMinMax(const ViewType& v, const Comparator& op)
+{
+    using T = typename ViewType::non_const_value_type;
+    using R = Kokkos::pair<T, T>;
+    const int n = v.extent_int(0);
+    KOKKOS_ASSERT(n > 0);
+    R ret = Kokkos::make_pair(v(0), v(0));
+    for (int i = 1; i < n; ++i)
+    {
+        const auto elt = v(i);
+        if (op(elt, ret.first))
+        {
+            ret.first = elt;
+        }
+        if (op(ret.second, elt))
+        {
+            ret.second = elt;
+        }
+    }
+    return ret;
+}
