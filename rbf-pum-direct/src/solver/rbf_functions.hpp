@@ -17,8 +17,7 @@ public:
             * ((static_cast<RbfPumFPType>(1.0) - p)
                * (static_cast<RbfPumFPType>(1.0) - p));
     }
-    __forceinline__
-        RbfPumFPType constexpr eval_host(const RbfPumFPType& r) const
+    inline RbfPumFPType constexpr eval_host(const RbfPumFPType& r) const
     {
         const RbfPumFPType p = r * _r_inv;
         if (p >= 1 || p < 0)
@@ -28,7 +27,7 @@ public:
         return std::pow(1.0 - p, 2);
     }
 
-    __forceinline__ void set_r_inv(const RbfPumFPType& r_inv)
+    inline void set_r_inv(const RbfPumFPType& r_inv)
     {
         this->_r_inv = r_inv;
     }
@@ -52,8 +51,7 @@ public:
                             static_cast<RbfPumFPType>(1.0)));
     }
 
-    __forceinline__
-        RbfPumFPType constexpr eval_host(const RbfPumFPType& r) const
+    inline RbfPumFPType constexpr eval_host(const RbfPumFPType& r) const
     {
         const RbfPumFPType p = r * _r_inv;
         if (p >= 1 || p < 0)
@@ -63,7 +61,7 @@ public:
         return std::pow(1.0 - p, 4) * rbfpum_fma(4.0, p, 1.0);
     }
 
-    __forceinline__ void set_r_inv(const RbfPumFPType& r_inv)
+    inline void set_r_inv(const RbfPumFPType& r_inv)
     {
         this->_r_inv = r_inv;
     }
@@ -88,8 +86,7 @@ public:
                                static_cast<RbfPumFPType>(3.0))));
     }
 
-    __forceinline__
-        RbfPumFPType constexpr eval_host(const RbfPumFPType& r) const
+    inline RbfPumFPType constexpr eval_host(const RbfPumFPType& r) const
     {
         const RbfPumFPType p = r * _r_inv;
         if (p >= 1 || p < 0)
@@ -100,10 +97,10 @@ public:
             * (35 * std::pow(p, 2) + rbfpum_fma(18.0, p, 3.0));
     }
 
-    __forceinline__ void set_r_inv(const RbfPumFPType& r_inv)
+    inline void set_r_inv(const RbfPumFPType& r_inv)
     {
         this->_r_inv = r_inv;
-    }
+    };
 
 private:
     RbfPumFPType _r_inv;
@@ -126,8 +123,7 @@ public:
                                static_cast<RbfPumFPType>(1.0))));
     }
 
-    __forceinline__
-        RbfPumFPType constexpr eval_host(const RbfPumFPType& r) const
+    inline RbfPumFPType constexpr eval_host(const RbfPumFPType& r) const
     {
         const RbfPumFPType p = r * _r_inv;
         if (p >= 1 || p < 0)
@@ -140,7 +136,7 @@ public:
                + rbfpum_fma(8.0, p, 1.0));
     }
 
-    __forceinline__ void set_r_inv(const RbfPumFPType& r_inv)
+    inline void set_r_inv(const RbfPumFPType& r_inv)
     {
         this->_r_inv = r_inv;
     }
@@ -166,9 +162,7 @@ public:
                + rbfpum_fma(static_cast<RbfPumFPType>(150.0), p,
                             static_cast<RbfPumFPType>(15.0)));
     }
-
-    __forceinline__
-        RbfPumFPType constexpr eval_host(const RbfPumFPType& r) const
+    inline RbfPumFPType constexpr eval_host(const RbfPumFPType& r) const
     {
         const RbfPumFPType p = r * _r_inv;
         if (p >= 1 || p < 0)
@@ -180,7 +174,7 @@ public:
                + 630.0 * std::pow(p, 2) + rbfpum_fma(150.0, p, 15.0));
     }
 
-    __forceinline__ void set_r_inv(const RbfPumFPType& r_inv)
+    inline void set_r_inv(const RbfPumFPType& r_inv)
     {
         this->_r_inv = r_inv;
     }

@@ -5,6 +5,7 @@
 #include <ArborX_Sphere.hpp>
 #include <Kokkos_Core.hpp>
 
+#include "concepts.hpp"
 #include "solver/rbf_functions.hpp"
 
 #define FULL_TEMPLATE                                                          \
@@ -18,29 +19,30 @@ FULL_TEMPLATE
 class RbfPumInterpolator
 {
     using Point = ArborX::Point<Dim, RbfPumFPType>;
+    using MemSpace = typename ExecSpace::memory_space;
 
     template <typename inner_type>
-    using VectorView = Kokkos::View<inner_type*, ExecSpace>;
+    using VectorView = Kokkos::View<inner_type*, MemSpace>;
 
     template <typename inner_type>
-    using MatrixView = Kokkos::View<inner_type**, ExecSpace>;
-
-    template <typename inner_type>
-    using TensorView = Kokkos::View<inner_type***, ExecSpace>;
+    using MatrixView = Kokkos::View<inner_type**, MemSpace>;
 
 public:
     // Constructor
-    RbfPumInterpolator(VectorView<Point>& source,
-                       VectorView<RbfPumFPType>& values,
-                       VectorView<Point>& target,
-                       RbfFunctionBasisType& rbf_function);
+    template <KokkosViewRank<1> SourceViewType,
+              KokkosViewRank<1> ValuesViewType,
+              KokkosViewRank<1> TargetViewType>
+    RbfPumInterpolator(SourceViewType& source, ValuesViewType& values,
+                       TargetViewType& target,
+                       RbfFunctionBasisType& rbf_function,
+                       int nodes_per_cluster = 50,
+                       double relative_overlap = 0.15,
+                       double rbf_support_radius = 0.1);
 
     // Internal routines
     void find_radius(void);
     void create_clusters(void);
-    constexpr void solve_systems(void);
-    void device_solve_systems(void);
-    void host_solve_systems(void);
+    void solve_systems(void);
 
     // Debug routines
     std::string get_interpolator_details(void) const;
@@ -67,9 +69,9 @@ public:
 
 private:
     double _radius;
-    const int _nodes_per_cluster = 50;
-    const double _relative_overlap = 0.15;
-    const double _support_radius = 0.1;
+    int _nodes_per_cluster;
+    double _relative_overlap;
+    double _support_radius;
 
     ArborX::BoundingVolumeHierarchy<typename VectorView<Point>::memory_space,
                                     ArborX::PairValueIndex<Point, unsigned int>>
