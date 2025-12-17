@@ -1,53 +1,65 @@
 cmake_minimum_required(VERSION 3.31)
 
-project(RBFPUMDirect LANGUAGES CXX CUDA)
+project(RBFPUMInterpolator LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+# Required by Kokkos
+set(CMAKE_CXX_EXTENSIONS OFF)
+# Required for the Python Module
+set(CMAKE_POSITION_INDEPENDENT_CODE ON CACHE BOOL "Enable -fPIC for all targets")
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION OFF)
+# Useful to configure the IDE
 set(EXPORT_COMPILE_COMMANDS ON)
 
-# Required only for main.cpp
-find_package(VTK COMPONENTS
-    CommonCore
-    IOXML
-    CommonDataModel
-    REQUIRED)
-# Required for the Host Solver (Serial/Threads/OpenMP backends) and Device Solver (Cuda backend)
-find_package(Eigen3 3.4 REQUIRED NO_MODULE)
+option(BUILD_MODULE "Build the Python module" ON)
+option(BUILD_TESTS "Build the test executable" OFF)
 
-set(Kokkos_DIR ${CMAKE_SOURCE_DIR}/external/installs/kokkos-5.0.0/lib64/cmake/Kokkos CACHE PATH "")
-set(ArborX_DIR ${CMAKE_SOURCE_DIR}/external/installs/ArborX-2.0.1/share/cmake/ArborX CACHE PATH "")
-set(KokkosKernels_DIR ${CMAKE_SOURCE_DIR}/external/installs/KokkosKernels-5.0.0/lib64/cmake/KokkosKernels CACHE PATH "")
-find_package(Kokkos 4.7 REQUIRED)
+# -----------------------------------------------------
+# Main Target (Interface)
+# -----------------------------------------------------
+find_package(Kokkos 5.0 REQUIRED)
 find_package(ArborX 2.0 REQUIRED)
-find_package(KokkosKernels 4.7 REQUIRED)
+find_package(KokkosKernels 5.0 REQUIRED)
+add_library(RbfPumInterpolator INTERFACE)
+target_link_libraries(RbfPumInterpolator INTERFACE
+                        Kokkos::kokkos
+                        KokkosKernels::kokkoskernels
+                        ArborX::ArborX)
+target_include_directories(RbfPumInterpolator INTERFACE src)
+target_compile_features(RbfPumInterpolator INTERFACE cxx_std_20)
 
-add_executable(main main.cpp)
-target_link_libraries(main PRIVATE
-    Kokkos::kokkos
-    KokkosKernels::kokkoskernels
-    ArborX::ArborX
-    Eigen3::Eigen
-    VTK::CommonCore
-    VTK::IOXML
-    VTK::CommonDataModel
-)
-target_include_directories(main PRIVATE "src/")
+# -----------------------------------------------------
+# Test executable (require VTK)
+# -----------------------------------------------------
+if (BUILD_TESTS)
+    find_package(VTK COMPONENTS
+        CommonCore
+        IOXML
+        CommonDataModel
+        REQUIRED)
+    add_executable(test tests/tests.cpp)
+    target_link_libraries(test PRIVATE
+        RbfPumInterpolator
+        VTK::CommonCore
+        VTK::IOXML
+        VTK::CommonDataModel
+    )
+    target_include_directories(test PRIVATE "src/")
+    target_include_directories(test PRIVATE "tests/")
+    target_compile_features(test PRIVATE cxx_std_20)
+    target_compile_options(test PRIVATE
+        -m64
+        -lineinfo # for HPCToolKit profiler
+    )
+endif()
 
-target_compile_features(main PRIVATE cxx_std_20)
-target_compile_definitions(main PRIVATE Kokkos_ENABLE_CUDA)
-target_compile_options(main PRIVATE
-    -m64
-)
-
-## Python Bindings (Host Solver Only)
-find_package(pybind11 CONFIG REQUIRED)
-
-pybind11_add_module(RbfPumInterpolator "src/pybindings/bindings.cpp")
-target_link_libraries(RbfPumInterpolator PRIVATE
-    Kokkos::kokkos
-    KokkosKernels::kokkoskernels
-    ArborX::ArborX
-    Eigen3::Eigen
-)
-target_include_directories(RbfPumInterpolator PRIVATE "src/")
+# -----------------------------------------------------
+# Python Module (Requires PyBind11)
+# -----------------------------------------------------
+if (BUILD_MODULE)
+    find_package(pybind11 CONFIG REQUIRED)
+    pybind11_add_module(interpolator "src/pybindings/bindings.cpp")
+    target_link_libraries(interpolator PRIVATE RbfPumInterpolator)
+    target_include_directories(interpolator PRIVATE "src")
+endif()

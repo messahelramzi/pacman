@@ -27,10 +27,15 @@ FULL_TEMPLATE
 ** @param rbf_function: A user-defined functor which is the rbf function used
 *for clusters points evaluation.
 */
-TEMPLATED_CLASSNAME::RbfPumInterpolator(VectorView<Point>& source,
-                                        VectorView<RbfPumFPType>& values,
-                                        VectorView<Point>& target,
-                                        RbfFunctionBasisType& rbf_function)
+template <KokkosViewRank<1> SourceViewType, KokkosViewRank<1> ValuesViewType,
+          KokkosViewRank<1> TargetViewType>
+TEMPLATED_CLASSNAME::RbfPumInterpolator(
+    SourceViewType& source, ValuesViewType& values, TargetViewType& target,
+    RbfFunctionBasisType& rbf_function, int nodes_per_cluster,
+    double relative_overlap, double rbf_support_radius)
+    : _nodes_per_cluster(nodes_per_cluster)
+    , _relative_overlap(relative_overlap)
+    , _support_radius(rbf_support_radius)
 {
     const std::string _region_name = "RbfPumInterpolator::RbfPumInterpolator";
     Kokkos::Profiling::ScopedRegion region(_region_name);
@@ -102,6 +107,7 @@ std::string TEMPLATED_CLASSNAME::get_interpolator_details(void) const
     strs << "    #Points per cluster: " << this->_nodes_per_cluster << "\n";
     strs << "    Relative overlap: " << this->_relative_overlap << "\n";
     strs << "    RBF Function: " << typeid(RbfFunctionBasisType).name() << "\n";
+    strs << "    Execution space: " << ExecSpace{}.name() << "\n";
     strs << "Found radius: " << this->_radius << "\n";
     strs << "Number of clusters: " << this->_clusters.extent(0);
 

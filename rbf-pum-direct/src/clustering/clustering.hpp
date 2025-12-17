@@ -59,6 +59,69 @@ constexpr auto zCurveNeighborOffsets(size_t shape[Dim])
     return result;
 }
 
+template <>
+constexpr auto zCurveNeighborOffsets<2>(size_t shape[2])
+{
+    constexpr size_t N = constexpr_pow<3, 2>() - 1;
+    std::array<int, N> result{};
+
+    const std::array<std::array<int, 3>, 8> offsets = { { { -1, -1 },
+                                                          { -1, 0 },
+                                                          { -1, 1 },
+                                                          { 0, -1 },
+                                                          { 0, 1 },
+                                                          { 1, -1 },
+                                                          { 1, 0 },
+                                                          { 1, 1 } } };
+
+    size_t out = 0;
+    for (const auto offset : offsets)
+    {
+        int index = 0;
+        size_t stride = 1;
+        for (int k = 1; k >= 0; --k)
+        {
+            index += offset[k] * stride;
+            stride *= shape[k];
+        }
+        result[out++] = index;
+    }
+
+    return result;
+}
+
+template <>
+constexpr auto zCurveNeighborOffsets<3>(size_t shape[3])
+{
+    constexpr size_t N = constexpr_pow<3, 3>() - 1;
+    std::array<int, N> result{};
+
+    const std::array<std::array<int, 3>, 26> offsets = {
+        { { -1, -1, -1 }, { -1, -1, 0 }, { -1, -1, 1 }, { -1, 0, 0 },
+          { -1, 0, 1 },   { -1, 0, -1 }, { -1, 1, 0 },  { -1, 1, 1 },
+          { -1, 1, -1 },  { 0, -1, -1 }, { 0, -1, 0 },  { 0, -1, 1 },
+          { 0, 0, 1 },    { 0, 0, -1 },  { 0, 1, 0 },   { 0, 1, 1 },
+          { 0, 1, -1 },   { 1, -1, -1 }, { 1, -1, 0 },  { 1, -1, 1 },
+          { 1, 0, 0 },    { 1, 0, 1 },   { 1, 0, -1 },  { 1, 1, 0 },
+          { 1, 1, 1 },    { 1, 1, -1 } }
+    };
+
+    size_t out = 0;
+    for (const auto offset : offsets)
+    {
+        int index = 0;
+        size_t stride = 1;
+        for (int k = 2; k >= 0; --k)
+        {
+            index += offset[k] * stride;
+            stride *= shape[k];
+        }
+        result[out++] = index;
+    }
+
+    return result;
+}
+
 template <typename value_type>
 struct remove_tagged
 {

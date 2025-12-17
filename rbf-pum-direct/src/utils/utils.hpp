@@ -2,16 +2,23 @@
 
 #include <Kokkos_Core.hpp>
 #include <cmath>
-#include <cuda.h>
-#include <cuda_runtime_api.h>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
 
+#if defined(Kokkos_ENABLE_CUDA)
+#    include <cuda.h>
+#    include <cuda_runtime_api.h>
+#endif
+
+#define SEND_TO_HOST(view)                                                     \
+    auto h_##view = Kokkos::create_mirror_view_and_copy(                       \
+        Kokkos::DefaultHostExecutionSpace{}, view)
+
 template <typename T>
-KOKKOS_FORCEINLINE_FUNCTION T rbfpum_fma(T a, T x, T b)
+KOKKOS_FORCEINLINE_FUNCTION T rbfpum_fma(const T a, const T x, const T b)
 {
 #if defined(KOKKOS_ENABLE_CUDA)
     return Kokkos::fma(a, x, b);
@@ -23,7 +30,7 @@ KOKKOS_FORCEINLINE_FUNCTION T rbfpum_fma(T a, T x, T b)
 }
 
 template <typename RbfPumFPType>
-__forceinline__ auto auto_fp_format(void)
+inline auto auto_fp_format(void)
 {
     return std::setprecision(std::numeric_limits<RbfPumFPType>::max_digits10);
 }
@@ -42,10 +49,26 @@ using base_type =
 
 void print_cuda_memory_usage()
 {
+#if defined(Kokkos_ENABLE_CUDA)
     size_t cuda_free, cuda_total;
     cudaMemGetInfo(&cuda_free, &cuda_total);
     std::cout << "used: " << (cuda_total - cuda_free) / 1'000'000.0 << "/"
               << (cuda_total) / 1'000'000.0 << "MB" << std::endl;
+#else
+    return;
+#endif
+}
+
+template <typename SourceView, typename TargetView>
+inline void SafeDeepCopy(TargetView& tgt, const SourceView& src)
+{
+    using SrcExecSpace = typename SourceView::execution_space;
+    using TgtExecSpace = typename TargetView::execution_space;
+    using TgtLayout = typename TargetView::array_layout;
+
+    const auto mirror =
+        Kokkos::create_mirror_view_and_copy(SrcExecSpace{}, src);
+    Kokkos::deep_copy(tgt, mirror);
 }
 
 template <typename ViewType>
@@ -87,94 +110,27 @@ void print_view(ViewType& v, std::string sep = " ")
     std::cout << v.label() << ".extent(0): " << m.extent(0) << std::endl;
 }
 
-template <typename ViewType, typename OffsView>
-void export_coeffs(const ViewType& coeffs, const OffsView& offs,
-                   const std::string& folder)
+template <typename DataView>
+void export_mat_view(const DataView& data, const int rows, const int cols,
+                     std::fstream& file)
 {
-    using data_type = typename ViewType::non_const_value_type;
-    std::cout << auto_fp_format<data_type>();
-    auto coeffs_host =
-        Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{}, coeffs);
-    auto offs_host =
-        Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{}, offs);
-    for (int k = 0; k < offs_host.extent(0) - 1; ++k)
+    using layout = typename DataView::array_layout;
+    Kokkos::View<typename DataView::const_value_type**, layout,
+                 Kokkos::DefaultHostExecutionSpace>
+        M(data.data(), rows, cols);
+    for (int i = 0; i < rows; ++i)
     {
-        const auto access_index = offs_host(k);
-        const auto next_index = offs_host(k + 1);
-        const auto n = next_index - access_index;
-        const std::string name =
-            folder + "coeffs_" + std::to_string(k) + ".csv";
-        std::fstream file{ name,
-                           file.in | file.out | file.trunc | file.binary };
-        if (!file.is_open())
+        for (int j = 0; j < cols - 1; ++j)
         {
-            std::cerr << name << " failed to open!" << std::endl;
-            std::cerr << strerror(errno) << "\n";
-            continue;
+            file << M(i, j) << ",";
         }
-        file << std::fixed << auto_fp_format<data_type>();
-        for (int i = 0; i < n - 1; ++i)
-        {
-            file << coeffs_host(access_index + i) << ",";
-        }
-        file << coeffs_host(access_index + n - 1) << "\n";
+        file << M(i, cols - 1) << "\n";
     }
-}
-
-template <typename ViewType>
-void export_matrix(const ViewType& matrix, const int& n,
-                   const std::string& name)
-{
-    using data_type = typename ViewType::non_const_value_type;
-    std::cout << auto_fp_format<data_type>();
-    std::fstream file{ name, file.in | file.out | file.trunc | file.binary };
-    if (!file.is_open())
-    {
-        std::cerr << name << " failed to open!" << std::endl;
-        std::cerr << strerror(errno) << "\n";
-        return;
-    }
-    file << std::fixed << auto_fp_format<data_type>();
-    double sum = 0.0;
-    for (size_t i = 0; i < n; ++i)
-    {
-        for (size_t j = 0; j < n - 1; ++j)
-        {
-            const auto val = matrix(i * n + j);
-            sum += val * val;
-            file << val << ",";
-        }
-        const auto val = matrix(i * n + (n - 1));
-        sum += val * val;
-        file << val << "\n";
-    }
-    file.close();
-    std::cout << "Wrote a matrix to " << name << std::endl;
-    std::cout << "Matrix norm: " << std::sqrt(sum) << std::endl;
-}
-
-template <typename ViewType, typename OffsType>
-void export_systems(const ViewType& data, const OffsType& offs,
-                    const std::string& folder = "./mats")
-{
-    const auto data_host =
-        Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{}, data);
-    const auto offs_host =
-        Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{}, offs);
-    const size_t K = offs_host.extent(0) - 1;
-    for (size_t k = 0; k < K; ++k)
-    {
-        const auto range = Kokkos::make_pair(offs_host(k), offs_host(k + 1));
-        const auto A = Kokkos::subview(data_host, range);
-        const std::filesystem::path name =
-            folder + "/" + "mat_" + std::to_string(k) + ".csv";
-        export_matrix(A, (int)(std::sqrt(offs_host(k + 1) - offs_host(k))),
-                      name.string());
-    }
+    file.flush();
 }
 
 template <typename ViewType, typename Comparator>
-inline auto MyMinMax(const ViewType& v, const Comparator& op)
+KOKKOS_INLINE_FUNCTION auto MyMinMax(const ViewType& v, const Comparator& op)
 {
     using T = typename ViewType::non_const_value_type;
     using R = Kokkos::pair<T, T>;

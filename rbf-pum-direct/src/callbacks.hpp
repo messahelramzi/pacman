@@ -1,18 +1,20 @@
 #pragma once
 
+#include <ArborX.hpp>
 #include <ArborX_Point.hpp>
 #include <ArborX_Sphere.hpp>
 
+#include "concepts.hpp"
 #include "utils/operators.hpp"
 
-template <typename ViewType>
+template <KokkosViewRank<1> ViewType>
 struct DistanceToKNearest
 {
     const int k;
     ViewType samples;
 };
 
-template <typename ViewType>
+template <KokkosViewRank<1> ViewType>
 struct ArborX::AccessTraits<DistanceToKNearest<ViewType>>
 {
     using memory_space = typename ViewType::memory_space;
@@ -38,13 +40,13 @@ struct DistanceToKNearestCallback
     }
 };
 
-template <typename ViewType>
+template <KokkosViewRank<1> ViewType>
 struct Projection
 {
     ViewType centers;
 };
 
-template <typename ViewType>
+template <KokkosViewRank<1> ViewType>
 struct ArborX::AccessTraits<Projection<ViewType>>
 {
     using memory_space = typename ViewType::memory_space;
@@ -71,13 +73,13 @@ struct ProjectionCallback
     }
 };
 
-template <typename ViewType>
+template <KokkosViewRank<1> ViewType>
 struct TagEmptyCenters
 {
     ViewType centers_candidates;
 };
 
-template <typename ViewType>
+template <KokkosViewRank<1> ViewType>
 struct ArborX::AccessTraits<TagEmptyCenters<ViewType>>
 {
     using memory_space = typename ViewType::memory_space;
@@ -99,7 +101,7 @@ struct ArborX::AccessTraits<TagEmptyCenters<ViewType>>
     }
 };
 
-template <typename ViewType, typename RbfPumFPType>
+template <KokkosViewRank<1> ViewType, typename RbfPumFPType>
 struct TagEmptyCentersCallback
 {
     ViewType centers_candidates;
@@ -122,13 +124,13 @@ struct TagEmptyCentersCallback
     }
 };
 
-template <typename ViewType>
+template <KokkosViewRank<1> ViewType>
 struct TransformToNearest
 {
     ViewType centers_candidates;
 };
 
-template <typename ViewType>
+template <KokkosViewRank<1> ViewType>
 struct ArborX::AccessTraits<TransformToNearest<ViewType>>
 {
     using memory_space = typename ViewType::memory_space;
@@ -150,7 +152,7 @@ struct ArborX::AccessTraits<TransformToNearest<ViewType>>
     }
 };
 
-template <typename ViewType>
+template <KokkosViewRank<1> ViewType>
 struct TransformToNearestCallback
 {
     ViewType centers_candidates;
@@ -163,14 +165,14 @@ struct TransformToNearestCallback
     }
 };
 
-template <typename ViewType, typename RbfPumFPType>
+template <KokkosViewRank<1> ViewType, typename RbfPumFPType>
 struct GetClustersPoints
 {
     ViewType centers;
     RbfPumFPType radius;
 };
 
-template <typename ViewType, typename RbfPumFPType>
+template <KokkosViewRank<1> ViewType, typename RbfPumFPType>
 struct ArborX::AccessTraits<GetClustersPoints<ViewType, RbfPumFPType>>
 {
     using memory_space = typename ViewType::memory_space;
