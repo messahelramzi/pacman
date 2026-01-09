@@ -1,0 +1,9 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+find_dependency(Kokkos)
+find_dependency(ArborX)
+find_dependency(KokkosKernels)
+
+include("${CMAKE_CURRENT_LIST_DIR}/PACMANTargets.cmake")
