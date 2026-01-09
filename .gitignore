@@ -1,11 +1,10 @@
 .vscode/
 build/
+build-gpu/
+build-cpu/
+install/
 env/
-external/
 meshes/
-precice-systems/
 .mypy_cache
-tests/
 tests_outputs/
-systems/
-test.cpp
+main.py
