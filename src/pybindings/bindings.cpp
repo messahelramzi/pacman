@@ -42,11 +42,12 @@ PYBIND11_MODULE(pacman, m) {
                                     "method interpolator (CPU/GPU)");
   rbf.def("interpolate",               // Python Func Name
           &PyBindingsRbf::Interpolate, // C++ Corresponding Function
-          py::arg("execspace"),        // #1 Arg
-          py::arg("rbf_function"),     // #2 Arg
-          py::arg("source_points"),    // #3 Arg
-          py::arg("source_values"),    // #4 Arg
-          py::arg("target_points")     // #5 Arg
+          py::arg("space_dimension"),  // #1 Arg
+          py::arg("execspace"),        // #2 Arg
+          py::arg("rbf_function"),     // #3 Arg
+          py::arg("source_points"),    // #4 Arg
+          py::arg("source_values"),    // #5 Arg
+          py::arg("target_points")     // #6 Arg
   );
 
   auto rbf_functions = rbf.def_submodule(
@@ -60,14 +61,15 @@ PYBIND11_MODULE(pacman, m) {
   auto fe = m.def_submodule(
       "fe", "Finite elements interpolation functions (CPU/GPU)");
   fe.def("interpolate", &PyBindingsFiniteElements::Interpolate,
-         py::arg("execspace"),     // #1 Arg
-         py::arg("method"),        // #2 Arg
-         py::arg("source_points"), // #3 Arg
-         py::arg("source_values"), // #4 Arg
-         py::arg("conn_val"),      // #5 Arg
-         py::arg("conn_off"),      // #6 Arg
-         py::arg("cell_types"),    // #7 Arg
-         py::arg("target_points")  // #8 Arg
+         py::arg("space_dimension"), // #1 Arg
+         py::arg("execspace"),       // #2 Arg
+         py::arg("method"),          // #3 Arg
+         py::arg("source_points"),   // #4 Arg
+         py::arg("source_values"),   // #5 Arg
+         py::arg("conn_val"),        // #6 Arg
+         py::arg("conn_off"),        // #7 Arg
+         py::arg("cell_types"),      // #8 Arg
+         py::arg("target_points")    // #9 Arg
   );
   auto fe_methods = fe.def_submodule(
       "methods", "Available FE methods for the Finite Elements interpolator");
@@ -76,6 +78,14 @@ PYBIND11_MODULE(pacman, m) {
   ADD_FE_METHODS_ENTRY(INTERP_NEAREST);
   ADD_FE_METHODS_ENTRY(INTERP_ZEROFILL);
   ADD_FE_METHODS_ENTRY(INTERP_EXTRAP);
+
+  fe.def("meshio_to_vtk_cell_type",
+         &PyBindingsFiniteElements::meshio_to_vtk_cell_type,
+         py::arg("cell_type"),
+         "Return VTK cell type index from a meshio cell type string");
+  fe.def("meshio_cell_dim", &PyBindingsFiniteElements::meshio_cell_dim,
+         py::arg("cell_type"),
+         "Return VTK cell dimension from a meshio cell type string");
 }
 
 } // namespace PACMAN

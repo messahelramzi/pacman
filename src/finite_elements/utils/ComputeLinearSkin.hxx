@@ -20,18 +20,18 @@
 #include "common/types.hpp"
 
 namespace PACMAN {
-namespace FiniteElement {
+namespace FiniteElements {
 
-template <KokkosViewRank<1> T, int_t spaceDimension> struct permute {
+template <KokkosViewRank<1> T, int_t Dim> struct permute {
   KOKKOS_INLINE_FUNCTION
   static void permuteCol(T kokkos_sv) {
-    if constexpr (spaceDimension >= 2) {
+    if constexpr (Dim >= 2) {
       if (kokkos_sv(0) > kokkos_sv(1)) {
         Kokkos::kokkos_swap(kokkos_sv(0), kokkos_sv(1));
       }
     }
 
-    if constexpr (spaceDimension >= 3) {
+    if constexpr (Dim >= 3) {
       if (kokkos_sv(2) > kokkos_sv(3)) {
         Kokkos::kokkos_swap(kokkos_sv(2), kokkos_sv(3));
       }
@@ -53,22 +53,22 @@ template <KokkosViewRank<1> T, int_t spaceDimension> struct permute {
  * transfer->skinParents.
  * @param[in] transfer
  */
-template <typename ExecSpace, int_t spaceDimension, TransferMethods Method>
-void ComputeLinearSkin(Transfer<ExecSpace, spaceDimension> &transfer) {
+template <typename ExecSpace, int_t Dim>
+void ComputeLinearSkin(Transfer<ExecSpace, Dim> &transfer) {
   Kokkos::Profiling::pushRegion("Compute Linear Skin");
 
   using MemorySpace = typename ExecSpace::memory_space;
   ExecSpace execSpace{};
 
   // TODO: Rewrite -> Ugly !
-  auto LFPE_val_vec = getLinearFacesPaddedEntries(spaceDimension);
+  auto LFPE_val_vec = getLinearFacesPaddedEntries(Dim);
   auto LFPE_val = Kokkos::View<shortint_t *,
                                Kokkos::DefaultHostExecutionSpace::memory_space,
                                Kokkos::MemoryTraits<Kokkos::Unmanaged>>(
       LFPE_val_vec.data(), LFPE_val_vec.size());
   auto linearFacesPadded_val =
       Kokkos::create_mirror_view_and_copy(execSpace, LFPE_val);
-  auto LFPE_off_vec = getLinearFacesPaddedOffsets(spaceDimension);
+  auto LFPE_off_vec = getLinearFacesPaddedOffsets(Dim);
   auto LFPE_off =
       Kokkos::View<offset_t *, Kokkos::DefaultHostExecutionSpace::memory_space,
                    Kokkos::MemoryTraits<Kokkos::Unmanaged>>(
@@ -76,27 +76,27 @@ void ComputeLinearSkin(Transfer<ExecSpace, spaceDimension> &transfer) {
   auto linearFacesPadded_off =
       Kokkos::create_mirror_view_and_copy(execSpace, LFPE_off);
 
-  auto TF_val_vec = getTriFacesEntries(spaceDimension);
+  auto TF_val_vec = getTriFacesEntries(Dim);
   auto TF_val = Kokkos::View<shortint_t *,
                              Kokkos::DefaultHostExecutionSpace::memory_space,
                              Kokkos::MemoryTraits<Kokkos::Unmanaged>>(
       TF_val_vec.data(), TF_val_vec.size());
   auto TriFaces_val = Kokkos::create_mirror_view_and_copy(execSpace, TF_val);
-  auto TF_off_vec = getTriFacesOffsets(spaceDimension);
+  auto TF_off_vec = getTriFacesOffsets(Dim);
   auto TF_off =
       Kokkos::View<offset_t *, Kokkos::DefaultHostExecutionSpace::memory_space,
                    Kokkos::MemoryTraits<Kokkos::Unmanaged>>(TF_off_vec.data(),
                                                             TF_off_vec.size());
   auto TriFaces_off = Kokkos::create_mirror_view_and_copy(execSpace, TF_off);
 
-  auto TLF_val_vec = getTriLocFacesEntries(spaceDimension);
+  auto TLF_val_vec = getTriLocFacesEntries(Dim);
   auto TLF_val = Kokkos::View<shortint_t *,
                               Kokkos::DefaultHostExecutionSpace::memory_space,
                               Kokkos::MemoryTraits<Kokkos::Unmanaged>>(
       TLF_val_vec.data(), TLF_val_vec.size());
   auto TriLocFaces_val =
       Kokkos::create_mirror_view_and_copy(execSpace, TLF_val);
-  auto TLF_off_vec = getTriLocFacesOffsets(spaceDimension);
+  auto TLF_off_vec = getTriLocFacesOffsets(Dim);
   auto TLF_off =
       Kokkos::View<offset_t *, Kokkos::DefaultHostExecutionSpace::memory_space,
                    Kokkos::MemoryTraits<Kokkos::Unmanaged>>(TLF_off_vec.data(),
@@ -113,7 +113,7 @@ void ComputeLinearSkin(Transfer<ExecSpace, spaceDimension> &transfer) {
   auto nbElem = CellTypesPtr.extent(0);
 
   int_t nodesPerFace = -1;
-  switch (spaceDimension) {
+  switch (Dim) {
   case 0:
     nodesPerFace = 0;
     break;
@@ -127,7 +127,7 @@ void ComputeLinearSkin(Transfer<ExecSpace, spaceDimension> &transfer) {
     nodesPerFace = 4;
     break;
   default:
-    std::cerr << "Invalid spaceDimension " << spaceDimension << std::endl;
+    std::cerr << "Invalid Dim " << Dim << std::endl;
     assert(false);
     break;
   }
@@ -180,7 +180,7 @@ void ComputeLinearSkin(Transfer<ExecSpace, spaceDimension> &transfer) {
             linFaces_sv(nodesPerFace - 1) =
                 (index == -1) ? maxi : localConnectivity(index);
             using subviewType = decltype(linFaces_sv);
-            permute<subviewType, spaceDimension>::permuteCol(linFaces_sv);
+            permute<subviewType, Dim>::permuteCol(linFaces_sv);
             linFaces_sv(nodesPerFace) = ielType;
           }
         }
@@ -256,7 +256,7 @@ void ComputeLinearSkin(Transfer<ExecSpace, spaceDimension> &transfer) {
               TriLocFaces_val, Kokkos::make_pair(TriLocFaces_off(ielType),
                                                  TriLocFaces_off(ielType + 1)));
           auto iloc = allFaceLocId(index);
-          sum += (iTriLocFaces(iloc + 1) - iTriLocFaces(iloc)) / spaceDimension;
+          sum += (iTriLocFaces(iloc + 1) - iTriLocFaces(iloc)) / Dim;
         }
       },
       nbTris);
@@ -276,10 +276,10 @@ void ComputeLinearSkin(Transfer<ExecSpace, spaceDimension> &transfer) {
 
   Kokkos::Profiling::pushRegion("Finalize: compute linear skin");
 
-  auto skinFaces = Kokkos::View<INTType **, ExecSpace>(
+  auto skinFaces = Kokkos::View<int_t **, ExecSpace>(
       Kokkos::view_alloc(execSpace, Kokkos::WithoutInitializing, "skinFaces"),
-      nbTris, spaceDimension);
-  auto skinParents = Kokkos::View<INTType *, ExecSpace>(
+      nbTris, Dim);
+  auto skinParents = Kokkos::View<int_t *, ExecSpace>(
       Kokkos::view_alloc(execSpace, Kokkos::WithoutInitializing, "skinParents"),
       nbTris);
 
@@ -296,8 +296,7 @@ void ComputeLinearSkin(Transfer<ExecSpace, spaceDimension> &transfer) {
             TriLocFaces_val, Kokkos::make_pair(TriLocFaces_off(ielType),
                                                TriLocFaces_off(ielType + 1)));
         auto iloc = allFaceLocId(index);
-        auto localnbFaces =
-            (iTriLocFaces(iloc + 1) - iTriLocFaces(iloc)) / spaceDimension;
+        auto localnbFaces = (iTriLocFaces(iloc + 1) - iTriLocFaces(iloc)) / Dim;
         auto firstIndex = partial_sum;
         partial_sum += localnbFaces;
         if (is_final) {
@@ -306,8 +305,8 @@ void ComputeLinearSkin(Transfer<ExecSpace, spaceDimension> &transfer) {
               Kokkos::make_pair(connOffPtr(iParent), connOffPtr(iParent + 1)));
           for (index_t j = 0; j < localnbFaces; j++) {
             skinParents(firstIndex + j) = iParent;
-            auto pos = iTriLocFaces(iloc) + j * spaceDimension;
-            for (int_t k = 0; k < spaceDimension; k++) {
+            auto pos = iTriLocFaces(iloc) + j * Dim;
+            for (int_t k = 0; k < Dim; k++) {
               const auto iconn = iTriFaces(pos + k);
               skinFaces(firstIndex + j, k) = localConnectivity(iconn);
             }
@@ -321,10 +320,8 @@ void ComputeLinearSkin(Transfer<ExecSpace, spaceDimension> &transfer) {
   Kokkos::Profiling::popRegion();
 
   Kokkos::Profiling::popRegion();
-
-  return;
 }
 
-} // namespace FiniteElement
+} // namespace FiniteElements
 
 } // namespace PACMAN

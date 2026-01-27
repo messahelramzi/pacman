@@ -16,43 +16,45 @@
 namespace PACMAN {
 namespace FiniteElements {
 
-KOKKOS_INLINE_FUNCTION ::ArborX::Point<2, fp_t>
-closest_point_to_edge(const ::ArborX::Point<2, fp_t> &p,
-                      const ::ArborX::Point<2, fp_t> &a,
-                      const ::ArborX::Point<2, fp_t> &b) {
+KOKKOS_INLINE_FUNCTION ArborX::Point<2, coordinates_t>
+closest_point_to_edge(const ArborX::Point<2, coordinates_t> &p,
+                      const ArborX::Point<2, coordinates_t> &a,
+                      const ArborX::Point<2, coordinates_t> &b) {
   const auto ab = b - a;
   const auto ap = p - a;
-  fp_t t = (ap[0] * ab[0] + ap[1] * ab[1]) / (ab[0] * ab[0] + ab[1] * ab[1]);
+  coordinates_t t =
+      (ap[0] * ab[0] + ap[1] * ab[1]) / (ab[0] * ab[0] + ab[1] * ab[1]);
   auto tclamp = Kokkos::max(0.0, Kokkos::min(1.0, t));
-  ::ArborX::Point<2, fp_t> ret = {a[0] + ab[0] * tclamp, a[1] + ab[1] * tclamp};
+  ArborX::Point<2, coordinates_t> ret = {a[0] + ab[0] * tclamp,
+                                         a[1] + ab[1] * tclamp};
   return ret;
 };
 
 template <typename ExecSpace>
-void ComputeProjectionOn3DSkin(
-    Transfer<ExecSpace, 3> &transfer,
-    Kokkos::View<int_t **, typename ExecSpace::memory_space> col2d_d,
-    Kokkos::View<fp_t **, typename ExecSpace::memory_space> val2d_d,
-    Kokkos::View<int_t *, typename ExecSpace::memory_space> countEntries,
-    bool extrapol = false) {
+void ComputeProjectionOn3DSkin(Transfer<ExecSpace, 3> &transfer,
+                               bool extrapol = false) {
+  Kokkos::Profiling::pushRegion("FiniteElements::ComputeProjectionOn3DSkin");
   using MemorySpace = typename ExecSpace::memory_space;
-  using Triangle = ::ArborX::Triangle<3, fp_t>;
-  using Point = ::ArborX::Point<3, fp_t>;
+  using Triangle = ArborX::Triangle<3, coordinates_t>;
+  using Point = ArborX::Point<3, coordinates_t>;
 
   ExecSpace execSpace{};
 
-  auto nodesPtr = transfer.nodes;
+  auto sourcePointsPtr = transfer.sourcePoints;
+  auto sourceValuesPtr = transfer.sourceValues;
+  auto connValPtr = transfer.connValues;
+  auto connOffPtr = transfer.connOffsets;
+  auto CellTypesPtr = transfer.cellTypes;
+
   auto targetPointsPtr = transfer.targetPoints;
-  auto targetElemPtr = transfer.targetElement;
+  auto targetValuesPtr = transfer.targetValues;
   auto targetStatusPtr = transfer.targetStatus;
-  auto elementsTypePtr = transfer.cellTypes;
-  auto connValPtr = transfer.connectivity_values;
-  auto connOffPtr = transfer.connectivity_offsets;
+  auto nbtargetPoints = targetPointsPtr.extent_int(0);
+
   auto skinFacesPtr = transfer.skinFaces;
   auto skinParentsPtr = transfer.skinParents;
 
-  Kokkos::Profiling::pushRegion("Build triangle BoundingVolumeHierarchy");
-  auto nbTri = transfer.skinFaces.extent(0);
+  auto nbTri = transfer.skinFaces.extent_int(0);
   Kokkos::View<Triangle *, MemorySpace> skinFacesView(
       Kokkos::view_alloc(execSpace, Kokkos::WithoutInitializing,
                          "Skin ArborX Triangles"),
@@ -60,37 +62,44 @@ void ComputeProjectionOn3DSkin(
   Kokkos::parallel_for(
       "Fill ArborX triangles",
       Kokkos::RangePolicy<ExecSpace>(execSpace, 0, nbTri),
-      KOKKOS_LAMBDA(int i) {
-        for (int d = 0; d < 3; d++) {
-          skinFacesView(i).a[d] = nodesPtr(skinFacesPtr(i, 0))[d];
-          skinFacesView(i).b[d] = nodesPtr(skinFacesPtr(i, 1))[d];
-          skinFacesView(i).c[d] = nodesPtr(skinFacesPtr(i, 2))[d];
+      KOKKOS_LAMBDA(const int_t &i) {
+        for (int_t d = 0; d < 3; d++) {
+          skinFacesView(i).a[d] = sourcePointsPtr(skinFacesPtr(i, 0))[d];
+          skinFacesView(i).b[d] = sourcePointsPtr(skinFacesPtr(i, 1))[d];
+          skinFacesView(i).c[d] = sourcePointsPtr(skinFacesPtr(i, 2))[d];
         }
       });
   ArborX::BoundingVolumeHierarchy skinBVH(
       execSpace, ArborX::Experimental::attach_indices(skinFacesView));
   Kokkos::fence();
-  Kokkos::Profiling::popRegion();
+  Kokkos::Profiling::popRegion(); // Build triangle BoundingVolumeHierarchy
+
+  Kokkos::Profiling::pushRegion("Compute query of nearest skin");
 
   Kokkos::View<int_t *, MemorySpace> values("values", 0);
-  Kokkos::View<int_t *, MemorySpace> offsets("offsets", 0);
+  Kokkos::View<offset_t *, MemorySpace> offsets("offsets", 0);
+
+  auto targetElement = Kokkos::View<int_t *, MemorySpace>(
+      Kokkos::view_alloc(execSpace, Kokkos::WithoutInitializing,
+                         "Target to elem"),
+      nbtargetPoints);
 
   Kokkos::Profiling::pushRegion("Point projection on triangle");
   PointCloudNearest<MemorySpace, 3> pcn{targetPointsPtr};
   if (extrapol) {
     skinBVH.query(execSpace, pcn,
                   PointTriangleProjectionExtrapol<ExecSpace, 3>{
-                      targetElemPtr, targetStatusPtr, skinParentsPtr},
+                      targetElement, targetStatusPtr, skinParentsPtr},
                   values, offsets);
   } else {
     skinBVH.query(
         execSpace, pcn,
-        PointTriangleProjection<ExecSpace, 3>{targetPointsPtr, targetElemPtr,
+        PointTriangleProjection<ExecSpace, 3>{targetPointsPtr, targetElement,
                                               targetStatusPtr, skinParentsPtr},
         values, offsets);
   }
   Kokkos::fence();
-  Kokkos::Profiling::popRegion();
+  Kokkos::Profiling::popRegion(); // Point projection on triangle
 
   auto statusOutside =
       (extrapol) ? TransferStatus::EXTRAP : TransferStatus::CLAMP;
@@ -99,85 +108,101 @@ void ComputeProjectionOn3DSkin(
       "Compute projection and interpolation coefficient");
   Kokkos::parallel_for(
       "Compute projection values ",
-      Kokkos::RangePolicy<ExecSpace>(execSpace, 0, values.extent(0)),
-      KOKKOS_LAMBDA(int i) {
+      Kokkos::RangePolicy<ExecSpace>(execSpace, 0, values.extent_int(0)),
+      KOKKOS_LAMBDA(const int_t &i) {
         auto predicate_index = values(i);
-        Eigen::Matrix<fp_t, 1, 3> tp;
-        for (int j = 0; j < 3; j++) {
-          tp(0, j) = targetPointsPtr(predicate_index, j);
+        Kokkos::Array<fp_t, MaxNodesPerElt> warr;
+        Kokkos::Array<coordinates_t, MaxNodesPerElt * 3> Xarr;
+        Kokkos::Array<coordinates_t, 3> tpa;
+        Kokkos::View<coordinates_t *, ExecSpace> tp(tpa.data(), 3);
+        for (int_t j = 0; j < 3; j++) {
+          tp(j) = targetPointsPtr(predicate_index, j);
         }
+        // predicate = target point data
         // primitive intersected bounding box finite element data
-        const int_t curElem = targetElemPtr(predicate_index);
-        const auto elemType = elementsTypePtr(curElem);
-        Eigen::Matrix<fp_t, maxNodePerElt, 3> Xcoor;
-        Xcoor.setZero();
+        const int_t curElem = targetElement(predicate_index);
+        const auto cellType = CellTypesPtr(curElem);
         auto localConn = Kokkos::subview(
             connValPtr,
             Kokkos::make_pair(connOffPtr(curElem), connOffPtr(curElem + 1)));
         int nbConnNodes = connOffPtr(curElem + 1) - connOffPtr(curElem);
-        for (int j = 0; j < nbConnNodes; ++j) {
+        Kokkos::View<fp_t *, ExecSpace> weights(warr.data(), nbConnNodes);
+        Kokkos::View<coordinates_t **, ExecSpace> Xcoor(Xarr.data(),
+                                                        nbConnNodes, 3);
+        for (int_t j = 0; j < nbConnNodes; ++j) {
           auto nodeId = localConn(j);
-          for (int k = 0; k < 3; ++k) {
-            Xcoor(j, k) = nodesPtr(nodeId)[k];
+          for (int_t k = 0; k < 3; ++k) {
+            Xcoor(j, k) = sourcePointsPtr(nodeId)[k];
           }
         }
-        auto val2d_sv = Kokkos::subview(val2d_d, predicate_index,
-                                        Kokkos::make_pair(0, nbConnNodes));
-        auto isInside = ApplyNewtonOnElement<MemorySpace, 3>(
-            CellTypes(i) /*elemType, Xcoor, tp, val2d_sv, true*/);
-        for (int j = 0; j < nbConnNodes; ++j) {
-          col2d_d(predicate_index, j) = localConn(j);
+        auto isInside = ApplyNewtonOnElement<ExecSpace, 3>(cellType, Xcoor, tp,
+                                                           weights, true);
+        for (int_t j = 0; j < nbConnNodes; ++j) {
+          auto nodeId = localConn(j);
+          targetValuesPtr(predicate_index) +=
+              weights[j] * sourceValuesPtr(nodeId);
         }
-        countEntries(predicate_index) = nbConnNodes;
         targetStatusPtr(predicate_index) = statusOutside;
       });
   Kokkos::fence();
-  Kokkos::Profiling::popRegion();
-  return;
+  Kokkos::Profiling::popRegion(); // Compute projection and interpolation
+                                  // coefficient
 };
 
 template <typename ExecSpace>
-void ComputeProjectionOn2DSkin(
-    Transfer<ExecSpace, 2> &transfer,
-    Kokkos::View<int_t **, typename ExecSpace::memory_space> col2d_d,
-    Kokkos::View<fp_t **, typename ExecSpace::memory_space> val2d_d,
-    Kokkos::View<int_t *, typename ExecSpace::memory_space> countEntries,
-    bool extrapol = false) {
-  Kokkos::Profiling::pushRegion("Compute query of nearest skin");
-
+void ComputeProjectionOn2DSkin(Transfer<ExecSpace, 2> &transfer,
+                               bool extrapol = false) {
+  Kokkos::Profiling::pushRegion("FiniteElements::ComputeProjectionOn2DSkin");
   using MemorySpace = typename ExecSpace::memory_space;
-  using Point = ArborX::Point<2, fp_t>;
+  using Point = ArborX::Point<2, coordinates_t>;
 
   ExecSpace execSpace{};
 
+  auto sourcePointsPtr = transfer.sourcePoints;
+  auto sourceValuesPtr = transfer.sourceValues;
+  auto connValPtr = transfer.connValues;
+  auto connOffPtr = transfer.connOffsets;
+  auto CellTypesPtr = transfer.cellTypes;
+
+  auto targetPointsPtr = transfer.targetPoints;
+  auto targetValuesPtr = transfer.targetValues;
+  auto targetStatusPtr = transfer.targetStatus;
+  auto nbtargetPoints = targetPointsPtr.extent_int(0);
+
   auto skinFacesPtr = transfer.skinFaces;
   auto skinParentsPtr = transfer.skinParents;
-  auto nodesPtr = transfer.nodes;
-  auto targetPointsPtr = transfer.targetPoints;
-  auto targetElemPtr = transfer.targetElement;
-  auto targetStatusPtr = transfer.targetStatus;
-  auto CellTypesPtr = transfer.CellTypes;
-  auto connValPtr = transfer.connectivity_values;
-  auto connOffPtr = transfer.connectivity_offsets;
+
+  auto statusOutside =
+      (extrapol) ? TransferStatus::EXTRAP : TransferStatus::CLAMP;
+
+  auto targetElement = Kokkos::View<int_t *, MemorySpace>(
+      Kokkos::view_alloc(execSpace, Kokkos::WithoutInitializing,
+                         "Target to elem"),
+      nbtargetPoints);
 
   Kokkos::Profiling::pushRegion(
       "Compute projection and interpolation coefficient");
   Kokkos::parallel_for(
       "Retrieve closest bar",
-      Kokkos::RangePolicy<ExecSpace>(execSpace, 0, targetPointsPtr.extent(0)),
-      KOKKOS_LAMBDA(int i) {
-        if (targetStatusPtr(i) == TransferStatus::UNDEFINED) {
+      Kokkos::RangePolicy<ExecSpace>(execSpace, 0,
+                                     targetPointsPtr.extent_int(0)),
+      KOKKOS_LAMBDA(const int_t &i) {
+        if (targetStatusPtr(i) == TransferStatus::OUTSIDE) {
+          Kokkos::Array<fp_t, MaxNodesPerElt> warr;
+          Kokkos::Array<coordinates_t, MaxNodesPerElt * 2> Xarr;
+          Kokkos::Array<coordinates_t, 2> tpa;
+          Kokkos::View<coordinates_t *, ExecSpace> tp(tpa.data(), 2);
           const Point target = {targetPointsPtr(i, 0), targetPointsPtr(i, 1)};
           fp_t mindistsqr = fp_consts::max();
           int_t closestId = -1;
           Point closest;
-          for (int s = 0; s < skinFacesPtr.extent(0); s++) {
-            auto p1 = nodesPtr(skinFacesPtr(s, 0));
-            auto p2 = nodesPtr(skinFacesPtr(s, 1));
+          for (int_t s = 0; s < skinFacesPtr.extent_int(0); s++) {
+            auto p1 = sourcePointsPtr(skinFacesPtr(s, 0));
+            auto p2 = sourcePointsPtr(skinFacesPtr(s, 1));
             auto cur = closest_point_to_edge(target, p1, p2);
-            fp_t dx = cur[0] - target[0];
-            fp_t dy = cur[1] - target[1];
-            fp_t curdistsqr = dx * dx + dy * dy;
+            coordinates_t dx = cur[0] - target[0];
+            coordinates_t dy = cur[1] - target[1];
+            coordinates_t curdistsqr = dx * dx + dy * dy;
             if (curdistsqr < mindistsqr) {
               closest = cur;
               mindistsqr = curdistsqr;
@@ -188,80 +213,90 @@ void ComputeProjectionOn2DSkin(
             targetPointsPtr(i, 0) = closest[0];
             targetPointsPtr(i, 1) = closest[1];
           }
-          targetElemPtr(i) = skinParentsPtr(closestId);
-          const int_t curElem = targetElemPtr(i);
-          const auto elemType = elementsTypePtr(curElem);
-          Eigen::Matrix<fp_t, maxNodePerElt, 2> Xcoor;
-          Xcoor.setZero();
+          for (int_t j = 0; j < 2; j++) {
+            tp(j) = targetPointsPtr(i, j);
+          }
+          targetElement(i) = skinParentsPtr(closestId);
+          const int_t curElem = targetElement(i);
+          const auto cellType = CellTypesPtr(curElem);
           auto localConn = Kokkos::subview(
               connValPtr,
               Kokkos::make_pair(connOffPtr(curElem), connOffPtr(curElem + 1)));
-          int nbConnNodes = connOffPtr(curElem + 1) - connOffPtr(curElem);
-          for (int j = 0; j < nbConnNodes; ++j) {
-            auto nodeId = localConn(j);
-            for (int k = 0; k < 2; ++k) {
-              Xcoor(j, k) = nodesPtr(nodeId)[k];
+          const int_t nbConnNodes =
+              connOffPtr(curElem + 1) - connOffPtr(curElem);
+          Kokkos::View<fp_t *, ExecSpace> weights(warr.data(), nbConnNodes);
+          Kokkos::View<coordinates_t **, ExecSpace> Xcoor(Xarr.data(),
+                                                          nbConnNodes, 2);
+          for (int_t j = 0; j < nbConnNodes; ++j) {
+            const auto nodeId = localConn(j);
+            for (int_t k = 0; k < 2; ++k) {
+              Xcoor(j, k) = sourcePointsPtr(nodeId)[k];
             }
           }
-          Eigen::Matrix<fp_t, 1, 2> tp;
-          for (int j = 0; j < 2; j++) {
-            tp(0, j) = targetPointsPtr(i, j);
+          auto isInside = FiniteElements::ApplyNewtonOnElement<ExecSpace, 2>(
+              cellType, Xcoor, tp, weights, true);
+          for (int_t j = 0; j < nbConnNodes; ++j) {
+            const auto nodeId = localConn(j);
+            targetValuesPtr(i) += weights[j] * sourceValuesPtr(nodeId);
           }
-          auto val2d_sv =
-              Kokkos::subview(val2d_d, i, Kokkos::make_pair(0, nbConnNodes));
-          auto isInside = ApplyNewtonOnElement<MemorySpace, 2>(
-              CellTypes(i) /*elemType, Xcoor, tp, val2d_sv, true*/);
-          for (int j = 0; j < nbConnNodes; ++j) {
-            col2d_d(i, j) = localConn(j);
-          }
-          countEntries(i) = nbConnNodes;
-          targetStatusPtr(i) = TransferStatus::CLAMP;
+          targetStatusPtr(i) = statusOutside;
         }
       });
   Kokkos::fence();
-  Kokkos::Profiling::popRegion();
-
-  return;
+  Kokkos::Profiling::popRegion(); // Compute projection and interpolation
+                                  // coefficient
 };
 
 template <typename ExecSpace>
-void ComputeProjectionOn1DSkin(
-    Transfer<ExecSpace, 1> &transfer,
-    Kokkos::View<int_t **, typename ExecSpace::memory_space> col2d_d,
-    Kokkos::View<fp_t **, typename ExecSpace::memory_space> val2d_d,
-    Kokkos::View<int_t *, typename ExecSpace::memory_space> countEntries,
-    bool extrapol = false) {
-  Kokkos::Profiling::pushRegion("Compute query of nearest skin");
-
+void ComputeProjectionOn1DSkin(Transfer<ExecSpace, 1> &transfer,
+                               bool extrapol = false) {
+  Kokkos::Profiling::pushRegion("FiniteElement::ComputeProjectionOn1DSkin");
   using MemorySpace = typename ExecSpace::memory_space;
-  using Point = ArborX::Point<1, fp_t>;
+  using Point = ArborX::Point<1, coordinates_t>;
 
   ExecSpace execSpace{};
 
-  auto skinFacesPtr = transfer.skinFaces;
-  auto nodesPtr = transfer.nodes;
+  auto sourcePointsPtr = transfer.sourcePoints;
+  auto sourceValuesPtr = transfer.sourceValues;
+  auto connValPtr = transfer.connValues;
+  auto connOffPtr = transfer.connOffsets;
+  auto CellTypesPtr = transfer.cellTypes;
+
   auto targetPointsPtr = transfer.targetPoints;
-  auto targetElemPtr = transfer.targetElement;
+  auto targetValuesPtr = transfer.targetValues;
   auto targetStatusPtr = transfer.targetStatus;
+  auto nbtargetPoints = targetPointsPtr.extent_int(0);
+
+  auto skinFacesPtr = transfer.skinFaces;
   auto skinParentsPtr = transfer.skinParents;
-  auto elementsTypePtr = transfer.CellTypes;
-  auto connValPtr = transfer.connectivity_values;
-  auto connOffPtr = transfer.connectivity_offsets;
+
+  auto statusOutside =
+      (extrapol) ? TransferStatus::EXTRAP : TransferStatus::CLAMP;
+
+  auto targetElement = Kokkos::View<int_t *, MemorySpace>(
+      Kokkos::view_alloc(execSpace, Kokkos::WithoutInitializing,
+                         "Target to elem"),
+      nbtargetPoints);
 
   Kokkos::Profiling::pushRegion(
       "Compute projection and interpolation coefficient");
   Kokkos::parallel_for(
       "Retrieve closest point",
-      Kokkos::RangePolicy<ExecSpace>(execSpace, 0, targetPointsPtr.extent(0)),
-      KOKKOS_LAMBDA(int i) {
-        if (targetStatusPtr(i) == TransferStatus::UNDEFINED) {
+      Kokkos::RangePolicy<ExecSpace>(execSpace, 0,
+                                     targetPointsPtr.extent_int(0)),
+      KOKKOS_LAMBDA(const int &i) {
+        if (targetStatusPtr(i) == TransferStatus::OUTSIDE) {
+          Kokkos::Array<fp_t, MaxNodesPerElt> warr;
+          Kokkos::Array<coordinates_t, MaxNodesPerElt> Xarr;
+          Kokkos::Array<coordinates_t, 1> tpa;
+          Kokkos::View<coordinates_t *, ExecSpace> tp(tpa.data(), 1);
           const Point target = {targetPointsPtr(i, 0)};
-          fp_t mindist = Kokkos::Experimental::finite_max<fp_t>::value;
+          fp_t mindist = fp_consts::max();
           int_t closestId = -1;
           Point closest;
-          for (int s = 0; s < skinFacesPtr.extent(0); s++) {
-            auto p = nodesPtr(skinFacesPtr(s, 0));
-            auto curdist = Kokkos::abs(p[0] - target[0]);
+          for (int_t s = 0; s < skinFacesPtr.extent_int(0); s++) {
+            auto p = sourcePointsPtr(skinFacesPtr(s, 0));
+            const auto curdist = Kokkos::abs(p[0] - target[0]);
             if (curdist < mindist) {
               closest = p;
               mindist = curdist;
@@ -271,42 +306,37 @@ void ComputeProjectionOn1DSkin(
           if (!extrapol) {
             targetPointsPtr(i, 0) = closest[0];
           }
-          targetElemPtr(i) = skinParentsPtr(closestId);
-          const int_t curElem = targetElemPtr(i);
-          const auto elemType = elementsTypePtr(curElem);
-
-          Eigen::Matrix<fp_t, maxNodePerElt, 1> Xcoor;
-          Xcoor.setZero();
+          for (int_t j = 0; j < 1; j++) {
+            tp(j) = targetPointsPtr(i, j);
+          }
+          targetElement(i) = skinParentsPtr(closestId);
+          const int_t curElem = targetElement(i);
+          const auto cellType = CellTypesPtr(curElem);
           auto localConn = Kokkos::subview(
               connValPtr,
               Kokkos::make_pair(connOffPtr(curElem), connOffPtr(curElem + 1)));
           int nbConnNodes = connOffPtr(curElem + 1) - connOffPtr(curElem);
-          for (int j = 0; j < nbConnNodes; ++j) {
-            auto nodeId = localConn(j);
-            for (int k = 0; k < 1; ++k) {
-              Xcoor(j, k) = nodesPtr(nodeId)[k];
+          Kokkos::View<fp_t *, ExecSpace> weights(warr.data(), nbConnNodes);
+          Kokkos::View<coordinates_t **, ExecSpace> Xcoor(Xarr.data(),
+                                                          nbConnNodes, 1);
+          for (int_t j = 0; j < nbConnNodes; ++j) {
+            const auto nodeId = localConn(j);
+            for (int_t k = 0; k < 1; ++k) {
+              Xcoor(j, k) = sourcePointsPtr(nodeId)[k];
             }
           }
-
-          Eigen::Matrix<fp_t, 1, 1> tp;
-          for (int j = 0; j < 1; j++) {
-            tp(0, j) = targetPointsPtr(i, j);
+          auto isInside = ApplyNewtonOnElement<ExecSpace, 1>(cellType, Xcoor,
+                                                             tp, weights, true);
+          for (int_t j = 0; j < nbConnNodes; ++j) {
+            const auto nodeId = localConn(j);
+            targetValuesPtr(i) += weights[j] * sourceValuesPtr(nodeId);
           }
-          auto val2d_sv =
-              Kokkos::subview(val2d_d, i, Kokkos::make_pair(0, nbConnNodes));
-          auto isInside = ApplyNewtonOnElement<MemorySpace, 1>(
-              CellTypes(i) /*elemType, Xcoor, tp, val2d_sv, true*/);
-          for (int j = 0; j < nbConnNodes; ++j) {
-            col2d_d(i, j) = localConn(j);
-          }
-          countEntries(i) = nbConnNodes;
-          targetStatusPtr(i) = TransferStatus::CLAMP;
+          targetStatusPtr(i) = statusOutside;
         }
       });
   Kokkos::fence();
-  Kokkos::Profiling::popRegion();
-
-  return;
+  Kokkos::Profiling::popRegion(); // Compute projection and interpolation
+                                  // coefficient
 };
 
 } // namespace FiniteElements
