@@ -4,7 +4,7 @@
 #include <Kokkos_Core.hpp>
 
 #include "common/types.hpp"
-#include "finite_elements/utils/FieldTransferTools.hxx"
+#include "finite_elements/utils/FEInterpolatorTools.hxx"
 
 namespace PACMAN {
 static constexpr int_t MaxNodesPerElt = 27;
@@ -19,9 +19,10 @@ template <typename ExecSpace, int_t Dim> struct Transfer {
 
   Kokkos::View<coordinates_t **, MemorySpace> targetPoints;
   Kokkos::View<fp_t *, MemorySpace> targetValues;
-  Kokkos::View<status_t *, MemorySpace> targetStatus;
+  Kokkos::View<TransferStatus *, MemorySpace> targetStatus;
 
   int_t nbElems;
+  int_t nbSpaceDimElements = 0;
   Kokkos::View<int_t *, MemorySpace> connValues;
   Kokkos::View<offset_t *, MemorySpace> connOffsets;
   Kokkos::View<cell_t *, MemorySpace> cellTypes;
@@ -67,7 +68,7 @@ void SetupTransferClass(Transfer<ExecSpace, Dim> &transfer,
                          "transfer.targetValues"),
       targetPointsSize);
 
-  transfer.targetStatus = Kokkos::View<status_t *, MemorySpace>(
+  transfer.targetStatus = Kokkos::View<TransferStatus *, MemorySpace>(
       Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
                          "transfer.targetStatus"),
       targetPointsSize);
@@ -80,7 +81,7 @@ void SetupTransferClass(Transfer<ExecSpace, Dim> &transfer,
       _region_name + "::copy target points",
       Kokkos::RangePolicy<ExecSpace>(execspace, 0, targetPointsSize),
       KOKKOS_LAMBDA(const index_t &i) {
-        target_status(i) = static_cast<status_t>(TransferStatus::UNDEFINED);
+        target_status(i) = TransferStatus::OUTSIDE;
         for (int_t j = 0; j < Dim; j++) {
           target_points(i, j) = unmanaged_device_tp(i, j);
         }
@@ -124,47 +125,53 @@ void SetupTransferClass(Transfer<ExecSpace, Dim> &transfer,
         source_values(i) = unmanaged_device_sv(i);
       });
 
+  transfer.nbLinearSkinFaces = -99;
+  transfer.nbSpaceDimElements = -99;
   // No need of conn for these methods
   if (transfer.method != TransferMethods::NEAREST_NEAREST &&
       transfer.method != TransferMethods::RBF_PUM) {
-    transfer.nbLinearSkinFaces = 0;
 
-    auto unmanaged_host_cv =
+    auto unmanagedHost_cv =
         Kokkos::View<int_t *, Kokkos::DefaultHostExecutionSpace::memory_space,
                      Kokkos::MemoryTraits<Kokkos::Unmanaged>>(pConnVal,
                                                               connValSize);
     transfer.connValues =
-        Kokkos::create_mirror_view_and_copy(execspace, unmanaged_host_cv);
+        Kokkos::create_mirror_view_and_copy(execspace2, unmanagedHost_cv);
 
-    auto unmanaged_host_co =
-        Kokkos::View<offset_t *,
-                     Kokkos::DefaultHostExecutionSpace::memory_space,
+    auto unmanagedHost_co =
+        Kokkos::View<int_t *, Kokkos::DefaultHostExecutionSpace::memory_space,
                      Kokkos::MemoryTraits<Kokkos::Unmanaged>>(pConnOff,
                                                               connOffSize);
     transfer.connOffsets =
-        Kokkos::create_mirror_view_and_copy(execspace, unmanaged_host_co);
+        Kokkos::create_mirror_view_and_copy(execspace2, unmanagedHost_co);
 
     transfer.nbElems = connOffSize - 1;
-    auto unmanaged_host_ct =
-        Kokkos::View<cell_t *, Kokkos::DefaultHostExecutionSpace::memory_space,
+    auto unmanagedHost_ct =
+        Kokkos::View<int_t *, Kokkos::DefaultHostExecutionSpace::memory_space,
                      Kokkos::MemoryTraits<Kokkos::Unmanaged>>(pCellTypes,
                                                               transfer.nbElems);
     transfer.cellTypes =
-        Kokkos::create_mirror_view_and_copy(execspace, unmanaged_host_ct);
+        Kokkos::create_mirror_view_and_copy(execspace2, unmanagedHost_ct);
 
-    auto conn_offsets = transfer.connOffsets;
-    auto cell_types = transfer.cellTypes;
+    auto connOffsetsPtr = transfer.connOffsets;
+    auto cellTypesPtr = transfer.cellTypes;
+
+    int_t result1;
+    int_t result2;
+
     Kokkos::parallel_reduce(
-        _region_name + "::transfer connectivity data",
-        Kokkos::RangePolicy<ExecSpace>(execspace, 0, connOffSize),
-        KOKKOS_LAMBDA(const index_t &i, int_t &lsum) {
-          const offset_t nbNodes = conn_offsets(i + 1) - conn_offsets(i);
-          lsum += FiniteElement::getNbFace<Dim>(
-              static_cast<CellType>(cell_types(i)));
+        "Transfer connectivity data",
+        Kokkos::RangePolicy<ExecSpace>(execspace2, 0, transfer.nbElems),
+        KOKKOS_LAMBDA(const int_t &i, int_t &lsum1, int_t &lsum2) {
+          const CellType cellType = static_cast<CellType>(cellTypesPtr(i));
+          lsum1 += FiniteElements::getNbFace<Dim>(cellType);
+          lsum2 += (FiniteElements::getDimension(cellType) == Dim);
         },
-        transfer.nbLinearSkinFaces);
+        Kokkos::Sum<int_t>(result1), Kokkos::Sum<int_t>(result2));
+    transfer.nbLinearSkinFaces = result1;
+    transfer.nbSpaceDimElements = result2;
   }
   Kokkos::fence();
-  Kokkos::Profiling::popRegion();
+  Kokkos::Profiling::popRegion(); // SetupTransferClass
 }
 } // namespace PACMAN

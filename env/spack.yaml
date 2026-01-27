@@ -6,6 +6,7 @@ spack:
         - ninja
         - vtk ~opengl2 ~mpi
         - py-numpy
+        - py-matplotlib
         - py-scipy
         - kokkos@5.0.0 cxxstd=20 +cuda cuda_arch=80 +hwloc +tuning +wrapper +openmp +serial +cuda_constexpr +cuda_lambda +numactl ~ipo
         - kokkos-kernels@5.0.0 +cuda cuda_arch=80 +openmp +serial ~ipo
@@ -19,6 +20,7 @@ spack:
     - compiler-wrapper@1.0
     - cuda@12.9
     - py-meshio
+    - py-pyyaml
     - matrix:
         - [$packages]
         - [$%compilers]

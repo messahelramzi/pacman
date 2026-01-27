@@ -38,6 +38,9 @@ concept IsRBFFunction = requires(const T t, const double x) {
 template <class T>
 concept IsKokkosArray = is_kokkos_array<std::remove_cv_t<T>>::value;
 
+template <int_t Dim>
+concept IsValidDim = (Dim >= 1 && Dim <= 3);
+
 /* Concepts as type */
 
 template <typename T, int R>

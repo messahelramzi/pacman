@@ -41,8 +41,6 @@ void FTNearest(Transfer<ExecSpace, Dim> &transfer) {
             NearestExtractIndex<MemorySpace>{source_values, target_values});
   Kokkos::fence();
   Kokkos::Profiling::popRegion();
-
-  return;
 }
 
 } // namespace FiniteElements

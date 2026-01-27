@@ -44,7 +44,8 @@ MakeRbfFunction(const unsigned char rbfFunction) {
   }
 }
 
-py::array_t<fp_t> Interpolate(const unsigned char execSpace,
+py::array_t<fp_t> Interpolate(const int_t spaceDimension,
+                              const unsigned char execSpace,
                               const unsigned char rbfFunction,
                               np_array<coordinates_t> sourcePoints,
                               np_array<fp_t> sourceValues,

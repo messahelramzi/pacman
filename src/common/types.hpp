@@ -19,6 +19,7 @@ typedef int32_t offset_t;
 typedef int32_t method_t;
 typedef int32_t cell_t;
 typedef int32_t status_t;
+typedef int32_t geosupport_t;
 
 enum class TransferMethods : method_t {
   NEAREST_NEAREST = 0xF0,
@@ -30,34 +31,48 @@ enum class TransferMethods : method_t {
 };
 
 enum class TransferStatus : status_t {
-  UNDEFINED = 0,
-  NEAREST = 1,
-  INTER = 2,
-  EXTRAP = 3,
-  CLAMP = 4,
-  ZERO_FILL = 5,
-  OUTSIDE = 6, // temporary
+  OUTSIDE,
+  NEAREST,
+  INTER,
+  EXTRAP,
+  CLAMP,
+};
+
+enum class GeoSupport : geosupport_t {
+
+  NA,
+  POINT,
+  LINE,
+  TRIANGLE,
+  QUAD,
+  TETRA,
+  HEXAHEDRON,
+  WEDGE,
+  PYRAMID,
 };
 
 enum class CellType : cell_t {
-  // Isoparametric linear cells using VTK numbering
-  VTK_EMPTY_CELL = 0,
-  VTK_VERTEX = 1,
-  VTK_LINE = 3,
-  VTK_TRIANGLE = 5,
-  VTK_QUAD = 9,
-  VTK_TETRA = 10,
-  VTK_HEXAHEDRON = 12,
-  VTK_WEDGE = 13,
-  VTK_PYRAMID = 14,
-  // Isoparametric quadratic cells using VTK numbering
-  VTK_QUADRATIC_EDGE = 21,
-  VTK_QUADRATIC_TRIANGLE = 22,
-  VTK_QUADRATIC_QUAD = 23,
-  VTK_QUADRATIC_TETRA = 24,
-  VTK_QUADRATIC_HEXAHEDRON = 25,
-  VTK_QUADRATIC_WEDGE = 26,
-  VTK_QUADRATIC_PYRAMID = 27,
+
+  // Isoparametric 0D
+  VTK_EMPTY_CELL,
+  VTK_VERTEX,
+  // Isoparametric 1D
+  VTK_LINE,
+  VTK_QUADRATIC_EDGE,
+  // Isoparametric 2D
+  VTK_TRIANGLE,
+  VTK_QUAD,
+  VTK_QUADRATIC_TRIANGLE,
+  VTK_QUADRATIC_QUAD,
+  // Isoparametric 3D
+  VTK_TETRA,
+  VTK_HEXAHEDRON,
+  VTK_WEDGE,
+  VTK_PYRAMID,
+  VTK_QUADRATIC_TETRA,
+  VTK_QUADRATIC_HEXAHEDRON,
+  VTK_QUADRATIC_WEDGE,
+  VTK_QUADRATIC_PYRAMID,
 };
 
 namespace fp_consts {

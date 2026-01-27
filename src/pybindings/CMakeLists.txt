@@ -4,6 +4,8 @@ target_link_libraries(pacman PRIVATE PACMAN)
 set_target_properties(pacman PROPERTIES
     INSTALL_RPATH_USE_LINK_PATH TRUE
 )
+set(PACMAN_PYTHON_DIR
+    $<TARGET_FILE_DIR:pacman> CACHE PATH ".")
 
 # -----------------------------------------------------
 # Install Python module

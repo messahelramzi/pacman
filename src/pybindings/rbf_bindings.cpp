@@ -46,6 +46,7 @@ py::array_t<fp_t> RunInterpolate(np_array<coordinates_t> &rSourcePoints,
 }
 
 template <int Dim>
+  requires IsValidDim<Dim>
 py::array_t<fp_t>
 Dispatch(np_array<coordinates_t> &rSourcePoints, np_array<fp_t> &rSourceValues,
          np_array<coordinates_t> &rTargetPoints, const unsigned char execSpace,
@@ -58,7 +59,8 @@ Dispatch(np_array<coordinates_t> &rSourcePoints, np_array<fp_t> &rSourceValues,
       MakeExecSpace(execSpace), MakeRbfFunction(rbfFunction));
 }
 
-py::array_t<fp_t> Interpolate(const unsigned char execSpace,
+py::array_t<fp_t> Interpolate(const int_t spaceDimension,
+                              const unsigned char execSpace,
                               const unsigned char rbfFunction,
                               np_array<coordinates_t> sourcePoints,
                               np_array<fp_t> sourceValues,
@@ -89,8 +91,7 @@ py::array_t<fp_t> Interpolate(const unsigned char execSpace,
         std::to_string(sourceValues.shape(0)) + "\n");
   }
 
-  const int_t dim = sourcePoints.shape(1);
-  switch (dim) {
+  switch (spaceDimension) {
   case 1:
     return Dispatch<1>(sourcePoints, sourceValues, targetPoints, execSpace,
                        rbfFunction);

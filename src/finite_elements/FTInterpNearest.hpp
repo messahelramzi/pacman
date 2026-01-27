@@ -12,18 +12,18 @@
 namespace PACMAN {
 namespace FiniteElements {
 
-template <typename ExecSpace, int spaceDimension>
+template <typename ExecSpace, int_t Dim>
 /**
  * @brief Compute the target point finite element interpolation if intersects or
  * assign nearest node value if outside all elements.
  * @param[in] transfer the transfer class holding informations.
  * @return target point values
  */
-void FTInterpNearest(Transfer<ExecSpace, spaceDimension> &transfer) {
+void FTInterpNearest(Transfer<ExecSpace, Dim> &transfer) {
   Kokkos::Profiling::pushRegion("FTInterpNearest");
 
   using MemorySpace = typename ExecSpace::memory_space;
-  using Box = ::ArborX::Box<spaceDimension, coordinates_t>;
+  using Box = ::ArborX::Box<Dim, coordinates_t>;
 
   ExecSpace execSpace{};
 
@@ -46,13 +46,13 @@ void FTInterpNearest(Transfer<ExecSpace, spaceDimension> &transfer) {
       Kokkos::view_alloc(execSpace, Kokkos::WithoutInitializing,
                          "nearestPointOffsets"),
       0);
-  PointCloudNearest<MemorySpace, spaceDimension> pcn{targetPointsPtr};
+  PointCloudNearest<MemorySpace, Dim> pcn{targetPointsPtr};
   bvhPoints.query(execSpace, pcn, ExtractIndex{}, nearestPointValues,
                   nearestPointOffsets);
   Kokkos::Profiling::popRegion();
 
   Kokkos::Profiling::pushRegion("Compute target point FE intersection");
-  ComputeBoxTargetPointIntersection<ExecSpace, spaceDimension>(transfer);
+  ComputeBoxTargetPointIntersection<ExecSpace, Dim>(transfer);
   Kokkos::fence();
   Kokkos::Profiling::popRegion();
 
@@ -61,11 +61,11 @@ void FTInterpNearest(Transfer<ExecSpace, spaceDimension> &transfer) {
   Kokkos::parallel_for(
       "Get Nearest functor",
       Kokkos::RangePolicy<ExecSpace>(execSpace, 0, nbtargetPoints),
-      KOKKOS_LAMBDA(int i) {
-        if (targetStatusPtr(i) !=
-            static_cast<status_t>(TransferStatus::INTER)) {
+      KOKKOS_LAMBDA(const int_t &i) {
+        if (targetStatusPtr(i) != TransferStatus::INTER) {
           auto nearest_idx = nearestPointValues(i);
           targetValuesPtr(i) = sourceValuesPtr(nearest_idx);
+          targetStatusPtr(i) = TransferStatus::NEAREST;
         }
       });
   Kokkos::fence();

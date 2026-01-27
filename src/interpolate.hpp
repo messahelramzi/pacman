@@ -4,12 +4,15 @@
 #include <utility>
 
 #include "common/transfer.hxx"
+#include "finite_elements/FTInterpClamp.hpp"
+#include "finite_elements/FTInterpExtrap.hpp"
 #include "finite_elements/FTInterpNearest.hpp"
+#include "finite_elements/FTInterpZero.hpp"
 #include "finite_elements/FTNearest.hpp"
 #include "rbf_pum/interpolator.hpp"
 
 namespace PACMAN {
-template <typename ExecSpace, int Dim>
+template <typename ExecSpace, int_t Dim>
 void Interpolate(Transfer<ExecSpace, Dim> &transfer) {
   const TransferMethods method = transfer.method;
 
@@ -18,16 +21,16 @@ void Interpolate(Transfer<ExecSpace, Dim> &transfer) {
     FiniteElements::FTNearest(transfer);
     break;
   case TransferMethods::INTERP_NEAREST:
-    // FiniteElements::FTInterpNearest(transfer);
+    FiniteElements::FTInterpNearest(transfer);
     break;
   case TransferMethods::INTERP_ZEROFILL:
-    // FTInterZero(transfer);
+    FiniteElements::FTInterZero(transfer);
     break;
   case TransferMethods::INTERP_EXTRAP:
-    // FTInterExtrap(transfer);
+    FiniteElements::FTInterExtrap(transfer);
     break;
   case TransferMethods::INTERP_CLAMP:
-    // FTInterClamp(transfer);
+    FiniteElements::FTInterClamp(transfer);
     break;
   case TransferMethods::RBF_PUM: {
     RbfPum::RbfPumInterpolator<ExecSpace, Dim, RbfPum::WendlandC6>

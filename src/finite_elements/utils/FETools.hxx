@@ -1,11 +1,91 @@
 #pragma once
 
-#include <Kokkos_Core.hpp>
+// #include <memory>
+// #include <stdexcept>
+// #include <cmath>
 
-#include "common/transfer.hxx"
+#include "common/types.hpp"
+#include <Kokkos_Core.hpp>
 
 namespace PACMAN {
 namespace FiniteElements {
+
+#define _EPS_BARY 1e-6
+
+template <GeoSupport T>
+KOKKOS_INLINE_FUNCTION bool IsBaryCoordInsideGeo(const fp_t xi, const fp_t eta,
+                                                 const fp_t phi) {
+  Kokkos::abort("not implemented in the field transfer");
+  return false;
+};
+
+template <>
+KOKKOS_INLINE_FUNCTION bool
+IsBaryCoordInsideGeo<GeoSupport::POINT>(const fp_t xi, const fp_t eta,
+                                        const fp_t phi) {
+  return true;
+}
+
+template <>
+KOKKOS_INLINE_FUNCTION bool
+IsBaryCoordInsideGeo<GeoSupport::LINE>(const fp_t xi, const fp_t eta,
+                                       const fp_t phi) {
+  return (Kokkos::abs(xi - 0.5) < 0.5 + _EPS_BARY);
+}
+
+template <>
+KOKKOS_INLINE_FUNCTION bool
+IsBaryCoordInsideGeo<GeoSupport::TRIANGLE>(const fp_t xi, const fp_t eta,
+                                           const fp_t phi) {
+  return (xi + _EPS_BARY > 0.) && (eta + _EPS_BARY > 0.) &&
+         (xi + eta < 1.0 + _EPS_BARY);
+}
+
+template <>
+KOKKOS_INLINE_FUNCTION bool
+IsBaryCoordInsideGeo<GeoSupport::QUAD>(const fp_t xi, const fp_t eta,
+                                       const fp_t phi) {
+  return (Kokkos::abs(xi - 0.5) < 0.5 + _EPS_BARY) &&
+         (Kokkos::abs(eta - 0.5) < 0.5 + _EPS_BARY);
+}
+template <>
+KOKKOS_INLINE_FUNCTION bool
+IsBaryCoordInsideGeo<GeoSupport::TETRA>(const fp_t xi, const fp_t eta,
+                                        const fp_t phi) {
+  return (xi + _EPS_BARY > 0.) && (eta + _EPS_BARY > 0.) &&
+         (phi + _EPS_BARY > 0.) && (xi + eta + phi < 1.0 + _EPS_BARY);
+}
+
+template <>
+KOKKOS_INLINE_FUNCTION bool
+IsBaryCoordInsideGeo<GeoSupport::HEXAHEDRON>(const fp_t xi, const fp_t eta,
+                                             const fp_t phi) {
+  return (Kokkos::abs(xi - 0.5) < 0.5 + _EPS_BARY) &&
+         (Kokkos::abs(eta - 0.5) < 0.5 + _EPS_BARY) &&
+         (Kokkos::abs(phi - 0.5) < 0.5 + _EPS_BARY);
+}
+
+template <>
+KOKKOS_INLINE_FUNCTION bool
+IsBaryCoordInsideGeo<GeoSupport::WEDGE>(const fp_t xi, const fp_t eta,
+                                        const fp_t phi) {
+  return (xi + _EPS_BARY > 0.) && (eta + _EPS_BARY > 0.) &&
+         (xi + eta < 1.0 + _EPS_BARY) &&
+         (Kokkos::abs(phi - 0.5) < 0.5 + _EPS_BARY);
+}
+
+template <>
+KOKKOS_INLINE_FUNCTION bool
+IsBaryCoordInsideGeo<GeoSupport::PYRAMID>(const fp_t xi, const fp_t eta,
+                                          const fp_t phi) {
+  const auto x = 0.5 * (xi - eta);
+  const auto y = 0.5 * (xi + eta);
+  const auto z = phi;
+  const auto s = 1.0 - z;
+  return (Kokkos::abs(x) < 0.5 * s + _EPS_BARY) &&
+         (Kokkos::abs(y) < 0.5 * s + _EPS_BARY) &&
+         (Kokkos::abs(z - 0.5) < 0.5 + _EPS_BARY);
+}
 
 template <typename ExecSpace, CellType CT> struct LagrangeSpaceGeo;
 
@@ -30,6 +110,10 @@ public:
                                    Kokkos::View<fp_t **, ExecSpace> sfddv) {
     return;
   }
+  KOKKOS_INLINE_FUNCTION static bool isInside(const fp_t xi, const fp_t eta,
+                                              const fp_t phi) {
+    return false;
+  };
 };
 template <typename ExecSpace>
 struct LagrangeSpaceGeo<ExecSpace, CellType::VTK_VERTEX> {
@@ -52,6 +136,10 @@ public:
                                    const fp_t phi,
                                    Kokkos::View<fp_t **, ExecSpace> sfddv) {
     return;
+  };
+  KOKKOS_INLINE_FUNCTION static bool isInside(const fp_t xi, const fp_t eta,
+                                              const fp_t phi) {
+    return IsBaryCoordInsideGeo<GeoSupport::POINT>(xi, eta, phi);
   };
 };
 template <typename ExecSpace>
@@ -78,6 +166,10 @@ public:
                                    const fp_t phi,
                                    Kokkos::View<fp_t **, ExecSpace> sfddv) {
     return;
+  };
+  KOKKOS_INLINE_FUNCTION static bool isInside(const fp_t xi, const fp_t eta,
+                                              const fp_t phi) {
+    return IsBaryCoordInsideGeo<GeoSupport::LINE>(xi, eta, phi);
   };
 };
 template <typename ExecSpace>
@@ -123,6 +215,10 @@ public:
     }
     return;
   };
+  KOKKOS_INLINE_FUNCTION static bool isInside(const fp_t xi, const fp_t eta,
+                                              const fp_t phi) {
+    return IsBaryCoordInsideGeo<GeoSupport::LINE>(xi, eta, phi);
+  };
 };
 template <typename ExecSpace>
 struct LagrangeSpaceGeo<ExecSpace, CellType::VTK_TRIANGLE> {
@@ -153,6 +249,10 @@ public:
                                    const fp_t phi,
                                    Kokkos::View<fp_t **, ExecSpace> sfddv) {
     return;
+  };
+  KOKKOS_INLINE_FUNCTION static bool isInside(const fp_t xi, const fp_t eta,
+                                              const fp_t phi) {
+    return IsBaryCoordInsideGeo<GeoSupport::TRIANGLE>(xi, eta, phi);
   };
 };
 template <typename ExecSpace>
@@ -235,6 +335,10 @@ public:
     }
     return;
   };
+  KOKKOS_INLINE_FUNCTION static bool isInside(const fp_t xi, const fp_t eta,
+                                              const fp_t phi) {
+    return IsBaryCoordInsideGeo<GeoSupport::TRIANGLE>(xi, eta, phi);
+  };
 };
 template <typename ExecSpace>
 struct LagrangeSpaceGeo<ExecSpace, CellType::VTK_QUAD> {
@@ -294,6 +398,10 @@ public:
     }
     }
     return;
+  };
+  KOKKOS_INLINE_FUNCTION static bool isInside(const fp_t xi, const fp_t eta,
+                                              const fp_t phi) {
+    return IsBaryCoordInsideGeo<GeoSupport::QUAD>(xi, eta, phi);
   };
 };
 template <typename ExecSpace>
@@ -435,6 +543,10 @@ public:
     }
     return;
   };
+  KOKKOS_INLINE_FUNCTION static bool isInside(const fp_t xi, const fp_t eta,
+                                              const fp_t phi) {
+    return IsBaryCoordInsideGeo<GeoSupport::QUAD>(xi, eta, phi);
+  };
 };
 template <typename ExecSpace>
 struct LagrangeSpaceGeo<ExecSpace, CellType::VTK_TETRA> {
@@ -472,6 +584,10 @@ public:
                                    const fp_t phi,
                                    Kokkos::View<fp_t **, ExecSpace> sfddv) {
     return;
+  };
+  KOKKOS_INLINE_FUNCTION static bool isInside(const fp_t xi, const fp_t eta,
+                                              const fp_t phi) {
+    return IsBaryCoordInsideGeo<GeoSupport::TETRA>(xi, eta, phi);
   };
 };
 template <typename ExecSpace>
@@ -615,6 +731,10 @@ public:
     }
     }
     return;
+  };
+  KOKKOS_INLINE_FUNCTION static bool isInside(const fp_t xi, const fp_t eta,
+                                              const fp_t phi) {
+    return IsBaryCoordInsideGeo<GeoSupport::TETRA>(xi, eta, phi);
   };
 };
 template <typename ExecSpace>
@@ -783,6 +903,10 @@ public:
     }
     }
     return;
+  };
+  KOKKOS_INLINE_FUNCTION static bool isInside(const fp_t xi, const fp_t eta,
+                                              const fp_t phi) {
+    return IsBaryCoordInsideGeo<GeoSupport::HEXAHEDRON>(xi, eta, phi);
   };
 };
 template <typename ExecSpace>
@@ -1358,6 +1482,10 @@ public:
     }
     return;
   };
+  KOKKOS_INLINE_FUNCTION static bool isInside(const fp_t xi, const fp_t eta,
+                                              const fp_t phi) {
+    return IsBaryCoordInsideGeo<GeoSupport::HEXAHEDRON>(xi, eta, phi);
+  };
 };
 template <typename ExecSpace>
 struct LagrangeSpaceGeo<ExecSpace, CellType::VTK_WEDGE> {
@@ -1446,6 +1574,10 @@ public:
     }
     return;
   };
+  KOKKOS_INLINE_FUNCTION static bool isInside(const fp_t xi, const fp_t eta,
+                                              const fp_t phi) {
+    return IsBaryCoordInsideGeo<GeoSupport::WEDGE>(xi, eta, phi);
+  };
 };
 template <typename ExecSpace>
 struct LagrangeSpaceGeo<ExecSpace, CellType::VTK_QUADRATIC_WEDGE> {
@@ -1457,7 +1589,7 @@ public:
                              Kokkos::View<fp_t *, ExecSpace> sfv) {
     const fp_t x0 = -eta - xi + 1;
     const fp_t x1 = 2 * phi;
-    const fp_t x2 = 1 - pow(x1 - 1, 2);
+    const fp_t x2 = 1 - Kokkos::pow(x1 - 1, 2);
     const fp_t x3 = x0 * x2;
     const fp_t x4 = 0.5 * x3;
     const fp_t x5 = 2 - x1;
@@ -1503,7 +1635,7 @@ public:
     const fp_t x6 = 0.5 * x5;
     const fp_t x7 = -eta - xi + 1;
     const fp_t x8 = 1.0 * x5;
-    const fp_t x9 = pow(x4 - 1, 2);
+    const fp_t x9 = Kokkos::pow(x4 - 1, 2);
     const fp_t x10 = 0.5 * x9 - 0.5;
     const fp_t x11 = -x10 - x3 * x6 - x7 * x8;
     const fp_t x12 = 1.0 * phi;
@@ -1757,6 +1889,10 @@ public:
     }
     return;
   };
+  KOKKOS_INLINE_FUNCTION static bool isInside(const fp_t xi, const fp_t eta,
+                                              const fp_t phi) {
+    return IsBaryCoordInsideGeo<GeoSupport::WEDGE>(xi, eta, phi);
+  };
 };
 template <typename ExecSpace>
 struct LagrangeSpaceGeo<ExecSpace, CellType::VTK_PYRAMID> {
@@ -1766,7 +1902,10 @@ public:
   KOKKOS_INLINE_FUNCTION static void
   UpdateShapeFunctionsValues(const fp_t xi, const fp_t eta, const fp_t phi,
                              Kokkos::View<fp_t *, ExecSpace> sfv) {
-    if (abs(1 - phi) < 1e-6) {
+    const fp_t x = xi;
+    const fp_t y = eta;
+    const fp_t z = phi;
+    if (Kokkos::abs(1 - z) < 1e-6) {
       sfv(0) = 0.0;
       sfv(1) = 0.0;
       sfv(2) = 0.0;
@@ -1774,64 +1913,68 @@ public:
       sfv(4) = 1.0;
       return;
     }
-    const fp_t x0 = phi - 1;
-    const fp_t x1 = -x0 - xi;
-    const fp_t x2 = 1.0 / (1.0 - phi);
-    const fp_t x3 = x2 * (-eta - x0);
-    const fp_t x4 = eta * x2;
-    sfv(0) = x1 * x3;
-    sfv(1) = x3 * xi;
-    sfv(2) = x4 * xi;
-    sfv(3) = x1 * x4;
-    sfv(4) = phi;
+    const fp_t denom = 0.25 / (1 - z);
+    const fp_t x0 = -x + y + z - 1.0;
+    const fp_t x1 = -x - y + z - 1.0;
+    const fp_t x2 = x - y + z - 1.0;
+    const fp_t x3 = x + y + z - 1.0;
+    sfv(0) = x0 * x1 * denom;
+    sfv(1) = x1 * x2 * denom;
+    sfv(2) = x2 * x3 * denom;
+    sfv(3) = x3 * x0 * denom;
+    sfv(4) = z;
     return;
   };
   KOKKOS_INLINE_FUNCTION static void
   UpdateShapeFunctionsDerValues(const fp_t xi, const fp_t eta, const fp_t phi,
                                 Kokkos::View<fp_t **, ExecSpace> sfdv) {
-    if (abs(1 - phi) < 1e-5) {
-      sfdv(2, 0) = -1.0;
-      sfdv(2, 0) = -1.0;
-      sfdv(2, 0) = -1.0;
-      sfdv(2, 1) = 1.0;
-      sfdv(2, 1) = 0.0;
-      sfdv(2, 1) = 0.0;
-      sfdv(2, 2) = 0.0;
-      sfdv(2, 2) = 0.0;
-      sfdv(2, 2) = 0.0;
-      sfdv(2, 3) = 0.0;
-      sfdv(2, 3) = 1.0;
-      sfdv(2, 3) = 0.0;
-      sfdv(2, 4) = 0.0;
-      sfdv(2, 4) = 0.0;
+    const fp_t x = xi;
+    const fp_t y = eta;
+    const fp_t z = phi;
+    if (Kokkos::abs(1 - phi) < 1e-6) {
+      sfdv(0, 0) = 0.5;
+      sfdv(0, 1) = 0.0;
+      sfdv(0, 2) = -0.5;
+      sfdv(0, 3) = 0.0;
+      sfdv(0, 4) = 0.0;
+
+      sfdv(1, 0) = 0.0;
+      sfdv(1, 1) = 0.5;
+      sfdv(1, 2) = 0.0;
+      sfdv(1, 3) = -0.5;
+      sfdv(1, 4) = 0.0;
+
+      sfdv(2, 0) = -0.25;
+      sfdv(2, 1) = -0.25;
+      sfdv(2, 2) = -0.25;
+      sfdv(2, 3) = -0.25;
       sfdv(2, 4) = 1.0;
       return;
     }
-    const fp_t x0 = phi - 1;
-    const fp_t x1 = -eta - x0;
-    const fp_t x2 = 1.0 - phi;
-    const fp_t x3 = 1.0 / x2;
-    const fp_t x4 = x1 * x3;
-    const fp_t x5 = eta * x3;
-    const fp_t x6 = -x0 - xi;
-    const fp_t x7 = x3 * x6;
-    const fp_t x8 = x3 * xi;
-    const fp_t x9 = pow(x2, -2);
-    sfdv(0, 0) = -x4;
-    sfdv(1, 0) = -x7;
-    sfdv(2, 0) = 1.0 * x1 * x6 * x9 - x4 - x7;
-    sfdv(0, 1) = x4;
-    sfdv(1, 1) = -x8;
-    sfdv(2, 1) = 1.0 * x1 * x9 * xi - x8;
-    sfdv(0, 2) = x5;
-    sfdv(1, 2) = x8;
-    sfdv(2, 2) = 1.0 * eta * x9 * xi;
-    sfdv(0, 3) = -x5;
-    sfdv(1, 3) = x7;
-    sfdv(2, 3) = 1.0 * eta * x6 * x9 - x5;
-    sfdv(0, 4) = 0;
-    sfdv(1, 4) = 0;
-    sfdv(2, 4) = 1;
+    const fp_t denom = 0.25 / (1.0 - z);
+    const fp_t denom2 = 4.0 * denom;
+    const fp_t x0 = x + y + z - 1.0;
+    const fp_t x1 = -x + y + z - 1.0;
+    const fp_t x2 = -x - y + z - 1.0;
+    const fp_t x3 = x - y + z - 1.0;
+
+    sfdv(0, 0) = (-x1 - x2) * denom;
+    sfdv(0, 1) = (x2 - x3) * denom;
+    sfdv(0, 2) = (x0 + x3) * denom;
+    sfdv(0, 3) = (x1 - x0) * denom;
+    sfdv(0, 4) = 0.0;
+
+    sfdv(1, 0) = (x2 - x1) * denom;
+    sfdv(1, 1) = (-x2 - x3) * denom;
+    sfdv(1, 2) = (x3 - x0) * denom;
+    sfdv(1, 3) = (x0 + x1) * denom;
+    sfdv(1, 4) = 0.0;
+
+    sfdv(2, 0) = (x1 + x2 + x1 * x2 * denom2) * denom;
+    sfdv(2, 1) = (x2 + x3 + x2 * x3 * denom2) * denom;
+    sfdv(2, 2) = (x3 + x0 + x3 * x0 * denom2) * denom;
+    sfdv(2, 3) = (x0 + x1 + x0 * x1 * denom2) * denom;
+    sfdv(2, 4) = 1.0;
     return;
   };
   KOKKOS_INLINE_FUNCTION static void
@@ -1845,7 +1988,7 @@ public:
       const fp_t x2 = 1.0 * x1;
       const fp_t x3 = phi - 1;
       const fp_t x4 = -eta - x3;
-      const fp_t x5 = pow(x0, -2);
+      const fp_t x5 = Kokkos::pow(x0, -2);
       const fp_t x6 = 1.0 * x5;
       const fp_t x7 = x2 - x4 * x6;
       const fp_t x8 = -x3 - xi;
@@ -1857,14 +2000,15 @@ public:
       sfddv(1, 2) = x9;
       sfddv(2, 0) = x7;
       sfddv(2, 1) = x9;
-      sfddv(2, 2) = 2.0 * x1 - x10 * x4 - x10 * x8 + 2.0 * x4 * x8 / pow(x0, 3);
+      sfddv(2, 2) =
+          2.0 * x1 - x10 * x4 - x10 * x8 + 2.0 * x4 * x8 / Kokkos::pow(x0, 3);
       break;
     }
     case 1: {
       const fp_t x0 = 1.0 - phi;
       const fp_t x1 = 1.0 / x0;
       const fp_t x2 = -x1;
-      const fp_t x3 = pow(x0, -2);
+      const fp_t x3 = Kokkos::pow(x0, -2);
       const fp_t x4 = -eta - phi + 1;
       const fp_t x5 = -x1 + 1.0 * x3 * x4;
       const fp_t x6 = -1.0 * x3 * xi;
@@ -1874,13 +2018,13 @@ public:
       sfddv(1, 2) = x6;
       sfddv(2, 0) = x5;
       sfddv(2, 1) = x6;
-      sfddv(2, 2) = -2.0 * x3 * xi + 2.0 * x4 * xi / pow(x0, 3);
+      sfddv(2, 2) = -2.0 * x3 * xi + 2.0 * x4 * xi / Kokkos::pow(x0, 3);
       break;
     }
     case 2: {
       const fp_t x0 = 1.0 - phi;
       const fp_t x1 = 1.0 / x0;
-      const fp_t x2 = 1.0 / pow(x0, 2);
+      const fp_t x2 = 1.0 / Kokkos::pow(x0, 2);
       const fp_t x3 = eta * x2;
       const fp_t x4 = x2 * xi;
       sfddv(0, 1) = x1;
@@ -1889,14 +2033,14 @@ public:
       sfddv(1, 2) = x4;
       sfddv(2, 0) = x3;
       sfddv(2, 1) = x4;
-      sfddv(2, 2) = 2.0 * eta * xi / pow(x0, 3);
+      sfddv(2, 2) = 2.0 * eta * xi / Kokkos::pow(x0, 3);
       break;
     }
     case 3: {
       const fp_t x0 = 1.0 - phi;
       const fp_t x1 = 1.0 / x0;
       const fp_t x2 = -x1;
-      const fp_t x3 = pow(x0, -2);
+      const fp_t x3 = Kokkos::pow(x0, -2);
       const fp_t x4 = -1.0 * eta * x3;
       const fp_t x5 = -phi - xi + 1;
       const fp_t x6 = -x1 + 1.0 * x3 * x5;
@@ -1906,7 +2050,7 @@ public:
       sfddv(1, 2) = x6;
       sfddv(2, 0) = x4;
       sfddv(2, 1) = x6;
-      sfddv(2, 2) = -2.0 * eta * x3 + 2.0 * eta * x5 / pow(x0, 3);
+      sfddv(2, 2) = -2.0 * eta * x3 + 2.0 * eta * x5 / Kokkos::pow(x0, 3);
       break;
     }
     case 4: {
@@ -1914,6 +2058,10 @@ public:
     }
     }
     return;
+  };
+  KOKKOS_INLINE_FUNCTION static bool isInside(const fp_t xi, const fp_t eta,
+                                              const fp_t phi) {
+    return IsBaryCoordInsideGeo<GeoSupport::PYRAMID>(xi, eta, phi);
   };
 };
 template <typename ExecSpace>
@@ -1924,7 +2072,7 @@ public:
   KOKKOS_INLINE_FUNCTION static void
   UpdateShapeFunctionsValues(const fp_t xi, const fp_t eta, const fp_t phi,
                              Kokkos::View<fp_t *, ExecSpace> sfv) {
-    if (abs(1 - phi) < 1e-6) {
+    if (Kokkos::abs(1 - phi) < 1e-6) {
       sfv(0) = 0.0;
       sfv(1) = 0.0;
       sfv(2) = 0.0;
@@ -1976,7 +2124,7 @@ public:
   KOKKOS_INLINE_FUNCTION static void
   UpdateShapeFunctionsDerValues(const fp_t xi, const fp_t eta, const fp_t phi,
                                 Kokkos::View<fp_t **, ExecSpace> sfdv) {
-    if (abs(1 - phi) < 1e-5) {
+    if (Kokkos::abs(1 - phi) < 1e-6) {
       sfdv(2, 0) = 1.0;
       sfdv(2, 0) = 1.0;
       sfdv(2, 0) = 1.0;
@@ -2067,7 +2215,7 @@ public:
     const fp_t x46 = x1 * x45;
     const fp_t x47 = 4.0 * phi;
     const fp_t x48 = x38 * x47;
-    const fp_t x49 = pow(x0, -2);
+    const fp_t x49 = Kokkos::pow(x0, -2);
     const fp_t x50 = x49 * x5;
     const fp_t x51 = x50 * xi;
     const fp_t x52 = eta * x49;
@@ -2137,7 +2285,7 @@ public:
       const fp_t x14 = 1.0 * x1 * x11 + x13;
       const fp_t x15 = -x14 - x9;
       const fp_t x16 = 0.5 * x5;
-      const fp_t x17 = pow(x0, -2);
+      const fp_t x17 = Kokkos::pow(x0, -2);
       const fp_t x18 = x11 * x17;
       const fp_t x19 = x16 * x18;
       const fp_t x20 = 0.5 * x12 * x17 * x5 - x14 - x19 - x7;
@@ -2156,7 +2304,7 @@ public:
       sfddv(2, 0) = x20;
       sfddv(2, 1) = x24;
       sfddv(2, 2) = 1.0 * x11 * x26 + x12 * x21 - x18 * x25 + x23 + x25 * x26 +
-                    x8 + x11 * x12 * x16 / pow(x0, 3);
+                    x8 + x11 * x12 * x16 / Kokkos::pow(x0, 3);
       break;
     }
     case 1: {
@@ -2171,7 +2319,7 @@ public:
       const fp_t x8 = 2.0 * x7;
       const fp_t x9 = x1 * x6 + x8;
       const fp_t x10 = 1.0 * x4 + x9;
-      const fp_t x11 = pow(x0, -2);
+      const fp_t x11 = Kokkos::pow(x0, -2);
       const fp_t x12 = x11 * x3;
       const fp_t x13 = 1.0 * x12 * xi;
       const fp_t x14 = 0.5 * x12 * x5 + x13 + x9;
@@ -2185,7 +2333,7 @@ public:
       sfddv(1, 2) = x16;
       sfddv(2, 0) = x14;
       sfddv(2, 1) = x16;
-      sfddv(2, 2) = -2.0 * x15 * x5 - x3 * x6 * xi / pow(x0, 3);
+      sfddv(2, 2) = -2.0 * x15 * x5 - x3 * x6 * xi / Kokkos::pow(x0, 3);
       break;
     }
     case 2: {
@@ -2197,7 +2345,7 @@ public:
       const fp_t x5 = 2.0 * x4;
       const fp_t x6 = -2 * eta - 2 * phi - 2 * xi + 3;
       const fp_t x7 = 1.0 * x1 * x6 - x3 - x5;
-      const fp_t x8 = pow(x0, -2);
+      const fp_t x8 = Kokkos::pow(x0, -2);
       const fp_t x9 = -2.0 * eta * x8 * xi;
       const fp_t x10 = 1.0 * x6;
       const fp_t x11 = eta * x8;
@@ -2211,7 +2359,7 @@ public:
       sfddv(1, 2) = x13;
       sfddv(2, 0) = x12;
       sfddv(2, 1) = x13;
-      sfddv(2, 2) = 2.0 * eta * x6 * xi / pow(x0, 3) + 4.0 * x11 * xi;
+      sfddv(2, 2) = 2.0 * eta * x6 * xi / Kokkos::pow(x0, 3) + 4.0 * x11 * xi;
       break;
     }
     case 3: {
@@ -2225,7 +2373,7 @@ public:
       const fp_t x7 = 2.0 * x2;
       const fp_t x8 = x5 * x6 + x7;
       const fp_t x9 = x4 * x5 + x8;
-      const fp_t x10 = pow(x0, -2);
+      const fp_t x10 = Kokkos::pow(x0, -2);
       const fp_t x11 = x10 * x6;
       const fp_t x12 = 1.0 * eta;
       const fp_t x13 = x12 * x4;
@@ -2240,7 +2388,7 @@ public:
       sfddv(1, 2) = x16;
       sfddv(2, 0) = x15;
       sfddv(2, 1) = x16;
-      sfddv(2, 2) = -2.0 * eta * x11 - x13 * x6 / pow(x0, 3);
+      sfddv(2, 2) = -2.0 * eta * x11 - x13 * x6 / Kokkos::pow(x0, 3);
       break;
     }
     case 4: {
@@ -2257,7 +2405,7 @@ public:
       const fp_t x6 = -x0 - 2 * xi;
       const fp_t x7 = 2.0 * x3 * x6 - x5;
       const fp_t x8 = 2.0 * x3;
-      const fp_t x9 = pow(x2, -2);
+      const fp_t x9 = Kokkos::pow(x2, -2);
       const fp_t x10 = x1 * x9;
       const fp_t x11 = 2.0 * xi;
       const fp_t x12 = x1 * x8 - x10 * x11 + 1.0 * x10 * x6 - x5 + x6 * x8;
@@ -2271,8 +2419,8 @@ public:
       sfddv(1, 2) = x14;
       sfddv(2, 0) = x12;
       sfddv(2, 1) = x14;
-      sfddv(2, 2) =
-          -x1 * x11 * x6 / pow(x2, 3) - x10 * x15 - x13 * x15 - 8.0 * x3 * xi;
+      sfddv(2, 2) = -x1 * x11 * x6 / Kokkos::pow(x2, 3) - x10 * x15 -
+                    x13 * x15 - 8.0 * x3 * xi;
       break;
     }
     case 6: {
@@ -2283,7 +2431,7 @@ public:
       const fp_t x4 = -2 * eta - 2 * phi + 2;
       const fp_t x5 = 2.0 * x4;
       const fp_t x6 = -x1 * x5 + x3;
-      const fp_t x7 = pow(x0, -2);
+      const fp_t x7 = Kokkos::pow(x0, -2);
       const fp_t x8 = x5 * x7;
       const fp_t x9 = eta * x8 + x3;
       const fp_t x10 = 8.0 * xi;
@@ -2297,7 +2445,7 @@ public:
       sfddv(1, 2) = x13;
       sfddv(2, 0) = x9;
       sfddv(2, 1) = x13;
-      sfddv(2, 2) = -eta * x12 * x4 / pow(x0, 3) - x10 * x11;
+      sfddv(2, 2) = -eta * x12 * x4 / Kokkos::pow(x0, 3) - x10 * x11;
       break;
     }
     case 7: {
@@ -2308,7 +2456,7 @@ public:
       const fp_t x4 = 2 * phi + 2 * xi - 2;
       const fp_t x5 = 2.0 * x4;
       const fp_t x6 = x1 * x5 + x3;
-      const fp_t x7 = pow(x0, -2);
+      const fp_t x7 = Kokkos::pow(x0, -2);
       const fp_t x8 = eta * x7;
       const fp_t x9 = 4.0 * eta * x1 - x2 * x8 - x5 * x8;
       const fp_t x10 = x3 - x5 * x7 * xi;
@@ -2319,7 +2467,7 @@ public:
       sfddv(1, 2) = x10;
       sfddv(2, 0) = x9;
       sfddv(2, 1) = x10;
-      sfddv(2, 2) = 4.0 * eta * x4 * xi / pow(x0, 3) - 8.0 * x8 * xi;
+      sfddv(2, 2) = 4.0 * eta * x4 * xi / Kokkos::pow(x0, 3) - 8.0 * x8 * xi;
       break;
     }
     case 8: {
@@ -2330,7 +2478,7 @@ public:
       const fp_t x4 = 2 * phi - 2;
       const fp_t x5 = -2 * eta - x4;
       const fp_t x6 = 2.0 * x1 * x5 - x3;
-      const fp_t x7 = pow(x0, -2);
+      const fp_t x7 = Kokkos::pow(x0, -2);
       const fp_t x8 = x5 * x7;
       const fp_t x9 = 2.0 * eta;
       const fp_t x10 = -x3 - x8 * x9;
@@ -2346,8 +2494,8 @@ public:
       sfddv(1, 2) = x14;
       sfddv(2, 0) = x10;
       sfddv(2, 1) = x14;
-      sfddv(2, 2) =
-          -8.0 * eta * x1 - x13 * x15 - x15 * x8 - x11 * x5 * x9 / pow(x0, 3);
+      sfddv(2, 2) = -8.0 * eta * x1 - x13 * x15 - x15 * x8 -
+                    x11 * x5 * x9 / Kokkos::pow(x0, 3);
       break;
     }
     case 9: {
@@ -2357,7 +2505,7 @@ public:
       const fp_t x3 = -x2;
       const fp_t x4 = 2 * phi - 2;
       const fp_t x5 = -2 * eta - x4;
-      const fp_t x6 = pow(x0, -2);
+      const fp_t x6 = Kokkos::pow(x0, -2);
       const fp_t x7 = phi * x6;
       const fp_t x8 = 2.0 * x7;
       const fp_t x9 = 2.0 * x1 * x5 - x2 - x5 * x8;
@@ -2370,9 +2518,9 @@ public:
       sfddv(1, 2) = x11;
       sfddv(2, 0) = x9;
       sfddv(2, 1) = x11;
-      sfddv(2, 2) = -8.0 * phi * x1 - 2.0 * phi * x10 * x5 / pow(x0, 3) +
-                    4.0 * x1 * x10 + 4.0 * x1 * x5 - x10 * x12 +
-                    2.0 * x10 * x5 * x6 - x12 * x5;
+      sfddv(2, 2) = -8.0 * phi * x1 -
+                    2.0 * phi * x10 * x5 / Kokkos::pow(x0, 3) + 4.0 * x1 * x10 +
+                    4.0 * x1 * x5 - x10 * x12 + 2.0 * x10 * x5 * x6 - x12 * x5;
       break;
     }
     case 10: {
@@ -2381,7 +2529,7 @@ public:
       const fp_t x2 = 4.0 * phi * x1;
       const fp_t x3 = -2 * eta - 2 * phi + 2;
       const fp_t x4 = 2.0 * x3;
-      const fp_t x5 = pow(x0, -2);
+      const fp_t x5 = Kokkos::pow(x0, -2);
       const fp_t x6 = phi * x5;
       const fp_t x7 = -x1 * x4 + x2 + x4 * x6;
       const fp_t x8 = 4.0 * xi;
@@ -2392,7 +2540,7 @@ public:
       sfddv(1, 2) = x9;
       sfddv(2, 0) = x7;
       sfddv(2, 1) = x9;
-      sfddv(2, 2) = -phi * x3 * x8 / pow(x0, 3) + 8.0 * x1 * xi +
+      sfddv(2, 2) = -phi * x3 * x8 / Kokkos::pow(x0, 3) + 8.0 * x1 * xi +
                     4.0 * x3 * x5 * xi - 8.0 * x6 * xi;
       break;
     }
@@ -2400,7 +2548,7 @@ public:
       const fp_t x0 = phi - 1.0;
       const fp_t x1 = 4.0 / x0;
       const fp_t x2 = -phi * x1;
-      const fp_t x3 = pow(x0, -2);
+      const fp_t x3 = Kokkos::pow(x0, -2);
       const fp_t x4 = 4.0 * phi;
       const fp_t x5 = -eta * x1 + eta * x3 * x4;
       const fp_t x6 = -x1 * xi + x3 * x4 * xi;
@@ -2410,14 +2558,15 @@ public:
       sfddv(1, 2) = x6;
       sfddv(2, 0) = x5;
       sfddv(2, 1) = x6;
-      sfddv(2, 2) = -8.0 * eta * phi * xi / pow(x0, 3) + 8.0 * eta * x3 * xi;
+      sfddv(2, 2) =
+          -8.0 * eta * phi * xi / Kokkos::pow(x0, 3) + 8.0 * eta * x3 * xi;
       break;
     }
     case 12: {
       const fp_t x0 = phi - 1.0;
       const fp_t x1 = 1.0 / x0;
       const fp_t x2 = 4.0 * phi * x1;
-      const fp_t x3 = pow(x0, -2);
+      const fp_t x3 = Kokkos::pow(x0, -2);
       const fp_t x4 = phi * x3;
       const fp_t x5 = 4.0 * eta;
       const fp_t x6 = 4.0 * eta * x1 - x4 * x5;
@@ -2431,12 +2580,17 @@ public:
       sfddv(2, 0) = x6;
       sfddv(2, 1) = x9;
       sfddv(2, 2) = 8.0 * eta * x1 + 4.0 * eta * x3 * x7 - 8.0 * eta * x4 -
-                    phi * x5 * x7 / pow(x0, 3);
+                    phi * x5 * x7 / Kokkos::pow(x0, 3);
       break;
     }
     }
     return;
   };
+  KOKKOS_INLINE_FUNCTION static bool isInside(const fp_t xi, const fp_t eta,
+                                              const fp_t phi) {
+    return IsBaryCoordInsideGeo<GeoSupport::PYRAMID>(xi, eta, phi);
+  };
 };
+
 } // namespace FiniteElements
 } // namespace PACMAN

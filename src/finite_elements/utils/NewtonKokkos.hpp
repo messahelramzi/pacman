@@ -1,48 +1,24 @@
 #pragma once
 
 #include <KokkosBatched_Gemm_Decl.hpp>
-#include <KokkosBatched_Gemm_Serial_Impl.hpp>
-#include <KokkosBatched_LU_Decl.hpp>
-#include <KokkosBatched_Trsv_Decl.hpp>
 #include <KokkosBlas1_axpby.hpp>
 #include <KokkosBlas1_dot.hpp>
+#include <KokkosBlas1_scal.hpp>
 #include <KokkosBlas2_serial_gemv.hpp>
+// #include <KokkosBatched_LU_Decl.hpp>
+// #include <KokkosBatched_Trsv_Decl.hpp>
 
 #include "finite_elements/utils/Algebra.hpp"
 #include "finite_elements/utils/FETools.hxx"
-
-/** Tolerance to stop the newton,  dxietaphi.squaredNorm()*/
-#define D_XI_ETA_PHI_TOL_SQUARED 1e-10
-/** Maximal number of newton iters */
-#define MAX_NEWTON_ITER 25
-
 namespace PACMAN {
 namespace FiniteElements {
-template <CellType CT, typename A, typename C, typename D>
-KOKKOS_INLINE_FUNCTION static void /*Eigen::Matrix<fp_t,
-                                      geoStruct::dimensionality,
-                                      geoStruct::dimensionality>*/
-DdfPart2(const A f, const C & /*dN*/,
-         const D &coordAtDofs /*, const MatrixD31& xietaphi*/) {
-  // Eigen::Matrix<fp_t, geoStruct::dimensionality, geoStruct::dimensionality>
-  // res; res.fill(0.0); Eigen::Matrix<fp_t, geoStruct::dimensionality,
-  // geoStruct::dimensionality> temp; for (int i = 0; i < coordAtDofs.cols();
-  // ++i) {
-  //     temp.fill(0.0);
-  //     for (int j = 0; j < coordAtDofs.rows(); ++j) {
-  //         Eigen::Matrix<fp_t, geoStruct::dimensionality,
-  //         geoStruct::dimensionality> ddNi; ddNi.setZero();
-  //         geoStruct::UpdateShapeFunctionsDerDerValues(j, xietaphi(0, 0),
-  //         xietaphi(1, 0), xietaphi(2, 0), ddNi); temp += ddNi *
-  //         coordAtDofs(j, i);
-  //     }
-  //     res -= f(0, i) * temp;
-  // }
-  // return res;
-  return;
-}
 
-template <typename ExecSpace, typename FEspace, unsigned int spaceDimension>
+/** Tolerance to stop the newton, dxietaphi.squaredNorm()*/
+#define D_XI_ETA_PHI_TOL_SQUARED 1e-10
+/** Maximal number of newton iters */
+#define MAX_NEWTON_ITER 15
+
+template <typename ExecSpace, typename FEspace, int_t Dim>
 /**
  * @brief The Newton method applied to a finite element. The targetPoint is
  * updated to hold the barycentric coordinates ultimately.
@@ -53,116 +29,156 @@ template <typename ExecSpace, typename FEspace, unsigned int spaceDimension>
  * coordinate.
  * @return true if the target point is contained in the finite element.
  */
-KOKKOS_FUNCTION bool ApplyNewton(
-    const Kokkos::View<coordinates_t **, ExecSpace> Xcoor,
-    const Kokkos::View<coordinates_t[spaceDimension], ExecSpace> targetPoint,
-    Kokkos::View<fp_t *, ExecSpace> weights,
-    const bool forceEvaluation = false) {
-  const fp_t one = 1.0;
-  const fp_t minus_one = -1.0;
-  const fp_t zero = 0.0;
+KOKKOS_FUNCTION bool
+ApplyNewton(const Kokkos::View<coordinates_t **, ExecSpace> Xcoor,
+            const Kokkos::View<coordinates_t[Dim], ExecSpace> targetPoint,
+            Kokkos::View<fp_t *, ExecSpace> weights,
+            const bool forceEvaluation = false) {
 
-  Kokkos::View<fp_t[spaceDimension], ExecSpace> xietaphi;
-  for (int j = 0; j < spaceDimension; j++) {
+  Kokkos::Array<fp_t, 3> xietaphi_arr;
+  Kokkos::View<fp_t *, ExecSpace> xietaphi(xietaphi_arr.data(), Dim);
+  for (int j = 0; j < Dim; j++) {
     xietaphi(j) = 0.5;
   }
-  // Something wrong here witht he compiler !
-  // auto xcoor_sv = Kokkos::subview(
-  //     Xcoor,
-  //     Kokkos::make_pair(0, (int)FEspace::numberOfShapeFunctions),
-  //     Kokkos::make_pair(0, (int)spaceDimension)
-  // );
-  Kokkos::View<fp_t[FEspace::numberOfShapeFunctions][spaceDimension],
-               ExecSpace>
-      xcoor_sv; // dim =
-                // [FEspace::numberOfShapeFunctions][FEspace::dimensionality]
-  for (int i = 0; i < FEspace::numberOfShapeFunctions; i++) {
-    for (int j = 0; j < spaceDimension; j++) {
-      xcoor_sv(i, j) = Xcoor(i, j);
-    }
-  }
-  Kokkos::View<fp_t[FEspace::numberOfShapeFunctions], ExecSpace>
-      sfv; // dim = [FEspace::numberOfShapeFunctions][1]
-  Kokkos::View<fp_t[spaceDimension], ExecSpace> f; // dim = [1][spaceDimension]
-  Kokkos::View<fp_t[FEspace::dimensionality][FEspace::numberOfShapeFunctions],
-               ExecSpace>
-      dN; // dim = [FEspace::dimensionality][FEspace::numberOfShapeFunctions]
-  Kokkos::View<fp_t[FEspace::dimensionality][spaceDimension], ExecSpace>
-      dNXcoor;
-  Kokkos::View<fp_t[FEspace::dimensionality], ExecSpace>
-      dfNum; // dim = [FEspace::dimensionality][1]
-  Kokkos::View<fp_t[FEspace::dimensionality][FEspace::dimensionality],
-               ExecSpace>
-      h; // dim = [FEspace::dimensionality][FEspace::dimensionality]
-  Kokkos::View<fp_t[FEspace::dimensionality], ExecSpace>
-      dxietaphi; // dim = [FEspace::dimensionality][1]
+  KOKKOS_ASSERT(Xcoor.extent_int(0) == FEspace::numberOfShapeFunctions);
+  // Shape function values at the current xi,eta,phi
+  Kokkos::Array<fp_t, FEspace::numberOfShapeFunctions> sfv_arr;
+  Kokkos::View<fp_t *, ExecSpace> sfv(sfv_arr.data(),
+                                      FEspace::numberOfShapeFunctions);
+  // Coordinates in the global system
+  Kokkos::Array<fp_t, Dim> f_arr;
+  Kokkos::View<fp_t *, ExecSpace> f(f_arr.data(), Dim);
+  // Derivatives of shape functions at the current xi,eta,phi
+  Kokkos::Array<fp_t, FEspace::dimensionality * FEspace::numberOfShapeFunctions>
+      dN_arr;
+  Kokkos::View<fp_t **, ExecSpace> dN(dN_arr.data(), FEspace::dimensionality,
+                                      FEspace::numberOfShapeFunctions);
+  // Derivative of f w.r.t xi,eta,phi
+  Kokkos::Array<fp_t, FEspace::dimensionality * Dim> dNXcoor_arr;
+  Kokkos::View<fp_t **, ExecSpace> dNXcoor(dNXcoor_arr.data(),
+                                           FEspace::dimensionality, Dim);
+  // Numerical derivative of f w.r.t xi,eta,phi
+  Kokkos::Array<fp_t, FEspace::dimensionality> dfNum_arr;
+  Kokkos::View<fp_t *, ExecSpace> dfNum(dfNum_arr.data(),
+                                        FEspace::dimensionality);
+  // Newton function to solve h * dxietaphi = dfNum
+  Kokkos::Array<fp_t, FEspace::dimensionality * FEspace::dimensionality> h_arr;
+  Kokkos::View<fp_t **, ExecSpace> h(h_arr.data(), FEspace::dimensionality,
+                                     FEspace::dimensionality);
+  // temporary arrays for second derivative computations
+  Kokkos::Array<fp_t, FEspace::dimensionality * FEspace::dimensionality>
+      tmp_arr;
+  Kokkos::View<fp_t **, ExecSpace> tmp(tmp_arr.data(), FEspace::dimensionality,
+                                       FEspace::dimensionality);
+  Kokkos::Array<fp_t, FEspace::dimensionality * FEspace::dimensionality>
+      ddNi_arr;
+  Kokkos::View<fp_t **, ExecSpace> ddNi(
+      ddNi_arr.data(), FEspace::dimensionality, FEspace::dimensionality);
+  // Newton update dxietaphi
+  Kokkos::Array<fp_t, FEspace::dimensionality> dxietaphi_arr;
+  Kokkos::View<fp_t *, ExecSpace> dxietaphi(dxietaphi_arr.data(),
+                                            FEspace::dimensionality);
 
-  FEspace::UpdateShapeFunctionsValues(xietaphi(0), xietaphi(1), xietaphi(2),
-                                      sfv);
+  FEspace::UpdateShapeFunctionsValues(xietaphi_arr[0], xietaphi_arr[1],
+                                      xietaphi_arr[2], sfv);
+  KokkosBlas::Experimental::serial_gemv('T', fp_consts::one(), Xcoor, sfv,
+                                        fp_consts::zero(),
+                                        f); // f= sfv.transpose() * xcoor;
+  KokkosBlas::serial_axpy(-fp_consts::one(), targetPoint,
+                          f); // f -= targetPoint;
 
-  int cnt = 0;
+  int_t cnt = 0;
   using namespace KokkosBatched;
 
   for (; cnt < MAX_NEWTON_ITER; ++cnt) {
-    KokkosBlas::Experimental::serial_gemv('T', one, xcoor_sv, sfv, zero,
+    KokkosBlas::Experimental::serial_gemv('T', fp_consts::one(), Xcoor, sfv,
+                                          fp_consts::zero(),
                                           f); // f= sfv.transpose() * xcoor;
-    KokkosBlas::serial_axpy(minus_one, targetPoint,
+    KokkosBlas::serial_axpy(-fp_consts::one(), targetPoint,
                             f); // f -= targetPoint;
 
-    FEspace::UpdateShapeFunctionsDerValues(xietaphi(0), xietaphi(1),
-                                           xietaphi(2), dN);
+    FEspace::UpdateShapeFunctionsDerValues(xietaphi_arr[0], xietaphi_arr[1],
+                                           xietaphi_arr[2], dN);
 
     // dfNum = (f * ((dN * xcoor).transpose())).transpose();
     // here h = (dN * xcoor)
     SerialGemm<Trans::NoTranspose, Trans::NoTranspose,
-               Algo::Gemm::Unblocked>::invoke(one, dN, xcoor_sv, zero, dNXcoor);
-    KokkosBlas::Experimental::serial_gemv('N', one, dNXcoor, f, zero, dfNum);
+               Algo::Gemm::Unblocked>::invoke(fp_consts::one(), dN, Xcoor,
+                                              fp_consts::zero(), dNXcoor);
+    KokkosBlas::Experimental::serial_gemv('N', fp_consts::one(), dNXcoor, f,
+                                          fp_consts::zero(), dfNum);
 
     // h  = (dN * xcoor) * (dN * xcoor).transpose();
     SerialGemm<Trans::NoTranspose, Trans::Transpose,
-               Algo::Gemm::Unblocked>::invoke(one, dNXcoor, dNXcoor, zero, h);
+               Algo::Gemm::Unblocked>::invoke(fp_consts::one(), dNXcoor,
+                                              dNXcoor, fp_consts::zero(), h);
 
-    // if (x > 9) {
-    //   h += DdfPart2<geoStruct>(-f, dN, xcoor, xietaphi);
-    // }
-
-    // ElemDimSolve(h, dfNum, dxietaphi) -> dxietaphi  = h^-1 * dfNum;
-    // FiniteElement::Matrix<ExecSpace, FEspace::dimensionality>::InvInPlace(h);
-    // KokkosBlas::Experimental::serial_gemv('N', one, h, dfNum, zero,
-    // dxietaphi);
-    SerialLU<Algo::LU::Unblocked>::invoke(h);
-    SerialTrsv<Uplo::Lower, Trans::NoTranspose, Diag::Unit,
-               Algo::Trsv::Unblocked>::invoke(one, h, dfNum);
-
-    for (int j = 0; j < spaceDimension; j++) {
-      xietaphi(j) -= dfNum(j);
+    if (cnt > 9) {
+      for (int_t j = 0; j < Dim; j++) { // cols
+        for (int_t k = 0; k < FEspace::dimensionality * FEspace::dimensionality;
+             k++) {
+          tmp_arr[k] = 0.0;
+        }
+        for (int_t i = 0; i < FEspace::numberOfShapeFunctions; i++) { // rows
+          for (int_t k = 0;
+               k < FEspace::dimensionality * FEspace::dimensionality; k++) {
+            ddNi_arr[k] = 0.0;
+          }
+          FEspace::UpdateShapeFunctionsDerDerValues(
+              i, xietaphi_arr[0], xietaphi_arr[1], xietaphi_arr[2], ddNi);
+          KokkosBlas::serial_axpy(Xcoor(i, j), ddNi, tmp);
+        }
+        KokkosBlas::serial_axpy(f(j), tmp, h);
+      }
     }
 
-    FEspace::UpdateShapeFunctionsValues(xietaphi(0), xietaphi(1), xietaphi(2),
-                                        sfv);
+    // Here we use a LU decomposition + backsubstitution dxietaphi = Inv(h) *
+    // dfNum dfNum inplace reused to store the result od dxietaphi
+    // SerialLU<Algo::LU::Unblocked>
+    //    ::invoke(h);
+    // SerialTrsv<Uplo::Lower,Trans::NoTranspose,Diag::Unit,Algo::Trsv::Unblocked>
+    //    ::invoke(one, h, dfNum);
+    FiniteElements::Matrix<ExecSpace, FEspace::dimensionality>::InvInPlace(h);
+    KokkosBlas::Experimental::serial_gemv('N', fp_consts::one(), h, dfNum,
+                                          fp_consts::zero(), dxietaphi);
 
-    fp_t norm2 = 0.0;
-    for (int j = 0; j < FEspace::dimensionality; j++) {
-      norm2 += dxietaphi(j) * dxietaphi(j);
+    for (int_t j = 0; j < FEspace::dimensionality; j++) {
+      xietaphi(j) -= dxietaphi(j);
     }
-    if (norm2 < D_XI_ETA_PHI_TOL_SQUARED) {
+
+    FEspace::UpdateShapeFunctionsValues(xietaphi_arr[0], xietaphi_arr[1],
+                                        xietaphi_arr[2], sfv);
+    KokkosBlas::Experimental::serial_gemv('T', fp_consts::one(), Xcoor, sfv,
+                                          fp_consts::zero(),
+                                          f); // f= sfv.transpose() * xcoor;
+    KokkosBlas::serial_axpy(-fp_consts::one(), targetPoint,
+                            f); // f -= targetPoint;
+
+    fp_t norm2 = fp_consts::zero();
+    fp_t scale = fp_consts::zero();
+    for (int_t j = 0; j < Dim; j++) {
+      norm2 += f(j) * f(j);
+      scale += targetPoint(j) * targetPoint(j);
+    }
+    if (norm2 / scale < D_XI_ETA_PHI_TOL_SQUARED) {
       break;
     }
   }
 
   if (forceEvaluation) {
-    for (int i = 0; i < FEspace::numberOfShapeFunctions; ++i) {
+    for (int_t i = 0; i < FEspace::numberOfShapeFunctions; ++i) {
       weights(i) = sfv(i);
     }
     return true;
   }
 
-  // if (x < MAX_NEWTON_ITER &&
-  // Muscat::IsBaryCoordInsideGeo<geoStruct::geotype>(xietaphi)) {
-  //     for (int i = 0; i < geoStruct::numberOfShapeFunctions; ++i) {
-  //         weights(i) = n(i);
-  //     }
-  //     return true;
+  if ((cnt < MAX_NEWTON_ITER) &&
+      FEspace::isInside(xietaphi_arr[0], xietaphi_arr[1], xietaphi_arr[2])) {
+    for (int_t i = 0; i < FEspace::numberOfShapeFunctions; ++i) {
+      weights(i) = sfv(i);
+    }
+    return true;
+  }
   return false;
 }
 } // namespace FiniteElements

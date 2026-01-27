@@ -12,8 +12,7 @@ template <KokkosViewRank<1> ViewType> struct PointNearest {
   ViewType points;
 };
 
-template <typename ExecSpace, int_t spaceDimension>
-struct PointTriangleProjection {
+template <typename ExecSpace, int_t Dim> struct PointTriangleProjection {
   using MemorySpace = typename ExecSpace::memory_space;
 
   Kokkos::View<coordinates_t **, MemorySpace> targetPointsPtr;
@@ -27,9 +26,9 @@ struct PointTriangleProjection {
                                   const OutputFunctor &out) const {
     const int predicate_index = ArborX::getData(predicate);
 
-    if (status(predicate_index) == TransferStatus::UNDEFINED) {
-      ArborX::Point<spaceDimension, coordinates_t> targetPoint;
-      for (int_t k = 0; k < spaceDimension; k++) {
+    if (status(predicate_index) == TransferStatus::OUTSIDE) {
+      ArborX::Point<Dim, coordinates_t> targetPoint;
+      for (int_t k = 0; k < Dim; k++) {
         targetPoint[k] = targetPointsPtr(predicate_index, k);
       }
 
@@ -45,7 +44,7 @@ struct PointTriangleProjection {
           dist{};
       targetPoint =
           dist.closest_point(targetPoint, triangle.a, triangle.b, triangle.c);
-      for (int_t k = 0; k < spaceDimension; k++) {
+      for (int_t k = 0; k < Dim; k++) {
         targetPointsPtr(predicate_index, k) = targetPoint[k];
       }
       parentElt(predicate_index) = skinParents(value.index);
@@ -54,8 +53,7 @@ struct PointTriangleProjection {
   }
 };
 
-template <typename ExecSpace, int spaceDimension>
-struct PointTriangleProjectionExtrapol {
+template <typename ExecSpace, int Dim> struct PointTriangleProjectionExtrapol {
   using MemorySpace = typename ExecSpace::memory_space;
 
   Kokkos::View<int_t *, MemorySpace> parentElt;
@@ -68,7 +66,7 @@ struct PointTriangleProjectionExtrapol {
                                   const OutputFunctor &out) const {
     const int predicate_index = ArborX::getData(predicate);
 
-    if (status(predicate_index) == TransferStatus::UNDEFINED) {
+    if (status(predicate_index) == TransferStatus::OUTSIDE) {
       parentElt(predicate_index) = skinParents(value.index);
       out(predicate_index);
     }
@@ -83,7 +81,7 @@ struct ExtractIndex {
   }
 };
 
-template <typename MemorySpace, int spaceDimension> struct PointCloudNearest {
+template <typename MemorySpace, int Dim> struct PointCloudNearest {
   Kokkos::View<coordinates_t **, MemorySpace> points;
 };
 
@@ -99,7 +97,7 @@ template <typename MemorySpace> struct NearestExtractIndex {
   }
 };
 
-template <typename MemorySpace, int_t spaceDimension> struct PointIntersect {
+template <typename MemorySpace, int_t Dim> struct PointIntersect {
   Kokkos::View<coordinates_t **, MemorySpace> points;
 };
 
@@ -120,38 +118,35 @@ struct AccessTraits<PACMAN::FiniteElements::PointNearest<ViewType>> {
   }
 };
 
-template <typename MemorySpace, int spaceDimension>
+template <typename MemorySpace, int Dim>
 struct AccessTraits<
-    PACMAN::FiniteElements::PointCloudNearest<MemorySpace, spaceDimension>> {
+    PACMAN::FiniteElements::PointCloudNearest<MemorySpace, Dim>> {
   using memory_space = MemorySpace;
-  using Self =
-      PACMAN::FiniteElements::PointCloudNearest<MemorySpace, spaceDimension>;
+  using Self = PACMAN::FiniteElements::PointCloudNearest<MemorySpace, Dim>;
 
   KOKKOS_FUNCTION
   static size_t size(const Self &self) { return self.points.extent(0); }
   KOKKOS_FUNCTION
   static auto get(const Self &self, size_t i) {
-    Point<spaceDimension, PACMAN::coordinates_t> point;
-    for (int k = 0; k < spaceDimension; k++) {
+    Point<Dim, PACMAN::coordinates_t> point;
+    for (int k = 0; k < Dim; k++) {
       point[k] = self.points(i, k);
     }
     return attach(nearest(point, 1), (int)i);
   }
 };
 
-template <typename MemorySpace, int spaceDimension>
-struct AccessTraits<
-    PACMAN::FiniteElements::PointIntersect<MemorySpace, spaceDimension>> {
+template <typename MemorySpace, int Dim>
+struct AccessTraits<PACMAN::FiniteElements::PointIntersect<MemorySpace, Dim>> {
   using memory_space = MemorySpace;
-  using Self =
-      PACMAN::FiniteElements::PointIntersect<MemorySpace, spaceDimension>;
+  using Self = PACMAN::FiniteElements::PointIntersect<MemorySpace, Dim>;
 
   KOKKOS_FUNCTION
   static size_t size(const Self &self) { return self.points.extent(0); }
   KOKKOS_FUNCTION
   static auto get(const Self &self, size_t i) {
-    Point<spaceDimension, PACMAN::coordinates_t> point;
-    for (int k = 0; k < spaceDimension; k++) {
+    Point<Dim, PACMAN::coordinates_t> point;
+    for (int k = 0; k < Dim; k++) {
       point[k] = self.points(i, k);
     }
     return attach(intersects(point), (int)i);
