@@ -119,7 +119,12 @@ KOKKOS_FORCEINLINE_FUNCTION int_t SerialFillQ(QViewType &Q, const XViewType &X,
   int_t poly_vals = dim + 1;
 
   Kokkos::Array<fp_t, dim + 1> scratch_data;
+  for (int i = 0; i < dim + 1; ++i)
+  {
+    scratch_data[i] = fp_consts::zero();
+  }
   Kokkos::View<fp_t *, ExecSpace> scratch(scratch_data.data(), dim + 1);
+
   do {
     SerialFillPoly(Q, X, XOffs, activeAxis);
     auto S = Kokkos::subview(scratch, Kokkos::make_pair(0, poly_vals));
@@ -133,7 +138,7 @@ KOKKOS_FORCEINLINE_FUNCTION int_t SerialFillQ(QViewType &Q, const XViewType &X,
       SerialFillPoly(Q, X, XOffs, activeAxis);
       break;
     }
-  } while (true);
+  } while (poly_vals > 1);
   return poly_vals;
 }
 

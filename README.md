@@ -25,6 +25,7 @@ Additional device requirements (Cuda):
 Additional requirements for the Python module:
 
 - `pybind11@2.13+`
+- `numpy@2.3+`
 
 You can find an example of a spack env which is able to build and run this project in: `./env/spack.yaml`.
 
@@ -149,10 +150,10 @@ RBF functions for the RBF-PUM interpolation method (ticked is tested):
 Finite elements methods (ticked is working):
 
 - [x] `pacman.fe.methods.NEAREST_NEAREST`
-- [ ] `pacman.fe.methods.INTERP_CLAMP`
-- [ ] `pacman.fe.methods.INTERP_NEAREST`
-- [ ] `pacman.fe.methods.INTERP_ZEROFILL`
-- [ ] `pacman.fe.methods.INTERP_EXTRAP`
+- [x] `pacman.fe.methods.INTERP_CLAMP`
+- [x] `pacman.fe.methods.INTERP_NEAREST`
+- [x] `pacman.fe.methods.INTERP_ZEROFILL`
+- [x] `pacman.fe.methods.INTERP_EXTRAP`
 
 ## Additional notes about the use of Kokkos
 

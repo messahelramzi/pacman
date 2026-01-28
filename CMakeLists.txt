@@ -18,7 +18,8 @@ set(CMAKE_SKIP_BUILD_RPATH FALSE)
 set(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
 
 option(BUILD_MODULE "Build the Python module" ON)
-option(BUILD_TESTS "Configure tests using ctest" OFF)
+option(BUILD_TESTS "Configure tests using ctest" ON)
+option(ENABLE_COVERAGE "Enable coverage tests (requires BUILD_TESTS=ON)" ON)
 
 include(GNUInstallDirs)
 
@@ -41,6 +42,7 @@ add_subdirectory(src)
 # Test executable (require VTK)
 # -----------------------------------------------------
 if (BUILD_TESTS)
+    include(CTest)
     enable_testing()
     add_subdirectory(tests)
 endif()

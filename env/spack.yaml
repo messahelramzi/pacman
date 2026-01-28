@@ -21,6 +21,7 @@ spack:
     - cuda@12.9
     - py-meshio
     - py-pyyaml
+    - py-gcovr
     - matrix:
         - [$packages]
         - [$%compilers]

@@ -7,6 +7,11 @@ set_target_properties(pacman PROPERTIES
 set(PACMAN_PYTHON_DIR
     $<TARGET_FILE_DIR:pacman> CACHE PATH ".")
 
+if (ENABLE_COVERAGE)
+    target_compile_options(pacman PRIVATE -g -O0 --coverage)
+    target_link_options(pacman PRIVATE --coverage)
+endif()
+
 # -----------------------------------------------------
 # Install Python module
 # -----------------------------------------------------
