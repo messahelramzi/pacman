@@ -1,3 +1,8 @@
+//
+// This file is subject to the terms and conditions defined in
+// file 'LICENSE', which is part of this source code package.
+//
+
 #pragma once
 
 #include <ArborX_LinearBVH.hpp>
@@ -37,6 +42,19 @@ static inline void FillTarget(const SourceType &sourceView,
       });
 }
 
+/// @brief Builds an interpolator object from the `Transfer` argument, and fills
+/// `rTransfer.targetValues` with the interpolated values.
+/// @tparam ExecSpace the Kokkos execution space interpolation will happen in
+/// @tparam Dim space dimension (1 <= Dim <= 3)
+/// @tparam RbfFunctionBasisType the RBF function to use for the RBF-PUM problem
+/// @param[in,out] rTransfer The `Transfer` object, which holds the field
+/// transfer information
+/// @param[in] nodesPerCluster An average number of nodes per cluster, defaults
+/// to `50`
+/// @param[in] relativeOverlap  The minimum overlap ratio in [0,1[ used for
+/// clustering, defaults to `0.15`
+/// @param[in] rbfSupportRadius The support radius of the RBF function passed as
+/// a template argument, defaults to `0.1`
 FULL_TEMPLATE
 TEMPLATED_CLASSNAME::RbfPumInterpolator(Transfer<ExecSpace, Dim> &rTransfer,
                                         int_t nodesPerCluster,
@@ -68,28 +86,22 @@ TEMPLATED_CLASSNAME::RbfPumInterpolator(Transfer<ExecSpace, Dim> &rTransfer,
   this->mWeightingFunction = WendlandC2{};
   Kokkos::fence();
 
-  // 1. We search for a good cluster radius that would verify:
-  // avg(nodes per cluster) ~ this->_nodes_per_clusters
-  // To do so, we take the center of the source mesh, and 2 points in each
-  // dimension, all at the same distance of the center.
-  // We compute from these centers the median max radius to intersect
-  // with this->_nodes_per_clusters nodes.
   FindRadius();
-
   this->mRbfFunction.SetRadiusInv(fp_consts::one() / this->mSupportRadius);
   this->mWeightingFunction.SetRadiusInv(fp_consts::one() / this->mRadius);
-
   CreateClusters();
-
   Interpolate();
 }
 
+/// @brief builds a string that contains information about the internal state
+///        of the interpolator.
+/// @tparam ExecSpace the Kokkos execution space interpolation will happen in
+/// @tparam Dim space dimension (1 <= Dim <= 3)
+/// @tparam RbfFunctionBasisType the RBF function to use for the RBF-PUM problem
+/// @return string
+/// @warning this function must not be called before the full initialization
+///          of the clusters of the interpolator object.
 FULL_TEMPLATE
-/* @return: a string that contains information about the internal state
- * of the interpolator.
- * @warning this function must not be called before the full initialization
- * of the clusters of the interpolator object.
- */
 std::string TEMPLATED_CLASSNAME::GetInterpolatorDetails(void) const {
   std::ostringstream strs;
   strs << fp_consts::set_precision();

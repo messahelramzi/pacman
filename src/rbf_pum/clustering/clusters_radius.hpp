@@ -1,3 +1,8 @@
+//
+// This file is subject to the terms and conditions defined in
+// file 'LICENSE', which is part of this source code package.
+//
+
 #pragma once
 
 #include <Kokkos_Core.hpp>
@@ -8,6 +13,12 @@
 
 namespace PACMAN {
 namespace RbfPum {
+
+/// @brief Computes the common radius of each region using the same heuristics
+/// as [preCICE](github.com/precice/precice) does.
+///        We pick 2 points per dimension and compute the average needed radius
+///        to get `this->mNodesPerCluster` points per picked cluster.
+/// @return The radius found by the heuristics for the clusters size.
 FULL_TEMPLATE
 void TEMPLATED_CLASSNAME::FindRadius(void) {
   assert(this->mNodesPerCluster > 0);

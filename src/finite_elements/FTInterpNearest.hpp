@@ -1,6 +1,6 @@
 //
 // This file is subject to the terms and conditions defined in
-// file 'LICENSE.txt', which is part of this source code package.
+// file 'LICENSE', which is part of this source code package.
 //
 
 #pragma once
@@ -12,13 +12,19 @@
 namespace PACMAN {
 namespace FiniteElements {
 
-template <typename ExecSpace, int_t Dim>
 /**
- * @brief Compute the target point finite element interpolation if intersects or
- * assign nearest node value if outside all elements.
- * @param[in] transfer the transfer class holding informations.
- * @return target point values
+ * @brief Interpolate target points from FE cells and fallback to nearest
+ * source-node value outside the source mesh.
+ * @tparam ExecSpace Kokkos execution space used for search and interpolation.
+ * @tparam Dim Spatial dimension of the interpolation problem.
+ * @param[in,out] transfer Transfer descriptor holding interpolation data.
+ * Reads: source mesh/field data and target points.
+ * Writes: `targetValues` and `targetStatus`.
+ * @note Target points not intersecting any source element are assigned the
+ * value of their nearest source point and marked with
+ * `TransferStatus::NEAREST`.
  */
+template <typename ExecSpace, int_t Dim>
 void FTInterpNearest(Transfer<ExecSpace, Dim> &transfer) {
   Kokkos::Profiling::pushRegion("FTInterpNearest");
 
@@ -53,7 +59,6 @@ void FTInterpNearest(Transfer<ExecSpace, Dim> &transfer) {
 
   Kokkos::Profiling::pushRegion("Compute target point FE intersection");
   ComputeBoxTargetPointIntersection<ExecSpace, Dim>(transfer);
-  Kokkos::fence();
   Kokkos::Profiling::popRegion();
 
   // Assign nearest node source value for target points outside the mesh
@@ -68,7 +73,6 @@ void FTInterpNearest(Transfer<ExecSpace, Dim> &transfer) {
           targetStatusPtr(i) = TransferStatus::NEAREST;
         }
       });
-  Kokkos::fence();
   Kokkos::Profiling::popRegion();
 
   Kokkos::Profiling::popRegion();

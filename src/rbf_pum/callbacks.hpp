@@ -1,3 +1,8 @@
+//
+// This file is subject to the terms and conditions defined in
+// file 'LICENSE', which is part of this source code package.
+//
+
 #pragma once
 
 #include <ArborX.hpp>
@@ -10,11 +15,16 @@
 
 namespace PACMAN {
 namespace RbfPum {
+
+/// @brief Support struct for an ArborX predicate
+/// @tparam ViewType A `Kokkos::View` of rank 1
 template <KokkosViewRank<1> ViewType> struct DistanceToKNearest {
   const int_t k;
   ViewType samples;
 };
 
+/// @brief Custom ArborX callback which returns the squared distance between a
+/// cluster center and its nearest points
 struct DistanceToKNearestCallback {
   template <typename Predicate, typename Value, typename OutputFunctor>
   KOKKOS_FUNCTION void operator()(Predicate predicate, Value const &value,
@@ -23,23 +33,30 @@ struct DistanceToKNearestCallback {
   }
 };
 
-template <KokkosViewRank<1> ViewType> struct Projection {
-  ViewType centers;
-};
+/// @brief Support struct for an ArborX predicate
+/// @tparam ViewType A `Kokkos::View` of rank 1
+template <KokkosViewRank<1> ViewType> struct Projection { ViewType centers; };
 
+/// @brief A custom ArborX callback which returns the nearest mesh point of a
+/// given value (the nearest projection of it)
 struct ProjectionCallback {
   template <typename Predicate, typename Value, typename OutputFunctor>
   KOKKOS_FUNCTION void operator()(Predicate predicate, Value const &value,
                                   OutputFunctor const &out) const {
-    // <centre, projection>
+    // <center, projection>
     out(Kokkos::make_pair(ArborX::getData(predicate), value.value));
   }
 };
 
+/// @brief Support struct for an ArborX predicate
+/// @tparam ViewType A `Kokkos::View` of rank 1
 template <KokkosViewRank<1> ViewType> struct TagEmptyCenters {
   ViewType centersCandidates;
 };
 
+/// @brief A custon ArborX callback which tags empty regions centers, by setting
+/// the `x` axis value of the center to `NAN`
+/// @tparam ViewType A `Kokkos::View` of rank 1
 template <KokkosViewRank<1> ViewType> struct TagEmptyCentersCallback {
   ViewType centersCandidates;
   fp_t threshold;
@@ -59,10 +76,15 @@ template <KokkosViewRank<1> ViewType> struct TagEmptyCentersCallback {
   }
 };
 
+/// @brief Support struct for an ArborX predicate
+/// @tparam ViewType A `Kokkos::View` of rank 1
 template <KokkosViewRank<1> ViewType> struct TransformToNearest {
   ViewType centersCandidates;
 };
 
+/// @brief A custom ArborX callback which performs a nearest point projection
+/// for all the `ArborX::Point` in the given view
+/// @tparam ViewType A `Kokkos::View` of rank 1
 template <KokkosViewRank<1> ViewType> struct TransformToNearestCallback {
   ViewType centersCandidates;
   template <typename Predicate, typename Value>
@@ -73,11 +95,16 @@ template <KokkosViewRank<1> ViewType> struct TransformToNearestCallback {
   }
 };
 
+/// @brief Support struct for an ArborX predicate
+/// @tparam ViewType A `Kokkos::View` of rank 1
 template <KokkosViewRank<1> ViewType> struct GetClustersPoints {
   ViewType centers;
   coordinates_t radius;
 };
 
+/// @brief A custon ArborX callback which returns the indices of the points
+/// inside of each region (according to the position of source/target points in
+/// the transfer views)
 struct GetClustersPointsCallback {
   template <typename Predicate, typename Value, typename OutputFunctor>
   KOKKOS_FUNCTION void operator()(Predicate /* predicate */, Value const &value,
@@ -90,6 +117,10 @@ struct GetClustersPointsCallback {
 } // namespace PACMAN
 
 namespace ArborX {
+
+/// @brief An `ArborX::AccessTraits` specialization used for the
+/// `DistanceToKNearest` custom predicate
+/// @tparam ViewType A `Kokkos::View` of rank 1
 template <PACMAN::KokkosViewRank<1> ViewType>
 struct AccessTraits<PACMAN::RbfPum::DistanceToKNearest<ViewType>> {
   using memory_space = typename ViewType::memory_space;
@@ -102,6 +133,9 @@ struct AccessTraits<PACMAN::RbfPum::DistanceToKNearest<ViewType>> {
   }
 };
 
+/// @brief An `ArborX::AccessTraits` specialization used for the `Projection`
+/// custom predicate
+/// @tparam ViewType A `Kokkos::View` of rank 1
 template <PACMAN::KokkosViewRank<1> ViewType>
 struct AccessTraits<PACMAN::RbfPum::Projection<ViewType>> {
   using memory_space = typename ViewType::memory_space;
@@ -114,6 +148,9 @@ struct AccessTraits<PACMAN::RbfPum::Projection<ViewType>> {
   }
 };
 
+/// @brief An `ArborX::AccessTraits` specialization used for the
+/// `TagEmptyCenters` custom predicate
+/// @tparam ViewType A `Kokkos::View` of rank 1
 template <PACMAN::KokkosViewRank<1> ViewType>
 struct AccessTraits<PACMAN::RbfPum::TagEmptyCenters<ViewType>> {
   using memory_space = typename ViewType::memory_space;
@@ -131,6 +168,9 @@ struct AccessTraits<PACMAN::RbfPum::TagEmptyCenters<ViewType>> {
   }
 };
 
+/// @brief An `ArborX::AccessTraits` specialization used for the
+/// `TransformToNearest` custom predicate
+/// @tparam ViewType A `Kokkos::View` of rank 1
 template <PACMAN::KokkosViewRank<1> ViewType>
 struct AccessTraits<PACMAN::RbfPum::TransformToNearest<ViewType>> {
   using memory_space = typename ViewType::memory_space;
@@ -148,6 +188,9 @@ struct AccessTraits<PACMAN::RbfPum::TransformToNearest<ViewType>> {
   }
 };
 
+/// @brief An `ArborX::AccessTraits` specialization used for the
+/// `GetClustersPoints` custom predicate
+/// @tparam ViewType A `Kokkos::View` of rank 1
 template <PACMAN::KokkosViewRank<1> ViewType>
 struct AccessTraits<PACMAN::RbfPum::GetClustersPoints<ViewType>> {
   using memory_space = typename ViewType::memory_space;

@@ -1,8 +1,15 @@
+//
+// This file is subject to the terms and conditions defined in
+// file 'LICENSE', which is part of this source code package.
+//
+
 #pragma once
 
 #include <Kokkos_Core.hpp>
 #include <concepts>
 #include <type_traits>
+
+#include "common/types.hpp"
 
 namespace PACMAN {
 /* Type Evaluation */
@@ -26,11 +33,6 @@ template <typename T, int R>
 concept IsRank = std::remove_cv_t<T>::rank == R;
 
 template <class T>
-concept IsHostRBFFunction = requires(const T t, const double x) {
-  { t.EvalHost(x) } -> std::floating_point;
-};
-
-template <class T>
 concept IsRBFFunction = requires(const T t, const double x) {
   { t.Eval(x) } -> std::floating_point;
 };
@@ -48,9 +50,6 @@ concept KokkosViewRank = IsKokkosView<T> && IsRank<T, R>;
 
 template <typename T>
 concept KokkosArray = IsKokkosArray<T>;
-
-template <typename T>
-concept HostRBFFunction = IsHostRBFFunction<T>;
 
 template <typename T>
 concept RBFFunction = IsRBFFunction<T>;

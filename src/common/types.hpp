@@ -1,3 +1,8 @@
+//
+// This file is subject to the terms and conditions defined in
+// file 'LICENSE', which is part of this source code package.
+//
+
 #pragma once
 
 #include <KokkosKernels_ArithTraits.hpp>
@@ -83,13 +88,13 @@ KOKKOS_INLINE_FUNCTION fp_t min(void) {
 KOKKOS_INLINE_FUNCTION fp_t max(void) {
   return KokkosKernels::ArithTraits<fp_t>::max();
 }
-KOKKOS_INLINE_FUNCTION constexpr fp_t zero(void) {
+KOKKOS_INLINE_FUNCTION consteval fp_t zero(void) {
   return static_cast<fp_t>(0.0);
 }
-KOKKOS_INLINE_FUNCTION constexpr fp_t one(void) {
+KOKKOS_INLINE_FUNCTION consteval fp_t one(void) {
   return static_cast<fp_t>(1.0);
 }
-KOKKOS_INLINE_FUNCTION constexpr fp_t epsilon(void) { return 1.0e-14; }
+KOKKOS_INLINE_FUNCTION consteval fp_t epsilon(void) { return 1.0e-14; }
 constexpr unsigned int precision = std::numeric_limits<fp_t>::max_digits10;
 inline auto set_precision(void) {
   return std::setprecision(fp_consts::precision);

@@ -1,3 +1,8 @@
+//
+// This file is subject to the terms and conditions defined in
+// file 'LICENSE', which is part of this source code package.
+//
+
 #pragma once
 
 #include <ArborX_LinearBVH.hpp>
@@ -10,10 +15,14 @@
 namespace PACMAN {
 namespace FiniteElements {
 /**
- * @brief Compute the nearest point in the mesh for all target points and
- * assigns its value.
- * @param[in] transfer the transfer class holding informations.
- * @return target point values
+ * @brief Transfer source values to target points using nearest-neighbor search.
+ * @tparam ExecSpace Kokkos execution space used for BVH build and query.
+ * @tparam Dim Spatial dimension of the point clouds (1, 2, or 3).
+ * @param[in,out] transfer Transfer descriptor holding interpolation data.
+ * Reads: `sourcePoints`, `sourceValues`, `targetPoints`.
+ * Writes: `targetValues`.
+ * @note This method is point-based and does not use connectivity or cell
+ * types.
  */
 template <typename ExecSpace, int_t Dim>
 void FTNearest(Transfer<ExecSpace, Dim> &transfer) {
@@ -39,7 +48,6 @@ void FTNearest(Transfer<ExecSpace, Dim> &transfer) {
   PointCloudNearest<MemorySpace, Dim> pcn{target_points};
   bvh.query(execspace, pcn,
             NearestExtractIndex<MemorySpace>{source_values, target_values});
-  Kokkos::fence();
   Kokkos::Profiling::popRegion();
 }
 

@@ -1,3 +1,8 @@
+//
+// This file is subject to the terms and conditions defined in
+// file 'LICENSE', which is part of this source code package.
+//
+
 #pragma once
 
 #include <Kokkos_Core.hpp>
@@ -20,7 +25,9 @@
       Kokkos::DefaultHostExecutionSpace{}, view)
 
 namespace PACMAN {
+
 namespace RbfPum {
+
 template <typename ExecSpace>
 KOKKOS_FORCEINLINE_FUNCTION constexpr bool IsHostAccessible(void) {
   return Kokkos::SpaceAccessibility<
@@ -28,10 +35,14 @@ KOKKOS_FORCEINLINE_FUNCTION constexpr bool IsHostAccessible(void) {
       typename ExecSpace::memory_space>::accessible;
 }
 
+/// @brief Returns a type without reference or const/volatile modifiers
+/// @tparam T Any type
 template <typename T>
 using base_type =
     typename std::remove_cv<typename std::remove_reference<T>::type>::type;
 
+/// @brief If Cuda is activated, prints the used Nvidia device memory, else do
+/// nothing
 static inline void PrintCudaMemoryUsage() {
 #if defined(Kokkos_ENABLE_CUDA)
   size_t cuda_free, cuda_total;
@@ -43,6 +54,9 @@ static inline void PrintCudaMemoryUsage() {
 #endif
 }
 
+/// @brief Prints the memory usage of a `Kokkos::View`
+/// @tparam ViewType Any `Kokkos::View` type specialization
+/// @param v The view to print the size of
 template <typename ViewType> void PrintSizeOfView(ViewType &v) {
   size_t size = 0;
   if (v.rank() == 1) {
@@ -86,6 +100,12 @@ void ExportMatView(const DataView &data, const index_t rows, const index_t cols,
   file.flush();
 }
 
+/// @brief A reimplementation of `Kokkos::MinMax` which works on any backend
+/// @tparam ViewType Any `Kokkos::View` type specialization
+/// @tparam Comparator Type of the comparison functor
+/// @param v The view we want the min max of
+/// @param op The comparison functor, must define `operator(a, b)` to compare
+/// values
 template <typename ViewType, typename Comparator>
 KOKKOS_INLINE_FUNCTION auto RbfPumMinMax(const ViewType &v,
                                          const Comparator &op) {

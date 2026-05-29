@@ -1,3 +1,8 @@
+//
+// This file is subject to the terms and conditions defined in
+// file 'LICENSE', which is part of this source code package.
+//
+
 #include "pybindings/fe_bindings.hpp"
 
 #include <Kokkos_Core.hpp>
@@ -8,8 +13,28 @@
 #include "interpolate.hpp"
 #include "pybindings/bindings.hpp"
 
+/**
+ * @file fe_bindings.cpp
+ * @brief Python bindings for PACMAN finite-elements interpolation APIs.
+ */
+
 namespace PACMAN {
 namespace PyBindingsFiniteElements {
+
+/// @brief Internal typed entry point that builds a `Transfer` object,
+/// dispatches interpolation, and copies results back to NumPy arrays.
+/// @tparam ExecSpace Kokkos execution space selected at runtime.
+/// @tparam Dim Spatial dimension of the interpolation problem.
+/// @param[in] method PACMAN transfer method to execute.
+/// @param[in,out] rSourcePoints Source points array `(n, Dim)`.
+/// @param[in,out] rSourceValues Source scalar values array `(n)`.
+/// @param[in,out] rConnVal Optional flattened connectivity values.
+/// @param[in,out] rConnOff Optional connectivity offsets (CSR layout).
+/// @param[in,out] rCellTypes Optional PACMAN cell types associated with
+/// connectivity entries.
+/// @param[in,out] rTargetPoints Target points array `(m, Dim)`.
+/// @return Tuple `(target_values, transfer_status)` where both arrays have
+/// length `m`.
 template <typename ExecSpace, int_t Dim>
 std::tuple<np_array<fp_t>, np_array<int_t>>
 RunInterpolate(const method_t method, np_array<coordinates_t> &rSourcePoints,
@@ -56,15 +81,27 @@ RunInterpolate(const method_t method, np_array<coordinates_t> &rSourcePoints,
   return std::make_tuple(target_values_np_array, transfer_status_np_array);
 }
 
+/// @brief This function allows us to pass runtime parameters as template
+/// arguments, using a type union `std::variant` (`AvailableExecSpaces`)
+/// @tparam Dim The space dimension of the problem, here the dimension is
+/// checked to be between 1 and 3 (included)
+/// @note The pattern using a `std::variant` and `std::visit` has multiple
+/// advantages: it allows us to dispatch safely the runtime arguments to
+/// templated function, with no big switch or polymorphism (which can be
+/// confusing), also, we are sure that all of the cases are handled properly, as
+/// we won't be able to compule the code until all the union values have their
+/// value handled.
+///       In short: it is safer, implies no heap allocation, no virtual dispatch
+///       and allows the compiler to check and optimise everything properly
 template <int_t Dim>
-  requires IsValidDim<Dim> // 1 <= Dim <= 3
-std::tuple<np_array<fp_t>, np_array<int_t>>
-Dispatch(const unsigned char execSpace, const method_t method,
-         np_array<coordinates_t> &rSourcePoints, np_array<fp_t> &rSourceValues,
-         optional_np_array<int_t> &rConnVal,
-         optional_np_array<offset_t> &rConnOff,
-         optional_np_array<cell_t> &rCellTypes,
-         np_array<coordinates_t> &rTargetPoints) {
+requires IsValidDim<Dim> // 1 <= Dim <= 3
+    std::tuple<np_array<fp_t>, np_array<int_t>>
+    Dispatch(const unsigned char execSpace, const method_t method,
+             np_array<coordinates_t> &rSourcePoints,
+             np_array<fp_t> &rSourceValues, optional_np_array<int_t> &rConnVal,
+             optional_np_array<offset_t> &rConnOff,
+             optional_np_array<cell_t> &rCellTypes,
+             np_array<coordinates_t> &rTargetPoints) {
   return std::visit(
       [&](auto execSpaceObj) {
         return RunInterpolate<decltype(execSpaceObj), Dim>(
@@ -74,6 +111,25 @@ Dispatch(const unsigned char execSpace, const method_t method,
       MakeExecSpace(execSpace));
 }
 
+/// @brief Python-facing finite-elements interpolation binding.
+///
+/// Validates NumPy input arrays, dispatches the call according to
+/// `spaceDimension` and `execSpace`, and returns interpolated values plus
+/// transfer status for each target point.
+///
+/// @param[in] spaceDimension Geometric dimension of points (`1`, `2`, or `3`).
+/// @param[in] execSpace Runtime execution-space selector.
+/// @param[in] method Transfer method selector from PACMAN FE methods.
+/// @param[in] sourcePoints Source points array shaped `(n, spaceDimension)`.
+/// @param[in] sourceValues Source scalar values array shaped `(n)`.
+/// @param[in] connVal Optional flattened connectivity values.
+/// @param[in] connOff Optional connectivity offsets (CSR layout).
+/// @param[in] cellTypes Optional PACMAN cell type identifiers.
+/// @param[in] targetPoints Target points array shaped `(m, spaceDimension)`.
+/// @return Tuple `(target_values, transfer_status)` where both arrays have
+/// length `m`.
+/// @throws std::invalid_argument when array dimensions/shapes are inconsistent.
+/// @throws std::runtime_error when `spaceDimension` is not in `{1,2,3}`.
 std::tuple<np_array<fp_t>, np_array<int_t>>
 Interpolate(const int_t spaceDimension, const unsigned char execSpace,
             const method_t method, np_array<coordinates_t> sourcePoints,
@@ -123,69 +179,92 @@ Interpolate(const int_t spaceDimension, const unsigned char execSpace,
   }
 }
 
-int_t meshio_to_vtk_cell_type(const std::string &cell_type) {
-  static const std::unordered_map<std::string, PACMAN::CellType> meshio_to_vtk =
-      {
-          // 0D
-          {"vertex", PACMAN::CellType::VTK_VERTEX},        // VTK_VERTEX
-                                                           // 1D
-          {"line", PACMAN::CellType::VTK_LINE},            // VTK_LINE
-          {"line3", PACMAN::CellType::VTK_QUADRATIC_EDGE}, // VTK_QUADRATIC_EDGE
-                                                           // 2D
-          {"triangle", PACMAN::CellType::VTK_TRIANGLE},    // VTK_TRIANGLE
-          {"quad", PACMAN::CellType::VTK_QUAD},            // VTK_QUAD
-          {"triangle6",
-           PACMAN::CellType::VTK_QUADRATIC_TRIANGLE}, // VTK_QUADRATIC_TRIANGLE
-          {"quad8", PACMAN::CellType::VTK_QUADRATIC_QUAD}, // VTK_QUADRATIC_QUAD
-                                                           // 3D
-          {"tetra", PACMAN::CellType::VTK_TETRA},          // VTK_TETRA
-          {"hexahedron", PACMAN::CellType::VTK_HEXAHEDRON}, // VTK_HEXAHEDRON
-          {"wedge", PACMAN::CellType::VTK_WEDGE},           // VTK_WEDGE
-          {"pyramid", PACMAN::CellType::VTK_PYRAMID},       // VTK_PYRAMID
-          {"tetra10",
-           PACMAN::CellType::VTK_QUADRATIC_TETRA}, // VTK_QUADRATIC_TETRA
-          {"hexahedron20",
-           PACMAN::CellType::
-               VTK_QUADRATIC_HEXAHEDRON}, // VTK_QUADRATIC_HEXAHEDRON
-          {"wedge15",
-           PACMAN::CellType::VTK_QUADRATIC_WEDGE}, // VTK_QUADRATIC_WEDGE
-          {"pyramid13",
-           PACMAN::CellType::VTK_QUADRATIC_PYRAMID}, // VTK_QUADRATIC_PYRAMID
-      };
-
-  auto it = meshio_to_vtk.find(cell_type);
-  if (it == meshio_to_vtk.end()) {
-    throw std::runtime_error("Unsupported meshio cell type: " + cell_type);
-  }
-  return static_cast<int_t>(static_cast<cell_t>((it->second)));
-}
-
-int_t meshio_cell_dim(const std::string &cell_type) {
-  static const std::unordered_map<std::string, int_t> meshio_dim = {
+/// @brief Convert VTK/vtk cell type identifiers to PACMAN cell type codes.
+/// @param[in] cell_type 1D NumPy array of VTK cell type identifiers.
+/// @return 1D NumPy array of PACMAN cell type identifiers with same length.
+/// @throws std::runtime_error if at least one VTK cell type is unsupported.
+np_array<int_t> vtk_to_pacman_cell_type(const np_array<int_t> cell_type) {
+  static const std::unordered_map<int_t, PACMAN::CellType> vtk_to_pacman = {
       // 0D
-      {"vertex", 0}, // VTK_VERTEX
-      // 1D
-      {"line", 1},  // VTK_LINE
-      {"line3", 1}, // VTK_QUADRATIC_EDGE
-      // 2D
-      {"triangle", 2},  // VTK_TRIANGLE
-      {"quad", 2},      // VTK_QUAD
-      {"triangle6", 2}, // VTK_QUADRATIC_TRIANGLE
-      {"quad8", 2},     // VTK_QUADRATIC_QUAD
-      // 3D
-      {"tetra", 3},        // VTK_TETRA
-      {"hexahedron", 3},   // VTK_HEXAHEDRON
-      {"wedge", 3},        // VTK_WEDGE
-      {"pyramid", 3},      // VTK_PYRAMID
-      {"tetra10", 3},      // VTK_QUADRATIC_TETRA
-      {"hexahedron20", 3}, // VTK_QUADRATIC_HEXAHEDRON
-      {"wedge15", 3},      // VTK_QUADRATIC_WEDGE
-      {"pyramid13", 3},    // VTK_QUADRATIC_PYRAMID
+      {1, PACMAN::CellType::VTK_VERTEX},              // VTK_VERTEX
+                                                      // 1D
+      {3, PACMAN::CellType::VTK_LINE},                // VTK_LINE
+      {21, PACMAN::CellType::VTK_QUADRATIC_EDGE},     // VTK_QUADRATIC_EDGE
+                                                      // 2D
+      {5, PACMAN::CellType::VTK_TRIANGLE},            // VTK_TRIANGLE
+      {9, PACMAN::CellType::VTK_QUAD},                // VTK_QUAD
+      {22, PACMAN::CellType::VTK_QUADRATIC_TRIANGLE}, // VTK_QUADRATIC_TRIANGLE
+      {23, PACMAN::CellType::VTK_QUADRATIC_QUAD},     // VTK_QUADRATIC_QUAD
+                                                      // 3D
+      {10, PACMAN::CellType::VTK_TETRA},              // VTK_TETRA
+      {12, PACMAN::CellType::VTK_HEXAHEDRON},         // VTK_HEXAHEDRON
+      {13, PACMAN::CellType::VTK_WEDGE},              // VTK_WEDGE
+      {14, PACMAN::CellType::VTK_PYRAMID},            // VTK_PYRAMID
+      {24, PACMAN::CellType::VTK_QUADRATIC_TETRA},    // VTK_QUADRATIC_TETRA
+      {25,
+       PACMAN::CellType::VTK_QUADRATIC_HEXAHEDRON},  // VTK_QUADRATIC_HEXAHEDRON
+      {26, PACMAN::CellType::VTK_QUADRATIC_WEDGE},   // VTK_QUADRATIC_WEDGE
+      {27, PACMAN::CellType::VTK_QUADRATIC_PYRAMID}, // VTK_QUADRATIC_PYRAMID
   };
 
-  auto it = meshio_dim.find(cell_type);
-  if (it == meshio_dim.end()) {
-    throw std::runtime_error("Unsupported meshio cell type: " + cell_type);
+  auto pacman_cell_type_np_array = np_array<int_t>(cell_type.shape(0));
+  auto *p_pct = pacman_cell_type_np_array.mutable_data();
+  auto unmanaged_pct =
+      Kokkos::View<int_t *, Kokkos::DefaultHostExecutionSpace::memory_space,
+                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>(
+          p_pct, pacman_cell_type_np_array.shape(0));
+
+  auto ct_buf = cell_type.unchecked<1>();
+
+  Kokkos::parallel_for(
+      "vtk celltype to pacman celltype",
+      Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(
+          Kokkos::DefaultHostExecutionSpace{}, 0,
+          pacman_cell_type_np_array.shape(0)),
+      [=](const index_t &i) {
+        auto it = vtk_to_pacman.find(ct_buf(i));
+        if (it == vtk_to_pacman.end()) {
+          throw std::runtime_error("Unsupported VTK cell type: " +
+                                   std::to_string(ct_buf(i)));
+        }
+        unmanaged_pct(i) =
+            static_cast<int_t>(static_cast<cell_t>((it->second)));
+      });
+
+  return pacman_cell_type_np_array;
+}
+
+/// @brief Return the topological dimension associated with one VTK cell type.
+/// @param[in] cell_type Single VTK/vtk cell type identifier.
+/// @return Cell dimension (`0`, `1`, `2`, or `3`).
+/// @throws std::runtime_error if the given cell type is unsupported.
+int_t vtk_cell_dim(const int_t &cell_type) {
+  static const std::unordered_map<int_t, int_t> vtk_dim = {
+      //== 0D
+      {1, 0}, // VTK_VERTEX
+      //== 1D
+      {3, 1},  // VTK_LINE
+      {21, 1}, // VTK_QUADRATIC_EDGE
+      //== 2D
+      {5, 2},  // VTK_TRIANGLE
+      {9, 2},  // VTK_QUAD
+      {22, 2}, // VTK_QUADRATIC_TRIANGLE
+      {23, 2}, // VTK_QUADRATIC_QUAD
+      //== 3D
+      {10, 3}, // VTK_TETRA
+      {12, 3}, // VTK_HEXAHEDRON
+      {13, 3}, // VTK_WEDGE
+      {14, 3}, // VTK_PYRAMID
+      {24, 3}, // VTK_QUADRATIC_TETRA
+      {25, 3}, // VTK_QUADRATIC_HEXAHEDRON
+      {26, 3}, // VTK_QUADRATIC_WEDGE
+      {27, 3}, // VTK_QUADRATIC_PYRAMID
+  };
+
+  auto it = vtk_dim.find(cell_type);
+  if (it == vtk_dim.end()) {
+    throw std::runtime_error("Unsupported Vtk cell type: " +
+                             std::to_string(cell_type));
   }
   return it->second;
 }

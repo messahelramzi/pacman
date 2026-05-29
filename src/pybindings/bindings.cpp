@@ -1,3 +1,8 @@
+//
+// This file is subject to the terms and conditions defined in
+// file 'LICENSE', which is part of this source code package.
+//
+
 #include "pybindings/bindings.hpp"
 
 #include <Kokkos_Core.hpp>
@@ -37,6 +42,34 @@ PYBIND11_MODULE(pacman, m) {
   ADD_EXECSPACES_ENTRY(CUDA);
   ADD_EXECSPACES_ENTRY(HIP);
   ADD_EXECSPACES_ENTRY(SYCL);
+
+  execspaces.def(
+      "available",
+      []() {
+        py::list spaces;
+
+#if defined(KOKKOS_ENABLE_SERIAL)
+        spaces.append("SERIAL");
+#endif
+#if defined(KOKKOS_ENABLE_OPENMP)
+        spaces.append("OPENMP");
+#endif
+#if defined(KOKKOS_ENABLE_THREADS)
+        spaces.append("THREADS");
+#endif
+#if defined(KOKKOS_ENABLE_CUDA)
+        spaces.append("CUDA");
+#endif
+#if defined(KOKKOS_ENABLE_HIP)
+        spaces.append("HIP");
+#endif
+#if defined(KOKKOS_ENABLE_SYCL)
+        spaces.append("SYCL");
+#endif
+
+        return spaces;
+      },
+      "Return a Python list of available Kokkos execution spaces");
 
   auto rbf = m.def_submodule("rbf", "Radial-based functions partition of unity "
                                     "method interpolator (CPU/GPU)");
@@ -79,13 +112,13 @@ PYBIND11_MODULE(pacman, m) {
   ADD_FE_METHODS_ENTRY(INTERP_ZEROFILL);
   ADD_FE_METHODS_ENTRY(INTERP_EXTRAP);
 
-  fe.def("meshio_to_vtk_cell_type",
-         &PyBindingsFiniteElements::meshio_to_vtk_cell_type,
+  fe.def("vtk_to_pacman_cell_type",
+         &PyBindingsFiniteElements::vtk_to_pacman_cell_type,
          py::arg("cell_type"),
-         "Return VTK cell type index from a meshio cell type string");
-  fe.def("meshio_cell_dim", &PyBindingsFiniteElements::meshio_cell_dim,
+         "Return VTK cell types index from a vtk cell type int");
+  fe.def("vtk_cell_dim", &PyBindingsFiniteElements::vtk_cell_dim,
          py::arg("cell_type"),
-         "Return VTK cell dimension from a meshio cell type string");
+         "Return VTK cell dimension from a vtk cell type int");
 }
 
 } // namespace PACMAN

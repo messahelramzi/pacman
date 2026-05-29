@@ -1,7 +1,12 @@
+//
+// This file is subject to the terms and conditions defined in
+// file 'LICENSE', which is part of this source code package.
+//
+
 #pragma once
 
 // <pybind11/pybind11.h> includes "Python.h"
-// which must be included first
+// which must be included first (CPython requirement)
 
 // clang-format off
 #include <pybind11/pybind11.h>
@@ -21,8 +26,13 @@ using np_array = py::array_t<T, py::array::c_style | py::array::forcecast>;
 
 template <typename T> using optional_np_array = std::optional<np_array<T>>;
 
+/// @brief Macro used to set the execution space values into a Python submodule
 #define ADD_EXECSPACES_ENTRY(E) execspaces.attr(#E) = ExecSpaces::E
 
+/// @brief A struct which represents the execution spaces from Kokkos using
+/// integer values to receive it easily from Python
+/// @note Struct entries underlying integer values are meaningless and can be
+/// changed
 struct ExecSpaces {
   static constexpr const unsigned char SERIAL = 0x00;
   static constexpr const unsigned char OPENMP = 0x01;
@@ -33,6 +43,8 @@ struct ExecSpaces {
 };
 
 // clang-format off
+
+/// @brief A type variant which defines the enabled Kokkos execution spaces, this variant is mandatory to pass the execution space as a template argument to the transfer method function.
 using AvailableExecSpaces = std::variant<
     #if defined(KOKKOS_ENABLE_SERIAL)
         Kokkos::Serial
@@ -60,6 +72,7 @@ using AvailableExecSpaces = std::variant<
 >;
 // clang-format on
 
+/// @brief Converts an execution space from an unsigned char to a variant type
 static inline AvailableExecSpaces MakeExecSpace(const unsigned char s) {
   // clang-format off
         switch (s) {

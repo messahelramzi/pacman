@@ -1,3 +1,8 @@
+//
+// This file is subject to the terms and conditions defined in
+// file 'LICENSE', which is part of this source code package.
+//
+
 #pragma once
 
 // clang-format off
@@ -15,6 +20,10 @@ using AvailableRbfFunctions =
     std::variant<RbfPum::WendlandC0, RbfPum::WendlandC2, RbfPum::WendlandC4,
                  RbfPum::WendlandC6, RbfPum::WendlandC8>;
 
+/// @brief A struct which represents the available RBF functions using integer
+/// values to receive it easily from Python
+/// @note Struct entries underlying integer values are meaningless and can be
+/// changed
 struct RbfFunctions {
   static constexpr const unsigned char WENDLANDC0 = 0x10;
   static constexpr const unsigned char WENDLANDC2 = 0x11;
@@ -23,6 +32,7 @@ struct RbfFunctions {
   static constexpr const unsigned char WENDLANDC8 = 0x14;
 };
 
+/// @brief Converts a RBF function from an unsigned char to a variant type
 static inline AvailableRbfFunctions
 MakeRbfFunction(const unsigned char rbfFunction) {
   switch (rbfFunction) {
@@ -44,6 +54,8 @@ MakeRbfFunction(const unsigned char rbfFunction) {
   }
 }
 
+/// @brief Function for RBF inteprolation exposed to the Python interface.
+/// @return A numpy array with the interpolated values at target points.
 py::array_t<fp_t> Interpolate(const int_t spaceDimension,
                               const unsigned char execSpace,
                               const unsigned char rbfFunction,

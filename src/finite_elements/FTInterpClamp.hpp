@@ -1,12 +1,12 @@
 //
 // This file is subject to the terms and conditions defined in
-// file 'LICENSE.txt', which is part of this source code package.
+// file 'LICENSE', which is part of this source code package.
 //
 
 #pragma once
 
 #include "finite_elements/utils/ArborXCallbacks.hpp"
-#include "finite_elements/utils/ComputeLinearSkin.hxx"
+#include "finite_elements/utils/ComputeLinearSkin.hpp"
 #include "finite_elements/utils/FTUtils.hpp"
 #include "finite_elements/utils/SkinProjection.hpp"
 
@@ -14,21 +14,23 @@ namespace PACMAN {
 
 namespace FiniteElements {
 
-template <typename ExecSpace, int_t Dim>
 /**
- * @brief Compute the target point finite element interpolation if intersects or
- * assign nearest element interpolation values after projection of the target
- * point if outside all elements. * @param[in] transfer the transfer class
- * holding informations.
- * @return target point values
+ * @brief Interpolate target points from FE cells and clamp outside points by
+ * projection onto the source mesh skin.
+ * @tparam ExecSpace Kokkos execution space used for search/projection kernels.
+ * @tparam Dim Spatial dimension of the interpolation problem.
+ * @param[in,out] transfer Transfer descriptor holding interpolation data.
+ * Reads: source mesh/field data and target points.
+ * Writes: `targetValues` and `targetStatus`.
+ * @note Outside points are projected onto the linearized boundary skin and
+ * clamped to boundary-consistent interpolated values.
  */
+template <typename ExecSpace, int_t Dim>
 void FTInterClamp(Transfer<ExecSpace, Dim> &transfer) {
   Kokkos::Profiling::pushRegion("FiniteElement::FTInterpClamp");
   Kokkos::Profiling::pushRegion("Compute target point FE intersection");
 
   ComputeBoxTargetPointIntersection<ExecSpace, Dim>(transfer);
-
-  Kokkos::fence();
 
   Kokkos::Profiling::popRegion(); // Compute target point FE intersection
 
@@ -44,7 +46,6 @@ void FTInterClamp(Transfer<ExecSpace, Dim> &transfer) {
   } else {
     throw std::runtime_error("Unexpected dimension for projection");
   }
-  Kokkos::fence();
 
   Kokkos::Profiling::popRegion(); // Compute target point projection on
                                   // triangulated skin mesh

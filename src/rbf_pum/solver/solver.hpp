@@ -1,3 +1,8 @@
+//
+// This file is subject to the terms and conditions defined in
+// file 'LICENSE', which is part of this source code package.
+//
+
 #pragma once
 
 #include <KokkosBatched_Copy_Decl.hpp>
@@ -11,7 +16,6 @@
 #include "solver/utils/serial_ops.hpp"
 #include "solver/utils/serial_solve.hpp"
 #include "solver/utils/team_ops.hpp"
-#include "solver/utils/team_solve.hpp"
 #include "utils/utils.hpp"
 
 #define VIEW_ALLOC(name)                                                       \
@@ -20,6 +24,13 @@
 
 namespace PACMAN {
 namespace RbfPum {
+
+/// @brief Performs the interpolation process by filling the system matrices,
+/// solving them for coefficients and building the global interpolant values
+/// @note: There are comments inlined in the function, as it is quite long
+/// @tparam ExecSpace the Kokkos execution space interpolation will happen in
+/// @tparam Dim space dimension (1 <= Dim <= 3)
+/// @tparam RbfFunctionBasisType the RBF function to use for the RBF-PUM problem
 FULL_TEMPLATE
 void TEMPLATED_CLASSNAME::Interpolate(void) {
   const std::string _region_name = "RbfPumInterpolator::Interpolate";
@@ -29,6 +40,8 @@ void TEMPLATED_CLASSNAME::Interpolate(void) {
 
   Kokkos::Profiling::pushRegion(_region_name +
                                 "::fetch source and target nodes");
+
+  // We get the source values in each cluster
   VectorView<index_t> clusters_source_indices(
       VIEW_ALLOC("clusters_source_indices"), 0);
   VectorView<offset_t> clusters_source_offsets(
@@ -36,6 +49,8 @@ void TEMPLATED_CLASSNAME::Interpolate(void) {
   GetClustersPoints get_clusters_points_predicate{this->mClusters,
                                                   this->mRadius};
   GetClustersPointsCallback get_clusters_points_callback;
+
+  // We get the target values in each cluster
   VectorView<index_t> clusters_target_indices(
       VIEW_ALLOC("clusters_target_indices"), 0);
   VectorView<offset_t> clusters_target_offsets(
@@ -53,6 +68,9 @@ void TEMPLATED_CLASSNAME::Interpolate(void) {
 
   Kokkos::Profiling::pushRegion(_region_name +
                                 "::compute offsets and allocate memory");
+
+  // We compute access offsets for our biggest matrices, to store them in a 1D
+  // array
   VectorView<offset_t> rbf_mat_offsets(VIEW_ALLOC("rbf_mat_offsets"), K + 1);
   VectorView<offset_t> eval_mat_offsets(VIEW_ALLOC("eval_mat_offsets"), K + 1);
   offset_t rbf_mat_size;
@@ -77,6 +95,22 @@ void TEMPLATED_CLASSNAME::Interpolate(void) {
   const int_t target_size = clusters_target_indices.extent_int(0);
   constexpr int_t poly_vals = Dim + 1;
 
+  // We allocate all of the space needed for the system solve process (N: nb
+  // source nodes, M: nb target nodes, poly_vals: nb active axis - 1) As: 1D
+  // vector which holds the RBF matrices (size N x N) Bs: 1D vector which holds
+  // the lhs vectors (the values we know at source points) (size 1 x N) Qs: 1D
+  // vector which holds the source polynomial augmentation (size N x poly_vals)
+  // Vs: 1D vector which holds the target polynomial augmentation (size M x
+  // poly_vals) Es: 1D vector which holds the RBF evaluation matrices (size M x
+  // N) Ts: 1D vector which holds temporary data for the QR factorization
+  // coefficients (size 1 x poly_vals) Ws: 1D vector which holds temporary
+  // workspace data for the QR factorization coefficients (size 1 x N), must be
+  // contiguous Xs: 1D vector which holds temporary solutions to compute the
+  // \beta coefficients (the source polynomial contribution) (size 1 x N)
+  // TempView: 1D vector which holds temporary local interpolant values (size 1
+  // x M) AxisView: 1D vector of `Kokkos::Array` which keeps track of the active
+  // axis for each system. Some axis can be deactivated for stable computations
+  // during the filling process of Q. (size K x (array<Dim>))
   VectorView<fp_t> As(VIEW_ALLOC("As"), rbf_mat_size);
   VectorView<fp_t> Bs(VIEW_ALLOC("Bs"), source_size);
   VectorView<fp_t> Qs(VIEW_ALLOC("Qs"), source_size * poly_vals);
@@ -91,6 +125,7 @@ void TEMPLATED_CLASSNAME::Interpolate(void) {
   Kokkos::fence();
   Kokkos::Profiling::popRegion(); // ! compute offsets and allocate memory
 
+  // Computation of the per clusters weights using a Shepard kernel
   Kokkos::Profiling::pushRegion(_region_name + "::compute clusters weights");
   const auto centers = this->mClusters;
   const auto source = this->mSource;
@@ -108,6 +143,9 @@ void TEMPLATED_CLASSNAME::Interpolate(void) {
   center_bvh.query(execspace, get_target_clusters, get_target_clusters_callback,
                    weights_indices, weights_offsets);
 
+  // weights: normalized weights per cluster per target point
+  // only non null weights are stored,
+  // so weights size if (M x (nb interacting regions per target point))
   VectorView<fp_t> weights(VIEW_ALLOC("weights"), weights_indices.extent(0));
 
   Kokkos::parallel_for(
@@ -130,11 +168,14 @@ void TEMPLATED_CLASSNAME::Interpolate(void) {
   Kokkos::fence();
   Kokkos::Profiling::popRegion(); // ! compute clusters weights
 
+  // output is transfer.targetValues to avoid a deepcopy
   auto output = this->out;
 
   using team_policy = Kokkos::TeamPolicy<ExecSpace>;
   using member_type = team_policy::member_type;
 
+  // The RBF matrices can be quite big, so we use a team policy to fill them
+  // it takes more time with OpenMP backend but is a big speedup on device
   Kokkos::Profiling::pushRegion(_region_name + "::fill and solve systems");
   Kokkos::parallel_for(
       _region_name + "::p_for team fill A, E, B",
@@ -154,15 +195,25 @@ void TEMPLATED_CLASSNAME::Interpolate(void) {
         const index_t n = source_slice.second - source_slice.first;
         const index_t m = target_slice.second - target_slice.first;
 
+        // we fetch the right slice of As, Es, Bs to access to A, E, B
+        // and reshape them from a vector to their real shape
         auto A = GetRbfMatrix(k, As, rbf_mat_offsets, n, n);
         auto E = GetRbfMatrix(k, Es, eval_mat_offsets, m, n);
         auto B = GetRbfVector(k, Bs, clusters_source_offsets, n);
+
+        // we fill these matrices
         TeamFillA(team, A, source, source_points, rbf_function);
         TeamFillE(team, E, source, source_points, target, target_points,
                   rbf_function);
         TeamFillB(team, B, values, source_points);
       });
 
+  // we want to fill Q and V, the polynomial augmentations
+  // and then solve $Q\beta = b$ & $A\alpha = b - \beta Q$
+  // after that, we compute the interpolated values with:
+  // $t_{local} = E\alpha + V\beta$ <- this represent local approximations per
+  // regions finally, we aggregate these local approximations with the weights:
+  // $t_{values}(x) = \sum_{k=0}^{K} w_k(x) \times t_{local}(x)
   Kokkos::parallel_for(
       _region_name + "::p_for fill and solve remaining systems",
       Kokkos::RangePolicy(execspace, 0, K), KOKKOS_LAMBDA(const index_t &k) {
@@ -190,6 +241,8 @@ void TEMPLATED_CLASSNAME::Interpolate(void) {
         }
         auto tQ = GetPolyMatrix(k, Qs, clusters_source_offsets, n, active_axis);
         auto W = GetRbfVector(k, Ws, clusters_source_offsets, n);
+        // this function returns the number of active axis, pv, after the
+        // condition number check loop on Q
         int_t pv = SerialFillQ(tQ, source, source_points, W, active_axis);
 
         auto V = GetPolyMatrix(k, Vs, clusters_target_offsets, m, active_axis);

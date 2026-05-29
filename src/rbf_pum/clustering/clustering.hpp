@@ -1,3 +1,8 @@
+//
+// This file is subject to the terms and conditions defined in
+// file 'LICENSE', which is part of this source code package.
+//
+
 #pragma once
 
 #include "callbacks.hpp"
@@ -7,6 +12,11 @@
 
 namespace PACMAN {
 namespace RbfPum {
+
+/// @brief A pow function computed at compile time.
+/// @tparam X The value X of $X^N$
+/// @tparam N The value N of $X^N$
+/// @return The value $X^N$ at compile time
 template <int_t X, int_t N> constexpr index_t CompileTimePow(void) {
   index_t prod = 1;
   for (index_t i = 0; i < N; ++i) {
@@ -15,6 +25,12 @@ template <int_t X, int_t N> constexpr index_t CompileTimePow(void) {
   return prod;
 }
 
+/// @brief Return the indices offsets of the spatial neighbors given the shape
+/// of the space.
+/// @tparam Dim The dimension of the space.
+/// @param shape The number of regions in each direction (each axis).
+/// @return An std::array of size 3^{Dim} - 1 which contains the offset to apply
+/// to each point to get its neighbors.
 template <int_t Dim> constexpr auto ZCurveNeighborOffsets(int_t shape[Dim]) {
   constexpr index_t N = CompileTimePow<3, Dim>() - 1;
   std::array<int_t, N> result{};
@@ -52,6 +68,7 @@ template <int_t Dim> constexpr auto ZCurveNeighborOffsets(int_t shape[Dim]) {
   return result;
 }
 
+/// @brief: 2D specialization of `ZCurveNeighborOffsets` for faster computations
 template <> constexpr auto ZCurveNeighborOffsets<2>(int_t shape[2]) {
   std::array<int_t, 8> result{};
 
@@ -72,6 +89,7 @@ template <> constexpr auto ZCurveNeighborOffsets<2>(int_t shape[2]) {
   return result;
 }
 
+/// @brief: 3D specialization of `ZCurveNeighborOffsets` for faster computations
 template <> constexpr auto ZCurveNeighborOffsets<3>(int_t shape[3]) {
   std::array<int_t, 26> result{};
 
@@ -97,11 +115,15 @@ template <> constexpr auto ZCurveNeighborOffsets<3>(int_t shape[3]) {
   return result;
 }
 
+/// @brief A functor which returns `true` is a given point is tagged for removal
+/// (=> if its first dimension coordinate is NaN)
 template <typename ValueType> struct RemoveTaggedCenters {
   KOKKOS_INLINE_FUNCTION
   bool operator()(const ValueType &v) const { return v[0] != v[0]; }
 };
 
+/// @brief Creates the clusters centers view using the same heuristics as
+/// [preCICE](github.com/precice/precice) does.
 FULL_TEMPLATE
 void TEMPLATED_CLASSNAME::CreateClusters(void) {
   assert(this->mRadius > 0);
@@ -111,11 +133,12 @@ void TEMPLATED_CLASSNAME::CreateClusters(void) {
   Kokkos::Profiling::ScopedRegion region(_region_name);
   const ExecSpace execspace{};
 
-  // 1. calcul de la BB sur les points source
+  // 1. computation of the source points bounding box
   const Point lower = this->mSourceBvh.bounds().minCorner();
   const Point upper = this->mSourceBvh.bounds().maxCorner();
 
-  // 2. calcul de la distance maximale entre 2 centres pour garantir l'overlap
+  // 2. compatation of the max distance between two points to guarantee the
+  // given overlap ratio
   const fp_t spacing = std::sqrt(4.0 / Dim) * this->mRadius *
                        (fp_consts::one() - this->mRelativeOverlap);
 
@@ -127,21 +150,21 @@ void TEMPLATED_CLASSNAME::CreateClusters(void) {
     fp_t edge_length = upper[axis] - lower[axis];
     edge_length = (edge_length < 0) ? (-edge_length) : (edge_length);
 
-    // 3-1. calcul du nombre de centres effectifs dans chaque direction
+    // 3-1. computation of the number of centers we can fit in each direction
     shape[axis] = std::ceil(std::max(fp_consts::one(), edge_length / spacing));
 
-    // 4. calcul des distances dx, dy, dz (en d dimensions)
+    // 4. computation of the distances dx, dy, dz, the space between centers in
+    // each direction
     distances[axis] = edge_length / shape[axis];
     if (distances[axis] < min_distance) {
       min_distance = distances[axis];
     }
 
-    // 3-2. On rajoute 1 centre dans chaque direction et on considère comme
-    // premier centre le point `lower`
+    // we begin fitting centers at the beginning of the bounding box
     nb_centers *= ++shape[axis];
   }
 
-  // 5. création des centres candidats
+  // 5. we create a view with all of the clusters centers we want to try
   this->mClusters = decltype(this->mClusters)(
       Kokkos::view_alloc(execspace, Kokkos::WithoutInitializing,
                          "this->mClusters"),
@@ -153,7 +176,7 @@ void TEMPLATED_CLASSNAME::CreateClusters(void) {
       Kokkos::RangePolicy(execspace, 0, nb_centers),
       KOKKOS_LAMBDA(const index_t &i) {
         index_t i_copy = i;
-        // a. calcul des coordonnées du point
+        // a. we compute the coordinates of the point on the centers grid
         Kokkos::Array<int_t, Dim> coords{};
         for (int_t axis = Dim - 1; axis >= 0; --axis) {
           int_t prod = 1;
@@ -164,7 +187,7 @@ void TEMPLATED_CLASSNAME::CreateClusters(void) {
           i_copy -= coords[axis] * prod;
         }
 
-        // b. calcul de l'indice zCurve
+        // b. computation of the zCurve index
         int_t index = 0;
         int_t stride = 1;
         for (int_t k = Dim - 1; k >= 0; --k) {
@@ -172,7 +195,7 @@ void TEMPLATED_CLASSNAME::CreateClusters(void) {
           stride *= shape[k];
         }
 
-        // c. calcul de la position du point dans la BB
+        // c. computation of the spatial coordinates of the point in space
         centers_candidates(index) = Point{lower};
         for (int_t axis = 0; axis < Dim; ++axis) {
           centers_candidates(index)[axis] += distances[axis] * coords[axis];
@@ -180,29 +203,28 @@ void TEMPLATED_CLASSNAME::CreateClusters(void) {
       });
   Kokkos::fence();
 
-  // 6. on tag les clusters qui ne contiennent pas de point source donc ceux
-  // pour lesquels: norm2(nearest(center), center) > radius
+  // 6. we tag for removal clusters which do not contain source points
+  // = all clusters with norm2(nearest(center), center) > radius
   TagEmptyCenters tag_empty_centers{centers_candidates};
   TagEmptyCentersCallback tag_empty_centers_callback{
       centers_candidates, this->mRadius * this->mRadius};
   this->mSourceBvh.query(execspace, tag_empty_centers,
                          tag_empty_centers_callback);
 
-  // 7. on tag les clusters qui ne contiennent pas de point target
-  // donc ceux pour lesquels: norm2(nearest(center), center) > radius
+  // 7. same step but checking for target points in clusters
   this->mTargetBvh.query(execspace, tag_empty_centers,
                          tag_empty_centers_callback);
 
-  // 8. on projette les centres non taggés sur leur point source respectif le
-  // plus proche
+  // 8. we transform each center candidate to its nearest point on the source
+  // mesh/source points cloud
   TransformToNearest transform_to_nearest{centers_candidates};
   TransformToNearestCallback transform_to_nearest_callback{centers_candidates};
 
   this->mSourceBvh.query(execspace, transform_to_nearest,
                          transform_to_nearest_callback);
 
-  // 9. on retire les centres qui sont trop proches les uns des autres,
-  // threshold = 0.4 * min(distances)
+  // 9. we remove centers that are too close from each others (can be improved
+  // and taken to parallel computations on GPU) threshold = 0.4 * min(distances)
   fp_t threshold = 0.4 * min_distance;
   threshold *= threshold;
   auto centers_host = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{},
@@ -231,15 +253,15 @@ void TEMPLATED_CLASSNAME::CreateClusters(void) {
   }
   Kokkos::deep_copy(centers_candidates, centers_host);
 
-  // 10. on tag les clusters qui ne contiennent pas de point target
-  // donc ceux pour lesquels: norm2(nearest(center), center) > radius
+  // 10. we tag for removal the clusters which do not contain any target point:
+  // = all clusters with norm2(nearest(center), center) > radius
   tag_empty_centers = decltype(tag_empty_centers){centers_candidates};
   tag_empty_centers_callback = decltype(tag_empty_centers_callback){
       centers_candidates, this->mRadius * this->mRadius};
   this->mTargetBvh.query(execspace, tag_empty_centers,
                          tag_empty_centers_callback);
 
-  // 11. on retire les centres taggés
+  // 11. we remove tagged centers
   const auto end = Kokkos::Experimental::remove_if(
       _region_name + "::remove_if", execspace, centers_candidates,
       RemoveTaggedCenters<Point>{});

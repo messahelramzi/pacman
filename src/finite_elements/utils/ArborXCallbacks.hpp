@@ -1,3 +1,8 @@
+//
+// This file is subject to the terms and conditions defined in
+// file 'LICENSE', which is part of this source code package.
+//
+
 #pragma once
 
 #include <ArborX.hpp>
@@ -5,13 +10,80 @@
 #include "common/concepts.hpp"
 #include "common/transfer.hxx"
 #include "common/types.hpp"
+#include "finite_elements/utils/NewtonKokkos.hpp"
+
+/**
+ * @file ArborXCallbacks.hpp
+ * @brief ArborX predicate/callback helpers for PACMAN finite-elements kernels.
+ */
 
 namespace PACMAN {
 namespace FiniteElements {
-template <KokkosViewRank<1> ViewType> struct PointNearest {
-  ViewType points;
+
+/// @brief Wrapper for nearest-neighbor predicates built from 1D point views.
+/// @tparam ViewType Kokkos view type containing point geometry values.
+template <KokkosViewRank<1> ViewType> struct PointNearest { ViewType points; };
+
+/// @brief Point-finite element intersection and interplolation callback.
+/// @tparam ExecSpace Kokkos execution space.
+/// @tparam Dim Spatial dimension (used with triangle point coordinates).
+template <typename ExecSpace, int_t Dim>
+struct PointFiniteElementInterpolation {
+  using MemorySpace = typename ExecSpace::memory_space;
+
+  Transfer<ExecSpace, Dim> transfer;
+  Kokkos::View<int *, MemorySpace> parents;
+
+  /// @brief ArborX callback: project one outside target point and emit output.
+  template <typename Predicate, typename Value>
+  KOKKOS_FUNCTION auto operator()(const Predicate &predicate,
+                                  const Value &value) const {
+
+    const int predicate_index = ArborX::getData(predicate);
+    const int_t curElem = parents(value.index); // RAMZI: is it needed ?
+    const auto cellType = transfer.cellTypes(curElem);
+
+    Kokkos::Array<fp_t, MaxNodesPerElt> warr;
+    Kokkos::Array<coordinates_t, MaxNodesPerElt * Dim> Xarr;
+    Kokkos::Array<coordinates_t, Dim> tpa;
+    Kokkos::View<coordinates_t *, ExecSpace> tp(tpa.data(), Dim);
+
+    for (int_t j = 0; j < Dim; j++) {
+      tp(j) = transfer.targetPoints(predicate_index, j);
+    }
+    const auto localConn =
+        Kokkos::subview(transfer.connValues,
+                        Kokkos::make_pair(transfer.connOffsets(curElem),
+                                          transfer.connOffsets(curElem + 1)));
+    const offset_t nbConnNodes =
+        transfer.connOffsets(curElem + 1) - transfer.connOffsets(curElem);
+    Kokkos::View<fp_t *, ExecSpace> weights(warr.data(), nbConnNodes);
+    Kokkos::View<coordinates_t **, ExecSpace> Xcoor(Xarr.data(), nbConnNodes,
+                                                    Dim);
+    for (int_t j = 0; j < nbConnNodes; ++j) {
+      const auto nodeId = localConn(j);
+      for (int_t k = 0; k < Dim; ++k) {
+        Xcoor(j, k) = transfer.sourcePoints(nodeId)[k];
+      }
+    }
+    if (ApplyNewtonOnElement<ExecSpace, Dim>(cellType, Xcoor, tp,
+                                             weights /*, false*/)) {
+      for (int_t j = 0; j < nbConnNodes; ++j) {
+        const auto nodeId = localConn(j);
+        transfer.targetValues(predicate_index) +=
+            weights[j] * transfer.sourceValues(nodeId);
+      }
+      transfer.targetStatus(predicate_index) = TransferStatus::INTER;
+      return ArborX::CallbackTreeTraversalControl::early_exit;
+    } else {
+      return ArborX::CallbackTreeTraversalControl::normal_continuation;
+    }
+  }
 };
 
+/// @brief Project outside target points onto nearest 3D skin triangle.
+/// @tparam ExecSpace Kokkos execution space.
+/// @tparam Dim Spatial dimension (used with triangle point coordinates).
 template <typename ExecSpace, int_t Dim> struct PointTriangleProjection {
   using MemorySpace = typename ExecSpace::memory_space;
 
@@ -20,6 +92,7 @@ template <typename ExecSpace, int_t Dim> struct PointTriangleProjection {
   Kokkos::View<TransferStatus *, MemorySpace> status;
   Kokkos::View<int_t *, MemorySpace> skinParents;
 
+  /// @brief ArborX callback: project one outside target point and emit output.
   template <typename Predicate, typename Value, typename OutputFunctor>
   KOKKOS_FUNCTION void operator()(const Predicate &predicate,
                                   const Value &value,
@@ -53,6 +126,10 @@ template <typename ExecSpace, int_t Dim> struct PointTriangleProjection {
   }
 };
 
+/// @brief ArborX callback variant for extrapolation mode.
+///
+/// This callback records the parent element from the nearest skin primitive
+/// without moving target point coordinates.
 template <typename ExecSpace, int Dim> struct PointTriangleProjectionExtrapol {
   using MemorySpace = typename ExecSpace::memory_space;
 
@@ -60,6 +137,7 @@ template <typename ExecSpace, int Dim> struct PointTriangleProjectionExtrapol {
   Kokkos::View<TransferStatus *, MemorySpace> status;
   Kokkos::View<int_t *, MemorySpace> skinParents;
 
+  /// @brief ArborX callback: assign nearest skin parent for outside points.
   template <typename Predicate, typename Value, typename OutputFunctor>
   KOKKOS_FUNCTION void operator()(const Predicate &predicate,
                                   const Value &value,
@@ -73,6 +151,7 @@ template <typename ExecSpace, int Dim> struct PointTriangleProjectionExtrapol {
   }
 };
 
+/// @brief Generic callback extracting index from ArborX query values.
 struct ExtractIndex {
   template <typename Predicate, typename Value, typename OutputFunctor>
   KOKKOS_FUNCTION void operator()(Predicate, const Value &value,
@@ -81,10 +160,15 @@ struct ExtractIndex {
   }
 };
 
+/// @brief Predicate wrapper for nearest-neighbor queries over point clouds.
+/// @tparam MemorySpace Kokkos memory space.
+/// @tparam Dim Point-cloud dimensionality.
 template <typename MemorySpace, int Dim> struct PointCloudNearest {
   Kokkos::View<coordinates_t **, MemorySpace> points;
 };
 
+/// @brief Callback assigning source value at nearest-neighbor index.
+/// @tparam MemorySpace Kokkos memory space.
 template <typename MemorySpace> struct NearestExtractIndex {
   Kokkos::View<fp_t *, MemorySpace> sourceValues;
   Kokkos::View<fp_t *, MemorySpace> targetValues;
@@ -97,6 +181,9 @@ template <typename MemorySpace> struct NearestExtractIndex {
   }
 };
 
+/// @brief Predicate wrapper for point/box intersection queries.
+/// @tparam MemorySpace Kokkos memory space.
+/// @tparam Dim Point dimensionality.
 template <typename MemorySpace, int_t Dim> struct PointIntersect {
   Kokkos::View<coordinates_t **, MemorySpace> points;
 };
@@ -106,6 +193,7 @@ template <typename MemorySpace, int_t Dim> struct PointIntersect {
 } // namespace PACMAN
 
 namespace ArborX {
+/// @brief ArborX access traits for nearest-neighbor predicates from 1D views.
 template <PACMAN::KokkosViewRank<1> ViewType>
 struct AccessTraits<PACMAN::FiniteElements::PointNearest<ViewType>> {
   using memory_space = typename ViewType::memory_space;
@@ -118,6 +206,7 @@ struct AccessTraits<PACMAN::FiniteElements::PointNearest<ViewType>> {
   }
 };
 
+/// @brief ArborX access traits for nearest-neighbor point-cloud predicates.
 template <typename MemorySpace, int Dim>
 struct AccessTraits<
     PACMAN::FiniteElements::PointCloudNearest<MemorySpace, Dim>> {
@@ -136,6 +225,7 @@ struct AccessTraits<
   }
 };
 
+/// @brief ArborX access traits for point-intersection predicates.
 template <typename MemorySpace, int Dim>
 struct AccessTraits<PACMAN::FiniteElements::PointIntersect<MemorySpace, Dim>> {
   using memory_space = MemorySpace;
@@ -152,4 +242,5 @@ struct AccessTraits<PACMAN::FiniteElements::PointIntersect<MemorySpace, Dim>> {
     return attach(intersects(point), (int)i);
   }
 };
+
 } // namespace ArborX

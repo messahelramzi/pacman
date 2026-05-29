@@ -1,0 +1,12 @@
+spack:
+  concretizer:
+    unify: true
+  specs:
+    - gcc
+    - cmake
+    - ninja
+    - kokkos@5.1 +rocm amdgpu_target=gfx942 +hwloc +tuning +openmp +serial
+    - kokkos-kernels@5.1  +openmp +serial
+    - arborx@2.0.1 +rocm amdgpu_target=gfx942 ~mpi +openmp +serial
+    - py-pybind11
+    - py-numpy

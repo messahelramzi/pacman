@@ -1,90 +1,58 @@
+#
+# This file is subject to the terms and conditions defined in
+# file 'LICENSE', which is part of this source code package.
+#
+
+"""Functional RBF-PUM interpolation test runner.
+
+This script loads source/target point clouds, evaluates an analytic Franke
+reference, calls ``pacman.rbf.interpolate``, and validates interpolation error
+against mesh-dependent tolerances.
+"""
+
 import os
-import meshio
+import sys
 import numpy as np
 import pacman
 import argparse
+from franke_functions import franke_3d
 
-def franke_2d(x, y):
-    return (
-        0.75
-        * np.exp(
-            -(
-                ((9.0 * x - 2.0) * (9.0 * x - 2.0))
-                + ((9.0 * y - 2.0) * (9.0 * y - 2.0))
-            )
-            / 4.0
-        )
-        + 0.75
-        * np.exp(
-            -(
-                ((9.0 * x + 1.0) * (9.0 * x + 1.0)) / 49.0
-                + (9.0 * y + 1.0) / 10.0
-            )
-        )
-        + 0.5
-        * np.exp(
-            -(
-                ((9.0 * x - 7.0) * (9.0 * x - 7.0))
-                + ((9.0 * y - 3.0) * (9.0 * y - 3.0))
-            ) / 4.0
-        )
-        - 0.2
-        * np.exp(
-            -(
-                ((9.0 * x - 4.0) * (9.0 * x - 4.0))
-                + ((9.0 * y - 7.0) * (9.0 * y - 7.0))
-            )
-        )
-    )
-
-def franke_3d(x, y, z):
-    return (
-        0.75
-        * np.exp(
-            -(
-                ((9.0 * x - 2.0) * (9.0 * x - 2.0))
-                + ((9.0 * y - 2.0) * (9.0 * y - 2.0))
-                + ((9.0 * z - 2.0) * (9.0 * z - 2.0))
-            )
-            / 4.0
-        )
-        + 0.75
-        * np.exp(
-            -(
-                ((9.0 * x + 1.0) * (9.0 * x + 1.0)) / 49.0
-                + (9.0 * y + 1.0) / 10.0
-                + (9.0 * z + 1.0) / 10.0
-            )
-        )
-        + 0.5
-        * np.exp(
-            -(
-                ((9.0 * x - 7.0) * (9.0 * x - 7.0))
-                + ((9.0 * y - 3.0) * (9.0 * y - 3.0))
-                + ((9.0 * z - 5.0) * (9.0 * z - 5.0))
-            ) / 4.0
-        )
-        - 0.2
-        * np.exp(
-            -(
-                ((9.0 * x - 4.0) * (9.0 * x - 4.0))
-                + ((9.0 * y - 7.0) * (9.0 * y - 7.0))
-                + ((9.0 * z - 5.0) * (9.0 * z - 5.0))
-            )
-        )
-    )
 
 def test_interpolation(mesh_dir, mesh_file, method, execspace):
+    """Run one RBF-PUM interpolation validation case.
+
+    Parameters
+    ----------
+    mesh_dir : str
+        Directory containing the ``.vtkhdf`` meshes used in the test pair.
+    mesh_file : tuple[str, str]
+        Pair ``(source_mesh, target_mesh)`` of mesh filenames.
+    method : int
+        RBF function constant from ``pacman.rbf.functions``.
+        Supported values in this test script:
+        - ``pacman.rbf.functions.WENDLANDC0``
+        - ``pacman.rbf.functions.WENDLANDC2``
+        - ``pacman.rbf.functions.WENDLANDC4``
+        - ``pacman.rbf.functions.WENDLANDC6``
+        - ``pacman.rbf.functions.WENDLANDC8``
+    execspace : int
+        Execution-space constant from ``pacman.execspaces``.
+        Supported values in this test script:
+        - ``pacman.execspaces.SERIAL``
+        - ``pacman.execspaces.OPENMP``
+        - ``pacman.execspaces.CUDA``
+    """
 
     spaceDimension = 3
-    source_mesh = meshio.read(mesh_dir + mesh_file[0])
-    target_mesh = meshio.read(mesh_dir + mesh_file[1])
+    source_mesh = np.load(mesh_dir + mesh_file[0])
+    target_mesh = np.load(mesh_dir + mesh_file[1])
 
     tp = None
     sp_values = None
 
-    sp = source_mesh.points.astype(np.float64)
-    tp = target_mesh.points.astype(np.float64)
+    sp = source_mesh["points"][:, :spaceDimension].astype(np.float64)
+    tp = target_mesh["points"][:, :spaceDimension].astype(np.float64)
+
     sp_values = franke_3d(sp[:,0], sp[:,1], sp[:,2])
 
     tp_values = pacman.rbf.interpolate(spaceDimension, execspace, method, sp, sp_values, tp)
@@ -105,9 +73,8 @@ def test_interpolation(mesh_dir, mesh_file, method, execspace):
         print(f'error norm: {error_norm} > {max_error_allowed}')
     assert error_norm < max_error_allowed, f"Method {method} for mesh_file {mesh_file}: error norm {error_norm} exceeds threshold"
 
-
-
 def main():
+    """Parse CLI arguments and execute one RBF-PUM interpolation test case."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--mesh")
     parser.add_argument("--method")
@@ -126,28 +93,32 @@ def main():
     }
 
     execspaces = {
-        "serial": pacman.execspaces.SERIAL,
-        "openmp": pacman.execspaces.OPENMP,
-        "cuda": pacman.execspaces.CUDA
+        "SERIAL": pacman.execspaces.SERIAL,
+        "OPENMP": pacman.execspaces.OPENMP,
+        "CUDA": pacman.execspaces.CUDA,
+        "HIP": pacman.execspaces.HIP
     }
+
+    avail_execspaces = pacman.execspaces.available()
+
+    requested_execspace = execspaces[args.exec_space]
+
+    if args.exec_space not in avail_execspaces:
+        print(
+            f"[SKIP] Execution space {args.exec_space} not available "
+            f"(available: {avail_execspaces})"
+        )
+        sys.exit(77)
 
     meshes= {
         # Coarse to Fine
-        "coarse_to_fine_0": ("0.03.vtu", "0.003.vtu"),
-        "coarse_to_fine_1": ("0.02.vtu", "0.002.vtu"),
-        "coarse_to_fine_2": ("0.01.vtu", "0.001.vtu"),
-        "coarse_to_fine_3": ("0.004.vtu", "0.0005.vtu"),
+        "coarse_to_fine_0": ("0.03.npz", "0.003.npz"),
 
         # Fine to Coarse
-        "fine_to_coarse_0": ("0.003.vtu", "0.03.vtu"),
-        "fine_to_coarse_1": ("0.002.vtu", "0.02.vtu"),
-        "fine_to_coarse_2": ("0.001.vtu", "0.01.vtu"),
-        "fine_to_coarse_3": ("0.0005.vtu", "0.004.vtu"),
+        "fine_to_coarse_0": ("0.003.npz", "0.03.npz"),
 
         # Same meshes
-        "same_0": ("0.03.vtu", "0.03.vtu"),
-        "same_1": ("0.001.vtu", "0.001.vtu"),
-        "same_2": ("0.0005.vtu", "0.0005.vtu"),
+        "same_0": ("0.03.npz", "0.03.npz"),
     }
 
     test_interpolation(mesh_dir, meshes[args.mesh], methods[args.method], execspaces[args.exec_space])

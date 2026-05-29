@@ -1,3 +1,8 @@
+//
+// This file is subject to the terms and conditions defined in
+// file 'LICENSE', which is part of this source code package.
+//
+
 #pragma once
 
 #include <ArborX_Point.hpp>
@@ -8,6 +13,13 @@
 #include "utils/utils.hpp"
 
 namespace ArborX {
+
+/// @brief Custom operator overload for `operator==` to compare two
+/// `ArborX::Point` using the values of each point, and handle NaN by skipping
+/// them
+/// @tparam Dim The space dimension of the points
+/// @param lhs The `lhs` point in `lhs == rhs`
+/// @param rhs The `rhs` point in `lhs == rhs`
 template <int Dim>
 KOKKOS_INLINE_FUNCTION constexpr bool
 operator==(const ArborX::Point<Dim, PACMAN::coordinates_t> &lhs,
@@ -20,6 +32,13 @@ operator==(const ArborX::Point<Dim, PACMAN::coordinates_t> &lhs,
   return true;
 }
 
+/// @brief Custom operator overload for `operator!=` to compare two
+/// `ArborX::Point` using the values of each point, and handle NaN by skipping
+/// them
+/// @tparam Dim The space dimension of the points
+/// @param lhs The `lhs` point in `lhs != rhs`
+/// @param rhs The `rhs` point in `lhs != rhs`
+/// @returns `!(lhs == rhs)`
 template <int Dim>
 KOKKOS_INLINE_FUNCTION constexpr bool
 operator!=(const ArborX::Point<Dim, PACMAN::coordinates_t> &lhs,
@@ -27,12 +46,18 @@ operator!=(const ArborX::Point<Dim, PACMAN::coordinates_t> &lhs,
   return !(lhs == rhs);
 }
 
+/// @brief Custom operator overload for `operator<` to compare two
+/// `ArborX::Point` using the values of each point. Performs a lexicographic
+/// ordering (NaNs are always bigger than non-NaNs)
+///        and follows strict weak ordering properties
+/// @tparam Dim The space dimension of the points
+/// @param lhs The `lhs` point in `lhs < rhs`
+/// @param rhs The `rhs` point in `lhs < rhs`
+/// @returns `true` if lhs < rhs
 template <int Dim>
 KOKKOS_INLINE_FUNCTION bool constexpr
 operator<(const ArborX::Point<Dim, PACMAN::coordinates_t> &lhs,
           const ArborX::Point<Dim, PACMAN::coordinates_t> &rhs) noexcept {
-  // Lexicographic ordering (NaNs are always bigger than non-NaNs)
-  // follows strict weak ordering properties
   const bool is_lhs_nan = lhs[0] != lhs[0];
   const bool is_rhs_nan = rhs[0] != rhs[0];
   if (is_lhs_nan != is_rhs_nan) {
@@ -49,6 +74,14 @@ operator<(const ArborX::Point<Dim, PACMAN::coordinates_t> &lhs,
   return false;
 }
 
+/// @brief Custom operator overload for `operator>` to compare two
+/// `ArborX::Point` using the values of each point. Performs a lexicographic
+/// ordering (NaNs are always bigger than non-NaNs)
+///        and follows strict weak ordering properties
+/// @tparam Dim The space dimension of the points
+/// @param lhs The `lhs` point in `lhs > rhs`
+/// @param rhs The `rhs` point in `lhs > rhs`
+/// @returns !(lhs <= rhs)
 template <int Dim>
 KOKKOS_INLINE_FUNCTION bool constexpr
 operator>(const ArborX::Point<Dim, PACMAN::coordinates_t> &lhs,
@@ -56,6 +89,13 @@ operator>(const ArborX::Point<Dim, PACMAN::coordinates_t> &lhs,
   return !(lhs == rhs) && !(lhs < rhs);
 }
 
+/// @brief Custom operator overload for `operator<<` to print a `ArborX::Point`
+/// with a nice format (ArborX::Point(x, y, z)). The coordinates are formated
+/// using their type
+/// @warning Works on host backends only
+/// @tparam Dim The space dimension of the points
+/// @param point The point to print
+/// @returns The stream the point has been added to
 template <int Dim>
 std::ostream &
 operator<<(std::ostream &os,
@@ -74,6 +114,14 @@ operator<<(std::ostream &os,
 
 namespace PACMAN {
 namespace RbfPum {
+
+/// @brief Returns the squared distance between two points, and check for NaN
+/// values
+/// @tparam Dim The space dimension of both points
+/// @param lhs Source `ArborX::Point`
+/// @param rhs Target `ArborX::Point`
+/// @return $\sigma_{i=0}^{Dim}\left(rhs_i - lhs_i)^2\right)$ if both `lhs` and
+/// `rhs` are valid (no NaN value) else returns -1.0
 template <int_t Dim>
 KOKKOS_INLINE_FUNCTION fp_t
 SquaredDifference(const ::ArborX::Point<Dim, coordinates_t> &lhs,
@@ -88,6 +136,13 @@ SquaredDifference(const ::ArborX::Point<Dim, coordinates_t> &lhs,
   return acc;
 }
 
+/// @brief Returns the euclidian norm between two points by performing a square
+/// root operation on the `SquaredDifference` result
+/// @tparam Dim The space dimension of both points
+/// @param lhs Source `ArborX::Point`
+/// @param rhs Target `ArborX::Point`
+/// @note see `SquaredDifference`, if `SquaredDifference` returns -1.0, this
+/// function returns -1.0 as well
 template <int_t Dim>
 KOKKOS_INLINE_FUNCTION fp_t
 Distance(const ::ArborX::Point<Dim, coordinates_t> &lhs,
@@ -99,6 +154,12 @@ Distance(const ::ArborX::Point<Dim, coordinates_t> &lhs,
   return Kokkos::sqrt(d);
 }
 
+/// @brief Returns the squared distance between two points, and don't check for
+/// NaN values
+/// @tparam Dim The space dimension of both points
+/// @param lhs Source `ArborX::Point`
+/// @param rhs Target `ArborX::Point`
+/// @return $\sigma_{i=0}^{Dim}\left(rhs_i - lhs_i)^2\right)$
 template <int_t Dim>
 KOKKOS_INLINE_FUNCTION fp_t
 SquaredDifferenceNoCheck(const ::ArborX::Point<Dim, coordinates_t> &lhs,
@@ -110,6 +171,12 @@ SquaredDifferenceNoCheck(const ::ArborX::Point<Dim, coordinates_t> &lhs,
   return acc;
 }
 
+/// @brief Returns the euclidian norm between two points by performing a square
+/// root operation on the `SquaredDifferenceNoCheck` result
+/// @tparam Dim The space dimension of both points
+/// @param lhs Source `ArborX::Point`
+/// @param rhs Target `ArborX::Point`
+/// @note see `SquaredDifferenceNoCheck`
 template <int_t Dim>
 KOKKOS_INLINE_FUNCTION fp_t
 DistanceNoCheck(const ::ArborX::Point<Dim, coordinates_t> &lhs,
@@ -122,6 +189,9 @@ struct OffsetsScanPair {
   offset_t targetCurrent;
 };
 
+/// @brief Struct used to build multiple matrices access offsets with one scan
+/// loop only, during the systems solver step
+/// @tparam ExecSpace The Kokkos execution space the operation happens in
 template <typename ExecSpace> struct OffsetsScan {
   Kokkos::View<offset_t *, ExecSpace> sourceOffsets;
   Kokkos::View<offset_t *, ExecSpace> targetOffsets;

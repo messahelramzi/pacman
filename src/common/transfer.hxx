@@ -1,14 +1,33 @@
+//
+// This file is subject to the terms and conditions defined in
+// file 'LICENSE', which is part of this source code package.
+//
+
 #pragma once
 
 #include <ArborX_Point.hpp>
 #include <Kokkos_Core.hpp>
 
 #include "common/types.hpp"
-#include "finite_elements/utils/FEInterpolatorTools.hxx"
+#include "finite_elements/utils/FESkinTools.hpp"
 
 namespace PACMAN {
+
+// FE const
 static constexpr int_t MaxNodesPerElt = 27;
 
+/// @brief This struct is the core is the interpolation system. It contains all of the information which is useful for the interpolation process.
+///        There are multiple attributes in this struct:  
+///        `method`: an enum type variable which describes the interpolation technique.  
+///        `sourcePoints`: a `Kokkos::View` of coordinates which describes the source points cloud.  
+///        `sourceValues`: a `Kokkos::View` of scalars which describes the values at the source points.  
+///        `targetPoints`: a `Kokkos::View` of coordinates which describes the target points cloud.  
+///        `targetValues`: a `Kokkos::View` of scalars which describes the values at the source points (the interpolated values).  
+///        `targetStatus`: a `Kokkos::View` of enum types, which is used only for debugging purposes. It indicates the nature of the transfer for each point.  
+///        `connValues` & `connOffsets`: CSR representation of the connectivity of the mesh, using `Kokkos::View`s  
+///        `cellTypes`: the VTK type of each cell in a `Kokkos::View`  
+/// @tparam ExecSpace The execution space in which the interpolation is executed
+/// @tparam Dim The space dimension of the problem
 template <typename ExecSpace, int_t Dim> struct Transfer {
   using MemorySpace = typename ExecSpace::memory_space;
 
@@ -37,6 +56,7 @@ template <typename ExecSpace, int_t Dim> struct Transfer {
   Transfer(const TransferMethods method) { this->method = method; }
 };
 
+/// @brief Fills the transfer object using the raw pointers passed from Python
 template <typename ExecSpace, int_t Dim>
 void SetupTransferClass(Transfer<ExecSpace, Dim> &transfer,
                         const index_t sourcePointsSize,

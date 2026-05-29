@@ -1,6 +1,6 @@
 //
 // This file is subject to the terms and conditions defined in
-// file 'LICENSE.txt', which is part of this source code package.
+// file 'LICENSE', which is part of this source code package.
 //
 
 #pragma once
@@ -13,20 +13,25 @@ namespace PACMAN {
 
 namespace FiniteElements {
 
-template <typename ExecSpace, int Dim>
 /**
- * @brief Compute the target point finite element interpolation if intersects or
- * assign zero node value if outside all elements.
- * @param[in] transfer the transfer class holding informations.
- * @return target point values
+ * @brief Interpolate target points from FE cells, zero-filling points outside
+ * the source mesh.
+ * @tparam ExecSpace Kokkos execution space used for the intersection/query
+ * kernels.
+ * @tparam Dim Spatial dimension of the interpolation problem.
+ * @param[in,out] transfer Transfer descriptor holding interpolation data.
+ * Reads: source mesh/field data and target points.
+ * Writes: `targetValues` and `targetStatus`.
+ * @note Points that do not intersect any source element are assigned a zero
+ * value.
  */
+template <typename ExecSpace, int Dim>
 void FTInterZero(Transfer<ExecSpace, Dim> &transfer) {
 
   Kokkos::Profiling::pushRegion("FiniteElement::FTInterpZero");
 
   Kokkos::Profiling::pushRegion("Compute target point FE intersection");
   ComputeBoxTargetPointIntersection<ExecSpace, Dim>(transfer);
-  Kokkos::fence();
   Kokkos::Profiling::popRegion(); // Compute target point FE intersection
 
   Kokkos::Profiling::popRegion(); // FTInterpZero

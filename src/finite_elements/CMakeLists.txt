@@ -1,3 +1,8 @@
+#
+# This file is subject to the terms and conditions defined in
+# file 'LICENSE', which is part of this source code package.
+#
+
 add_library(finiteelements INTERFACE)
 
 target_include_directories(finiteelements INTERFACE  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)

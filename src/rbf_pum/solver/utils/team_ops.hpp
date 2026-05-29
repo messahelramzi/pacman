@@ -1,6 +1,10 @@
+//
+// This file is subject to the terms and conditions defined in
+// file 'LICENSE', which is part of this source code package.
+//
+
 #pragma once
 
-#include <KokkosBlas2_gemv.hpp>
 #include <Kokkos_Core.hpp>
 
 #include "common/concepts.hpp"
@@ -9,6 +13,25 @@
 namespace PACMAN {
 
 namespace RbfPum {
+
+/// @brief Fills the RBF matrix A in parallel. This function must not be called
+/// in a nested parallel loop
+/// @tparam TeamHandleType Type of the team of threads
+/// @tparam AViewType Type of the matrix A (a concept enforces `Kokkos::View` of
+/// rank 2)
+/// @tparam XType Type of the source points view (a concept enforces
+/// `Kokkos::View` of rank 1)
+/// @tparam XOffsType Type of the access offsets associated to the source points
+/// (a concept enforces `Kokkos::View` of rank 1)
+/// @tparam RbfFuncType A RBF function (for instance: Wendland functions), a
+/// concept enforces that function.Eval exists
+/// @param teamHandle The Kokkos object which represents the team of threads
+/// @param A The RBF matrix we are filling
+/// @param X The source points contained in the local cluster
+/// @param XOffs The access offsets of the local cluster points in the source
+/// points view
+/// @param func The RBF function we use to compute values to assign to A
+/// @note A is symmetric, and is filled 2 values by 2 values using this property
 template <typename TeamHandleType, KokkosViewRank<2> AViewType,
           KokkosViewRank<1> XType, KokkosViewRank<1> XOffsType,
           RBFFunction RbfFuncType>
@@ -28,6 +51,30 @@ TeamFillA(const TeamHandleType &teamHandle, const AViewType &A, const XType &X,
       });
 }
 
+/// @brief Fills the RBF evaluation matrix E in parallel. This function must not
+/// be called in a nested parallel loop
+/// @tparam TeamHandleType Type of the team of threads
+/// @tparam AViewType Type of the matrix E (a concept enforces `Kokkos::View` of
+/// rank 2)
+/// @tparam XType Type of the source points view (a concept enforces
+/// `Kokkos::View` of rank 1)
+/// @tparam XOffsType Type of the access offsets associated to the source points
+/// (a concept enforces `Kokkos::View` of rank 1)
+/// @tparam YType Type of the target points view (a concept enforces
+/// `Kokkos::View` of rank 1)
+/// @tparam YOffsType Type of the access offsets associated to the target points
+/// (a concept enforces `Kokkos::View` of rank 1)
+/// @tparam RbfFuncType A RBF function (for instance: Wendland functions), a
+/// concept enforces that function.Eval exists
+/// @param teamHandle The Kokkos object which represents the team of threads
+/// @param A The RBF evaluation matrix we are filling
+/// @param X The source points contained in the local cluster
+/// @param XOffs The access offsets of the local cluster points in the source
+/// points view
+/// @param Y The target points contained in the local cluster
+/// @param YOffs The access offsets of the local cluster points in the target
+/// points view
+/// @param func The RBF function we use to compute values to assign to A
 template <typename TeamHandleType, KokkosViewRank<2> AViewType,
           KokkosViewRank<1> XType, KokkosViewRank<1> XOffsType,
           KokkosViewRank<1> YType, KokkosViewRank<1> YOffsType,
@@ -49,6 +96,20 @@ TeamFillE(const TeamHandleType &teamHandle, AViewType &A, const XType &X,
       });
 }
 
+/// @brief Fills the vector of known source values B in parallel. This function
+/// must not be called in a nested parallel loop
+/// @tparam TeamHandleType Type of the team of threads
+/// @tparam BViewType Type of the vector B (a concept enforces `Kokkos::View` of
+/// rank 1)
+/// @tparam XType Type of the source points view (a concept enforces
+/// `Kokkos::View` of rank 1)
+/// @tparam XOffsType Type of the access offsets associated to the source points
+/// (a concept enforces `Kokkos::View` of rank 1)
+/// @param teamHandle The Kokkos object which represents the team of threads
+/// @param B The known source values vector B we are filling
+/// @param X The source points contained in the local cluster
+/// @param XOffs The access offsets of the local cluster points in the source
+/// points view
 template <typename TeamHandleType, KokkosViewRank<1> BViewType,
           KokkosViewRank<1> XType, KokkosViewRank<1> XOffsType>
 KOKKOS_FORCEINLINE_FUNCTION void TeamFillB(const TeamHandleType &teamHandle,
@@ -57,59 +118,6 @@ KOKKOS_FORCEINLINE_FUNCTION void TeamFillB(const TeamHandleType &teamHandle,
   const int_t N = B.extent_int(0);
   Kokkos::parallel_for(Kokkos::TeamVectorRange(teamHandle, N),
                        [&](const int_t &i) { B(i) = X(XOffs(i)); });
-}
-
-template <typename TeamHandleType, KokkosViewRank<2> PViewType,
-          KokkosViewRank<1> XViewType, KokkosViewRank<1> OffsViewType,
-          KokkosArray AxisType>
-KOKKOS_INLINE_FUNCTION auto
-TeamPolyFill(const TeamHandleType &teamHandle, PViewType &P, const XViewType &X,
-             const OffsViewType &XOffs, AxisType &activeAxis) {
-  constexpr int_t dim = activeAxis.size();
-  const int_t N = P.extent_int(0);
-  int_t active_count = 0;
-  int_t active_index[dim];
-  for (int_t j = 0; j < dim; ++j) {
-    if (activeAxis[j]) {
-      active_index[active_count++] = j;
-    }
-  }
-
-  Kokkos::parallel_for(Kokkos::TeamVectorMDRange(teamHandle, N, active_count),
-                       [&](const int_t &i, const int_t &k) {
-                         P(i, 1 + k) = X(XOffs(i))[active_index[k]];
-                       });
-}
-
-template <typename TeamHandleType, KokkosViewRank<2> AViewType,
-          KokkosViewRank<1> BViewType, KokkosViewRank<1> OutViewType>
-KOKKOS_FORCEINLINE_FUNCTION auto
-TeamMulMatVec(const TeamHandleType &teamHandle, const AViewType &A,
-              const BViewType &B, OutViewType &out) {
-  namespace KB = KokkosBlas;
-  using Gemv = KB::TeamGemv<TeamHandleType, KB::Trans::NoTranspose,
-                            KB::Algo::Gemv::Unblocked>;
-  Gemv::invoke(teamHandle, fp_consts::one(), A, B, fp_consts::zero(), out);
-}
-
-template <typename TeamHandleType, KokkosViewRank<1> UViewType,
-          KokkosViewRank<1> VViewType>
-KOKKOS_FORCEINLINE_FUNCTION void TeamVecVecAdd(const TeamHandleType &teamHandle,
-                                               UViewType &U,
-                                               const VViewType &V) {
-  const int_t N = U.extent_int(0);
-  Kokkos::parallel_for(Kokkos::TeamVectorRange(teamHandle, N),
-                       [&](const int_t &i) { U(i) += V(i); });
-}
-
-template <typename TeamHandleType, KokkosViewRank<1> UViewType,
-          KokkosViewRank<1> VViewType>
-KOKKOS_FORCEINLINE_FUNCTION void TeamVecVecSub(const TeamHandleType &teamHandle,
-                                               UViewType &U,
-                                               const VViewType &V) {
-  const int_t N = U.extent_int(0);
-  Kokkos::parallel_for(Kokkos::TeamVectorRange(teamHandle, N),
-                       [&](const int_t &i) { U(i) -= V(i); });
 }
 
 } // namespace RbfPum

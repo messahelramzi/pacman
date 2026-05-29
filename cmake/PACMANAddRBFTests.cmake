@@ -1,3 +1,8 @@
+#
+# This file is subject to the terms and conditions defined in
+# file 'LICENSE', which is part of this source code package.
+#
+
 function(add_rbf_test mesh method exec_space)
   string(REPLACE "/" "_" method_safe "${method}")
 

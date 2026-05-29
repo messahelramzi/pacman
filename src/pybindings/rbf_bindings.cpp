@@ -1,3 +1,8 @@
+//
+// This file is subject to the terms and conditions defined in
+// file 'LICENSE', which is part of this source code package.
+//
+
 #include "pybindings/rbf_bindings.hpp"
 
 #include <ArborX_Point.hpp>
@@ -5,7 +10,10 @@
 #include <Kokkos_Profiling_ScopedRegion.hpp>
 
 #include "pybindings/bindings.hpp"
-#include "rbf_pum/interpolator.hpp"
+// Only the class declaration is needed here — method bodies are provided by the
+// ETI translation units (rbf_eti_*.cpp).  Extern template declarations in
+// interpolator.hxx suppress re-instantiation in this TU.
+#include "rbf_pum/interpolator.hxx"
 
 namespace PACMAN {
 namespace PyBindingsRbf {
@@ -45,9 +53,13 @@ py::array_t<fp_t> RunInterpolate(np_array<coordinates_t> &rSourcePoints,
   return target_values_np_array;
 }
 
-template <int Dim>
-  requires IsValidDim<Dim>
-py::array_t<fp_t>
+/// @brief This function allows us to pass runtime parameters as template
+/// arguments, using a type union `std::variant` (`AvailableExecSpaces` &
+/// `AvailableRbfFunctions`) to restraint types
+/// @tparam Dim The space dimension of the problem, here the dimension is
+/// checked to be between 1 and 3 (included)
+template <int_t Dim>
+requires IsValidDim<Dim> py::array_t<fp_t>
 Dispatch(np_array<coordinates_t> &rSourcePoints, np_array<fp_t> &rSourceValues,
          np_array<coordinates_t> &rTargetPoints, const unsigned char execSpace,
          const unsigned char rbfFunction) {

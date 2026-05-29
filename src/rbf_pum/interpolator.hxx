@@ -1,3 +1,8 @@
+//
+// This file is subject to the terms and conditions defined in
+// file 'LICENSE', which is part of this source code package.
+//
+
 #pragma once
 
 #include <ArborX_Box.hpp>
@@ -68,3 +73,124 @@ private:
 
 } // namespace RbfPum
 } // namespace PACMAN
+
+// Explicit template instantiation declarations.
+// Each enabled exec space has a dedicated ETI translation unit that provides
+// the definitions — suppress implicit instantiation everywhere else.
+#ifndef PACMAN_RBF_ETI_COMPILATION
+namespace PACMAN {
+namespace RbfPum {
+
+// clang-format off
+#if defined(KOKKOS_ENABLE_SERIAL)
+extern template class RbfPumInterpolator<Kokkos::Serial, 1, WendlandC0>;
+extern template class RbfPumInterpolator<Kokkos::Serial, 1, WendlandC2>;
+extern template class RbfPumInterpolator<Kokkos::Serial, 1, WendlandC4>;
+extern template class RbfPumInterpolator<Kokkos::Serial, 1, WendlandC6>;
+extern template class RbfPumInterpolator<Kokkos::Serial, 1, WendlandC8>;
+extern template class RbfPumInterpolator<Kokkos::Serial, 2, WendlandC0>;
+extern template class RbfPumInterpolator<Kokkos::Serial, 2, WendlandC2>;
+extern template class RbfPumInterpolator<Kokkos::Serial, 2, WendlandC4>;
+extern template class RbfPumInterpolator<Kokkos::Serial, 2, WendlandC6>;
+extern template class RbfPumInterpolator<Kokkos::Serial, 2, WendlandC8>;
+extern template class RbfPumInterpolator<Kokkos::Serial, 3, WendlandC0>;
+extern template class RbfPumInterpolator<Kokkos::Serial, 3, WendlandC2>;
+extern template class RbfPumInterpolator<Kokkos::Serial, 3, WendlandC4>;
+extern template class RbfPumInterpolator<Kokkos::Serial, 3, WendlandC6>;
+extern template class RbfPumInterpolator<Kokkos::Serial, 3, WendlandC8>;
+#endif
+
+#if defined(KOKKOS_ENABLE_OPENMP)
+extern template class RbfPumInterpolator<Kokkos::OpenMP, 1, WendlandC0>;
+extern template class RbfPumInterpolator<Kokkos::OpenMP, 1, WendlandC2>;
+extern template class RbfPumInterpolator<Kokkos::OpenMP, 1, WendlandC4>;
+extern template class RbfPumInterpolator<Kokkos::OpenMP, 1, WendlandC6>;
+extern template class RbfPumInterpolator<Kokkos::OpenMP, 1, WendlandC8>;
+extern template class RbfPumInterpolator<Kokkos::OpenMP, 2, WendlandC0>;
+extern template class RbfPumInterpolator<Kokkos::OpenMP, 2, WendlandC2>;
+extern template class RbfPumInterpolator<Kokkos::OpenMP, 2, WendlandC4>;
+extern template class RbfPumInterpolator<Kokkos::OpenMP, 2, WendlandC6>;
+extern template class RbfPumInterpolator<Kokkos::OpenMP, 2, WendlandC8>;
+extern template class RbfPumInterpolator<Kokkos::OpenMP, 3, WendlandC0>;
+extern template class RbfPumInterpolator<Kokkos::OpenMP, 3, WendlandC2>;
+extern template class RbfPumInterpolator<Kokkos::OpenMP, 3, WendlandC4>;
+extern template class RbfPumInterpolator<Kokkos::OpenMP, 3, WendlandC6>;
+extern template class RbfPumInterpolator<Kokkos::OpenMP, 3, WendlandC8>;
+#endif
+
+#if defined(KOKKOS_ENABLE_THREADS)
+extern template class RbfPumInterpolator<Kokkos::Threads, 1, WendlandC0>;
+extern template class RbfPumInterpolator<Kokkos::Threads, 1, WendlandC2>;
+extern template class RbfPumInterpolator<Kokkos::Threads, 1, WendlandC4>;
+extern template class RbfPumInterpolator<Kokkos::Threads, 1, WendlandC6>;
+extern template class RbfPumInterpolator<Kokkos::Threads, 1, WendlandC8>;
+extern template class RbfPumInterpolator<Kokkos::Threads, 2, WendlandC0>;
+extern template class RbfPumInterpolator<Kokkos::Threads, 2, WendlandC2>;
+extern template class RbfPumInterpolator<Kokkos::Threads, 2, WendlandC4>;
+extern template class RbfPumInterpolator<Kokkos::Threads, 2, WendlandC6>;
+extern template class RbfPumInterpolator<Kokkos::Threads, 2, WendlandC8>;
+extern template class RbfPumInterpolator<Kokkos::Threads, 3, WendlandC0>;
+extern template class RbfPumInterpolator<Kokkos::Threads, 3, WendlandC2>;
+extern template class RbfPumInterpolator<Kokkos::Threads, 3, WendlandC4>;
+extern template class RbfPumInterpolator<Kokkos::Threads, 3, WendlandC6>;
+extern template class RbfPumInterpolator<Kokkos::Threads, 3, WendlandC8>;
+#endif
+
+#if defined(KOKKOS_ENABLE_CUDA)
+extern template class RbfPumInterpolator<Kokkos::Cuda, 1, WendlandC0>;
+extern template class RbfPumInterpolator<Kokkos::Cuda, 1, WendlandC2>;
+extern template class RbfPumInterpolator<Kokkos::Cuda, 1, WendlandC4>;
+extern template class RbfPumInterpolator<Kokkos::Cuda, 1, WendlandC6>;
+extern template class RbfPumInterpolator<Kokkos::Cuda, 1, WendlandC8>;
+extern template class RbfPumInterpolator<Kokkos::Cuda, 2, WendlandC0>;
+extern template class RbfPumInterpolator<Kokkos::Cuda, 2, WendlandC2>;
+extern template class RbfPumInterpolator<Kokkos::Cuda, 2, WendlandC4>;
+extern template class RbfPumInterpolator<Kokkos::Cuda, 2, WendlandC6>;
+extern template class RbfPumInterpolator<Kokkos::Cuda, 2, WendlandC8>;
+extern template class RbfPumInterpolator<Kokkos::Cuda, 3, WendlandC0>;
+extern template class RbfPumInterpolator<Kokkos::Cuda, 3, WendlandC2>;
+extern template class RbfPumInterpolator<Kokkos::Cuda, 3, WendlandC4>;
+extern template class RbfPumInterpolator<Kokkos::Cuda, 3, WendlandC6>;
+extern template class RbfPumInterpolator<Kokkos::Cuda, 3, WendlandC8>;
+#endif
+
+#if defined(KOKKOS_ENABLE_HIP)
+extern template class RbfPumInterpolator<Kokkos::HIP, 1, WendlandC0>;
+extern template class RbfPumInterpolator<Kokkos::HIP, 1, WendlandC2>;
+extern template class RbfPumInterpolator<Kokkos::HIP, 1, WendlandC4>;
+extern template class RbfPumInterpolator<Kokkos::HIP, 1, WendlandC6>;
+extern template class RbfPumInterpolator<Kokkos::HIP, 1, WendlandC8>;
+extern template class RbfPumInterpolator<Kokkos::HIP, 2, WendlandC0>;
+extern template class RbfPumInterpolator<Kokkos::HIP, 2, WendlandC2>;
+extern template class RbfPumInterpolator<Kokkos::HIP, 2, WendlandC4>;
+extern template class RbfPumInterpolator<Kokkos::HIP, 2, WendlandC6>;
+extern template class RbfPumInterpolator<Kokkos::HIP, 2, WendlandC8>;
+extern template class RbfPumInterpolator<Kokkos::HIP, 3, WendlandC0>;
+extern template class RbfPumInterpolator<Kokkos::HIP, 3, WendlandC2>;
+extern template class RbfPumInterpolator<Kokkos::HIP, 3, WendlandC4>;
+extern template class RbfPumInterpolator<Kokkos::HIP, 3, WendlandC6>;
+extern template class RbfPumInterpolator<Kokkos::HIP, 3, WendlandC8>;
+#endif
+
+#if defined(KOKKOS_ENABLE_SYCL)
+extern template class RbfPumInterpolator<Kokkos::SYCL, 1, WendlandC0>;
+extern template class RbfPumInterpolator<Kokkos::SYCL, 1, WendlandC2>;
+extern template class RbfPumInterpolator<Kokkos::SYCL, 1, WendlandC4>;
+extern template class RbfPumInterpolator<Kokkos::SYCL, 1, WendlandC6>;
+extern template class RbfPumInterpolator<Kokkos::SYCL, 1, WendlandC8>;
+extern template class RbfPumInterpolator<Kokkos::SYCL, 2, WendlandC0>;
+extern template class RbfPumInterpolator<Kokkos::SYCL, 2, WendlandC2>;
+extern template class RbfPumInterpolator<Kokkos::SYCL, 2, WendlandC4>;
+extern template class RbfPumInterpolator<Kokkos::SYCL, 2, WendlandC6>;
+extern template class RbfPumInterpolator<Kokkos::SYCL, 2, WendlandC8>;
+extern template class RbfPumInterpolator<Kokkos::SYCL, 3, WendlandC0>;
+extern template class RbfPumInterpolator<Kokkos::SYCL, 3, WendlandC2>;
+extern template class RbfPumInterpolator<Kokkos::SYCL, 3, WendlandC4>;
+extern template class RbfPumInterpolator<Kokkos::SYCL, 3, WendlandC6>;
+extern template class RbfPumInterpolator<Kokkos::SYCL, 3, WendlandC8>;
+#endif
+// clang-format on
+
+} // namespace RbfPum
+} // namespace PACMAN
+#endif // PACMAN_RBF_ETI_COMPILATION

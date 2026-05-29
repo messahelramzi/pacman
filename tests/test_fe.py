@@ -1,129 +1,72 @@
+#
+# This file is subject to the terms and conditions defined in
+# file 'LICENSE', which is part of this source code package.
+#
+
+"""Functional FE interpolation test runner.
+
+This script loads source/target meshes, evaluates analytic Franke references,
+calls ``pacman.fe.interpolate``, and validates results for multiple FE methods.
+"""
+
 import os
-import meshio
-import numpy as np
+import sys
 import pacman
+import numpy as np
 import argparse
+from franke_functions import franke_2d, franke_3d
 
-def franke_2d(x, y):
-    return (
-        0.75
-        * np.exp(
-            -(
-                ((9.0 * x - 2.0) * (9.0 * x - 2.0))
-                + ((9.0 * y - 2.0) * (9.0 * y - 2.0))
-            )
-            / 4.0
-        )
-        + 0.75
-        * np.exp(
-            -(
-                ((9.0 * x + 1.0) * (9.0 * x + 1.0)) / 49.0
-                + (9.0 * y + 1.0) / 10.0
-            )
-        )
-        + 0.5
-        * np.exp(
-            -(
-                ((9.0 * x - 7.0) * (9.0 * x - 7.0))
-                + ((9.0 * y - 3.0) * (9.0 * y - 3.0))
-            ) / 4.0
-        )
-        - 0.2
-        * np.exp(
-            -(
-                ((9.0 * x - 4.0) * (9.0 * x - 4.0))
-                + ((9.0 * y - 7.0) * (9.0 * y - 7.0))
-            )
-        )
-    )
-
-def franke_3d(x, y, z):
-    return (
-        0.75
-        * np.exp(
-            -(
-                ((9.0 * x - 2.0) * (9.0 * x - 2.0))
-                + ((9.0 * y - 2.0) * (9.0 * y - 2.0))
-                + ((9.0 * z - 2.0) * (9.0 * z - 2.0))
-            )
-            / 4.0
-        )
-        + 0.75
-        * np.exp(
-            -(
-                ((9.0 * x + 1.0) * (9.0 * x + 1.0)) / 49.0
-                + (9.0 * y + 1.0) / 10.0
-                + (9.0 * z + 1.0) / 10.0
-            )
-        )
-        + 0.5
-        * np.exp(
-            -(
-                ((9.0 * x - 7.0) * (9.0 * x - 7.0))
-                + ((9.0 * y - 3.0) * (9.0 * y - 3.0))
-                + ((9.0 * z - 5.0) * (9.0 * z - 5.0))
-            ) / 4.0
-        )
-        - 0.2
-        * np.exp(
-            -(
-                ((9.0 * x - 4.0) * (9.0 * x - 4.0))
-                + ((9.0 * y - 7.0) * (9.0 * y - 7.0))
-                + ((9.0 * z - 5.0) * (9.0 * z - 5.0))
-            )
-        )
-    )
 
 def test_interpolation(mesh_dir, mesh_file, method, execspace):
+    """Run one FE interpolation validation case.
+
+    Parameters
+    ----------
+    mesh_dir : str
+        Directory containing the ``*_source.vtk`` and ``*_target.vtk`` meshes.
+    mesh_file : str
+        Base mesh name (without ``_source.vtk`` / ``_target.vtk`` suffix).
+    method : int
+        Finite-elements interpolation method constant from ``pacman.fe.methods``.
+        Supported values in this test script:
+        - ``pacman.fe.methods.NEAREST_NEAREST``
+        - ``pacman.fe.methods.INTERP_CLAMP``
+        - ``pacman.fe.methods.INTERP_NEAREST``
+        - ``pacman.fe.methods.INTERP_ZEROFILL``
+        - ``pacman.fe.methods.INTERP_EXTRAP``
+    execspace : int
+        Execution-space constant from ``pacman.execspaces``.
+        Supported values in this test script (tested so far):
+        - ``pacman.execspaces.SERIAL``
+        - ``pacman.execspaces.OPENMP``
+        - ``pacman.execspaces.CUDA``
+    """
+
+    source_mesh = np.load(mesh_dir + mesh_file + "_source.npz")
+    target_mesh = np.load(mesh_dir + mesh_file + "_target.npz")
+
+    tp = None
+    sp_values = None
+
+    connVal = source_mesh["connectivity"].astype(np.int64)
+    connOff = source_mesh["offsets"].astype(np.int64)
+
+    cellTypes = pacman.fe.vtk_to_pacman_cell_type(source_mesh["types"].astype(np.int64))
 
     spaceDimension = None
 
     if mesh_file == "aste":
         spaceDimension = 3
     else:
-        spaceDimension = pacman.fe.meshio_cell_dim(mesh_file)
+        spaceDimension = pacman.fe.vtk_cell_dim(int(source_mesh["types"][0]))
 
-    source_mesh = meshio.read(mesh_dir + mesh_file + "_source.vtk")
-    target_mesh = meshio.read(mesh_dir + mesh_file + "_target.vtk")
-
-    tp = None
-    sp_values = None
+    sp = source_mesh["points"][:, :spaceDimension].astype(np.float64)
+    tp = target_mesh["points"][:, :spaceDimension].astype(np.float64)
 
     if spaceDimension == 2:
-        sp = source_mesh.points[:,0:spaceDimension].astype(np.float64)
-        tp = target_mesh.points[:,0:spaceDimension].astype(np.float64)
         sp_values = franke_2d(sp[:,0], sp[:,1])
     else:
-        sp = source_mesh.points.astype(np.float64)
-        tp = target_mesh.points.astype(np.float64)
         sp_values = franke_3d(sp[:,0], sp[:,1], sp[:,2])
-
-    connVal = np.array([]).astype(np.int64).flatten()
-    connOff = np.array([]).astype(np.int64).flatten()
-    cellTypes = np.array([]).astype(np.int64).flatten()
-
-    for eltype in source_mesh.cells_dict:
-        if pacman.fe.meshio_cell_dim(eltype) < spaceDimension-1 :
-            continue
-        conn = source_mesh.cells_dict[eltype]
-        if connVal.shape[0]==0:
-            connVal = conn.flatten()
-        else:
-            np.hstack((connVal, conn.flatten()))
-        loc_off = conn.shape[1]*np.ones(conn.shape[0])
-        if connOff.shape[0]==0:
-            connOff = loc_off.flatten()
-        else:
-            np.hstack((connOff, loc_off))
-        vtk_cell_type_idx = pacman.fe.meshio_to_vtk_cell_type(eltype)
-        loc_celltype = vtk_cell_type_idx*np.ones(conn.shape[0])
-        if cellTypes.shape[0]==0:
-            cellTypes = loc_celltype.flatten()
-        else:
-            np.hstack((connOff, loc_off))
-
-    connOff = np.cumsum(connOff).astype(np.int64)
-    connOff = np.insert(connOff, 0, 0)
 
     tp_values, tp_status = pacman.fe.interpolate(spaceDimension, execspace, method, sp, sp_values, connVal, connOff, cellTypes, tp)
 
@@ -147,8 +90,8 @@ def test_interpolation(mesh_dir, mesh_file, method, execspace):
                 print(f"tp_ref: {tp_ref}")
             assert np.allclose(tp_values, tp_ref), f"Method {method} for mesh_file {mesh_file}: tp_values and tp_ref do not match"
 
-
 def main():
+    """Parse CLI arguments and execute one FE interpolation test case."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--mesh")
     parser.add_argument("--method")
@@ -167,13 +110,24 @@ def main():
     }
 
     execspaces = {
-        "serial": pacman.execspaces.SERIAL,
-        "openmp": pacman.execspaces.OPENMP,
-        "cuda": pacman.execspaces.CUDA
+        "SERIAL": pacman.execspaces.SERIAL,
+        "OPENMP": pacman.execspaces.OPENMP,
+        "CUDA": pacman.execspaces.CUDA,
+        "HIP": pacman.execspaces.HIP
     }
 
-    test_interpolation(mesh_dir, args.mesh, methods[args.method], execspaces[args.exec_space])
+    avail_execspaces = pacman.execspaces.available()
 
+    requested_execspace = execspaces[args.exec_space]
+
+    if args.exec_space not in avail_execspaces:
+        print(
+            f"[SKIP] Execution space {args.exec_space} not available "
+            f"(available: {avail_execspaces})"
+        )
+        sys.exit(77)
+
+    test_interpolation(mesh_dir, args.mesh, methods[args.method], requested_execspace)
 
 if __name__ == "__main__":
     main()

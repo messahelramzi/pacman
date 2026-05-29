@@ -1,10 +1,8 @@
 .vscode/
-build/
-build-gpu/
-build-cpu/
+build*
 install/
-env/
-meshes/
 .mypy_cache
-tests_outputs/
-main.py
+
+# Python bytecode caches
+tests/__pycache__/
+**/__pycache__/

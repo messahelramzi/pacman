@@ -1,6 +1,6 @@
 //
 // This file is subject to the terms and conditions defined in
-// file 'LICENSE.txt', which is part of this source code package.
+// file 'LICENSE', which is part of this source code package.
 //
 
 #pragma once
@@ -16,6 +16,13 @@
 namespace PACMAN {
 namespace FiniteElements {
 
+/**
+ * @brief Compute the closest point on a 2D edge segment.
+ * @param[in] p Query point.
+ * @param[in] a First segment endpoint.
+ * @param[in] b Second segment endpoint.
+ * @return Closest point to `p` on segment `[a,b]`.
+ */
 KOKKOS_INLINE_FUNCTION ArborX::Point<2, coordinates_t>
 closest_point_to_edge(const ArborX::Point<2, coordinates_t> &p,
                       const ArborX::Point<2, coordinates_t> &a,
@@ -30,6 +37,17 @@ closest_point_to_edge(const ArborX::Point<2, coordinates_t> &p,
   return ret;
 };
 
+/**
+ * @brief Project outside target points on a 3D skin and evaluate FE values.
+ * @tparam ExecSpace Kokkos execution space used for queries and kernels.
+ * @param[in,out] transfer Transfer descriptor containing mesh/field data.
+ * Reads: source mesh/values, connectivity, skin entities, target points/status.
+ * Writes: `targetValues`, `targetStatus`, and optionally projected
+ * `targetPoints` when `extrapol == false`.
+ * @param[in] extrapol If `true`, keep target coordinates and mark outside
+ * points as `TransferStatus::EXTRAP`; otherwise clamp projected coordinates and
+ * mark as `TransferStatus::CLAMP`.
+ */
 template <typename ExecSpace>
 void ComputeProjectionOn3DSkin(Transfer<ExecSpace, 3> &transfer,
                                bool extrapol = false) {
@@ -71,7 +89,6 @@ void ComputeProjectionOn3DSkin(Transfer<ExecSpace, 3> &transfer,
       });
   ArborX::BoundingVolumeHierarchy skinBVH(
       execSpace, ArborX::Experimental::attach_indices(skinFacesView));
-  Kokkos::fence();
   Kokkos::Profiling::popRegion(); // Build triangle BoundingVolumeHierarchy
 
   Kokkos::Profiling::pushRegion("Compute query of nearest skin");
@@ -98,7 +115,6 @@ void ComputeProjectionOn3DSkin(Transfer<ExecSpace, 3> &transfer,
                                               targetStatusPtr, skinParentsPtr},
         values, offsets);
   }
-  Kokkos::fence();
   Kokkos::Profiling::popRegion(); // Point projection on triangle
 
   auto statusOutside =
@@ -144,11 +160,21 @@ void ComputeProjectionOn3DSkin(Transfer<ExecSpace, 3> &transfer,
         }
         targetStatusPtr(predicate_index) = statusOutside;
       });
-  Kokkos::fence();
   Kokkos::Profiling::popRegion(); // Compute projection and interpolation
                                   // coefficient
 };
 
+/**
+ * @brief Project outside target points on a 2D skin and evaluate FE values.
+ * @tparam ExecSpace Kokkos execution space used for kernels.
+ * @param[in,out] transfer Transfer descriptor containing mesh/field data.
+ * Reads: source mesh/values, connectivity, skin entities, target points/status.
+ * Writes: `targetValues`, `targetStatus`, and optionally projected
+ * `targetPoints` when `extrapol == false`.
+ * @param[in] extrapol If `true`, keep target coordinates and mark outside
+ * points as `TransferStatus::EXTRAP`; otherwise clamp projected coordinates and
+ * mark as `TransferStatus::CLAMP`.
+ */
 template <typename ExecSpace>
 void ComputeProjectionOn2DSkin(Transfer<ExecSpace, 2> &transfer,
                                bool extrapol = false) {
@@ -242,11 +268,21 @@ void ComputeProjectionOn2DSkin(Transfer<ExecSpace, 2> &transfer,
           targetStatusPtr(i) = statusOutside;
         }
       });
-  Kokkos::fence();
   Kokkos::Profiling::popRegion(); // Compute projection and interpolation
                                   // coefficient
 };
 
+/**
+ * @brief Project outside target points on a 1D skin and evaluate FE values.
+ * @tparam ExecSpace Kokkos execution space used for kernels.
+ * @param[in,out] transfer Transfer descriptor containing mesh/field data.
+ * Reads: source mesh/values, connectivity, skin entities, target points/status.
+ * Writes: `targetValues`, `targetStatus`, and optionally projected
+ * `targetPoints` when `extrapol == false`.
+ * @param[in] extrapol If `true`, keep target coordinates and mark outside
+ * points as `TransferStatus::EXTRAP`; otherwise clamp projected coordinates and
+ * mark as `TransferStatus::CLAMP`.
+ */
 template <typename ExecSpace>
 void ComputeProjectionOn1DSkin(Transfer<ExecSpace, 1> &transfer,
                                bool extrapol = false) {
@@ -334,7 +370,6 @@ void ComputeProjectionOn1DSkin(Transfer<ExecSpace, 1> &transfer,
           targetStatusPtr(i) = statusOutside;
         }
       });
-  Kokkos::fence();
   Kokkos::Profiling::popRegion(); // Compute projection and interpolation
                                   // coefficient
 };

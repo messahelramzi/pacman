@@ -1,3 +1,8 @@
+//
+// This file is subject to the terms and conditions defined in
+// file 'LICENSE', which is part of this source code package.
+//
+
 #pragma once
 
 #include <Kokkos_Core.hpp>
@@ -9,6 +14,18 @@
 namespace PACMAN {
 namespace RbfPum {
 
+/// @brief Returns a matrix of rank 2, shaped as (n, m), using the given data
+/// view, team rank, and offsets. This function basically reinterprets a 1D
+/// vector into a 2D matrix accordingly to the given dimensions.
+/// @tparam AsViewType Matrices data view type.
+/// @tparam OffsViewType Access offsets type for the given data view.
+/// @param k The index of the current team in the league
+/// @param As The matrices data view
+/// @param offs The access offsets of the matrices data view
+/// @param n The number of lines in the reshaped matrix which is returned
+/// @param m The number of columns in the reshaped matrix which is returned
+/// @return A non owning data `Kokkos::View` (unmanaged) which represents the
+/// RBF matrix.
 template <KokkosViewRank<1> AsViewType, KokkosViewRank<1> OffsViewType>
 KOKKOS_FORCEINLINE_FUNCTION auto
 GetRbfMatrix(const index_t &k, const AsViewType &As, const OffsViewType &offs,
@@ -22,6 +39,20 @@ GetRbfMatrix(const index_t &k, const AsViewType &As, const OffsViewType &offs,
                                                                m);
 }
 
+/// @brief Returns a matrix of rank 2, shaped as (n, m), using the given data
+/// view, team rank, and offsets. This function basically reinterprets a 1D
+/// vector into a 2D matrix accordingly to the given dimension and active axis.
+/// @tparam PsViewType Matrices data view type.
+/// @tparam OffsViewType Access offsets type for the given data view.
+/// @tparam AxisType Active axis `Kokkos::Array` type
+/// @param k The index of the current team in the league
+/// @param Ps The matrices data view
+/// @param offs The access offsets of the matrices data view
+/// @param n The number of lines in the reshaped matrix which is returned
+/// @param activeAxis The number of active axis is the number of columns in the
+/// reshaped matrix which is returned
+/// @return A non owning data `Kokkos::View` (unmanaged) which represents the
+/// polynomial matrix.
 template <KokkosViewRank<1> PsViewType, KokkosViewRank<1> OffsViewType,
           KokkosArray AxisType>
 KOKKOS_FORCEINLINE_FUNCTION auto
@@ -45,6 +76,17 @@ GetPolyMatrix(const index_t &k, const PsViewType &Ps, const OffsViewType &offs,
                                                                M);
 }
 
+/// @brief Returns a vector view of rank 1, of length n, using the given data
+/// view, team rank, and offsets. This function wraps a slice of `Bs` into an
+/// unmanaged view.
+/// @tparam BsViewType Vectors data view type.
+/// @tparam OffsViewType Access offsets type for the given data view.
+/// @param k The index of the current team in the league
+/// @param Bs The vectors data view
+/// @param offs The access offsets of the vectors data view
+/// @param n The length of the returned vector
+/// @return A non owning data `Kokkos::View` (unmanaged) which represents the
+/// source values vector.
 template <KokkosViewRank<1> BsViewType, KokkosViewRank<1> OffsViewType>
 KOKKOS_FORCEINLINE_FUNCTION auto
 GetRbfVector(const index_t &k, const BsViewType &Bs, const OffsViewType &offs,

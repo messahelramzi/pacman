@@ -1,0 +1,12 @@
+spack:
+  concretizer:
+    unify: true
+  specs:
+    - gcc
+    - cmake
+    - ninja
+    - kokkos@5.1 +cuda cuda_arch=86 +hwloc +tuning +wrapper +openmp +serial
+    - kokkos-kernels@5.1 +cuda cuda_arch=86 +openmp +serial
+    - arborx@2.0.1 +cuda cuda_arch=86 ~mpi +openmp +serial
+    - py-pybind11
+    - py-numpy
