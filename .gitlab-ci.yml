@@ -248,13 +248,17 @@ pages:
   needs:
     - job: docs:build
       artifacts: true
+    - job: test:debug-coverage
+      artifacts: true
   script:
     # GitLab Pages requires content in a `public/` directory.
     - mv docs/html/ public/
+    # Embed the coverage HTML report so it is permanently accessible at /coverage/
+    - mv "${COVERAGE_DIR}/" public/coverage/
   artifacts:
     paths:
       - public/
-    expire_in: 1 week
+    expire_in: never
   rules:
     # Only publish pages from the default branch.
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

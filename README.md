@@ -5,13 +5,13 @@
 </p>
 
 <p align="center">
-  <a href="https://gitlab.com/messahel.ramzi/pacman/-/pipelines">
-    <img src="https://gitlab.com/messahel.ramzi/pacman/badges/main/pipeline.svg" alt="pipeline status"/>
+  <a href="https://gitlab.com/drti/pacman/-/pipelines">
+    <img src="https://gitlab.com/drti/pacman/badges/main/pipeline.svg" alt="pipeline status"/>
   </a>
-  <a href="https://messahel.ramzi.gitlab.io/pacman/coverage/">
-    <img src="https://gitlab.com/messahel.ramzi/pacman/badges/main/coverage.svg" alt="coverage"/>
+  <a href="https://drti.gitlab.io/pacman/coverage/">
+    <img src="https://gitlab.com/drti/pacman/badges/main/coverage.svg" alt="coverage"/>
   </a>
-  <a href="https://messahel.ramzi.gitlab.io/pacman/">
+  <a href="https://drti.gitlab.io/pacman/">
     <img src="https://img.shields.io/badge/docs-doxygen-blue" alt="documentation"/>
   </a>
 </p>
@@ -28,8 +28,8 @@ PACMAN and its approach to code and performance portability were presented at [H
 
 | Resource | URL |
 |----------|-----|
-| API Documentation (Doxygen) | https://messahel.ramzi.gitlab.io/pacman/ |
-| Coverage Report | https://messahel.ramzi.gitlab.io/pacman/coverage/ |
+| API Documentation (Doxygen) | https://drti.gitlab.io/pacman/ |
+| Coverage Report | https://drti.gitlab.io/pacman/coverage/ |
 
 ## Get the source code
 
