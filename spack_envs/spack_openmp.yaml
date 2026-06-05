@@ -4,9 +4,8 @@ spack:
   specs:
     - gcc
     - cmake
-    - ninja
-    - kokkos@5.1 +hwloc +tuning +openmp +serial
-    - kokkos-kernels@5.1 +openmp +serial
-    - arborx@2.0.1 ~mpi +openmp +serial
+    - kokkos@5 +openmp +serial
+    - kokkos-kernels@5 +openmp +serial
+    - arborx ~mpi +openmp +serial
     - py-pybind11
     - py-numpy

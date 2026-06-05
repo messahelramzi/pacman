@@ -14,7 +14,7 @@ import sys
 import pacman
 import numpy as np
 import argparse
-from franke_functions import franke_2d, franke_3d
+from franke_functions import franke_1d, franke_2d, franke_3d
 
 
 def test_interpolation(mesh_dir, mesh_file, method, execspace):
@@ -63,7 +63,9 @@ def test_interpolation(mesh_dir, mesh_file, method, execspace):
     sp = source_mesh["points"][:, :spaceDimension].astype(np.float64)
     tp = target_mesh["points"][:, :spaceDimension].astype(np.float64)
 
-    if spaceDimension == 2:
+    if spaceDimension == 1:
+        sp_values = franke_1d(sp[:,0])
+    elif spaceDimension == 2:
         sp_values = franke_2d(sp[:,0], sp[:,1])
     else:
         sp_values = franke_3d(sp[:,0], sp[:,1], sp[:,2])

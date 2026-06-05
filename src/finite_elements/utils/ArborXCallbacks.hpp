@@ -6,6 +6,7 @@
 #pragma once
 
 #include <ArborX.hpp>
+#include <algorithms/ArborX_ClosestPoint.hpp>
 
 #include "common/concepts.hpp"
 #include "common/transfer.hxx"
@@ -115,8 +116,7 @@ template <typename ExecSpace, int_t Dim> struct PointTriangleProjection {
       ArborX::Details::Dispatch::distance<PointTag, TriangleTag, Point,
                                           Triangle>
           dist{};
-      targetPoint =
-          dist.closest_point(targetPoint, triangle.a, triangle.b, triangle.c);
+      targetPoint = ArborX::Experimental::closestPoint(targetPoint, triangle);
       for (int_t k = 0; k < Dim; k++) {
         targetPointsPtr(predicate_index, k) = targetPoint[k];
       }

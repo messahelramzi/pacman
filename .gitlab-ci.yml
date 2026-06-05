@@ -1,0 +1,260 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# PACMAN – GitLab CI/CD Pipeline
+#
+# Pipeline stages
+#   0. docker-image  – Build & push the CI base image (only when image files change)
+#   1. test          – Debug build with code-coverage reporting
+#   2. build         – Release build (runs only after stage 1 is green)
+#   3. test-release  – Release test suite (runs only after stage 2 is green)
+#   4. docs          – Doxygen HTML generation + GitLab Pages deployment
+#
+# Required tools in the runner image (registry.gitlab.com/drti/pacman:latest)
+#   cmake >= 3.31, ninja, gcc >= 13 (C++20), gcovr, doxygen
+#   kokkos >= 5, kokkos-kernels >= 5, arborx >= 2.0
+#   pybind11 >= 3, numpy >= 2.3
+#
+# The CI image is built from the provided Dockerfile.
+# It is rebuilt automatically ONLY when Dockerfile or spack_envs/ change.
+# All other pipelines skip stage 0 and reuse the already-pushed :latest image.
+# To force a rebuild without touching those files, trigger the job manually.
+# ─────────────────────────────────────────────────────────────────────────────
+
+stages:
+  - docker-image
+  - test
+  - build
+  - test-release
+  - docs
+
+variables:
+  # ── CI image ───────────────────────────────────────────────────────────────
+  # Full image reference used by every job as its execution environment.
+  # Re-tag or override to point to a GPU variant when needed.
+  CI_IMAGE: "registry.gitlab.com/drti/pacman:latest"
+
+  # Build argument forwarded to the Dockerfile (spack_openmp | spack_cuda | spack_hip)
+  SPACK_ENV: "spack_openmp"
+
+  # ── Build directories ──────────────────────────────────────────────────────
+  BUILD_DEBUG: "build-debug"
+  BUILD_RELEASE: "build-release"
+
+  # ── Coverage output ────────────────────────────────────────────────────────
+  COVERAGE_DIR: "coverage"
+
+  # ── CMake generator ────────────────────────────────────────────────────────
+  CMAKE_GENERATOR: "Ninja"
+
+default:
+  image: $CI_IMAGE
+  interruptible: true
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Stage 0 – Build & push the CI base image
+#
+# Uses Docker-in-Docker (dind).  The job runs ONLY when Dockerfile or
+# spack_envs/ are modified, so normal source-only commits skip this stage
+# entirely and reuse the existing :latest image from the registry.
+# It can also be triggered manually at any time from the pipeline UI.
+#
+# Required CI/CD variables (set in Settings → CI/CD → Variables):
+#   CI_REGISTRY_USER     – GitLab registry login   (predefined by GitLab)
+#   CI_REGISTRY_PASSWORD – GitLab registry token   (predefined by GitLab)
+# ─────────────────────────────────────────────────────────────────────────────
+
+docker:build-ci-image:
+  stage: docker-image
+  # Override the default image so we get a plain Docker client, not the PACMAN image.
+  image: docker:27
+  services:
+    - docker:27-dind
+  variables:
+    DOCKER_TLS_CERTDIR: "/certs"
+    # Do NOT inherit the default CI_IMAGE for this job
+    GIT_DEPTH: "1"
+  before_script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login registry.gitlab.com
+        --username "$CI_REGISTRY_USER" --password-stdin
+  script:
+    - >
+      docker build
+      --build-arg SPACK_ENV=${SPACK_ENV}
+      --cache-from registry.gitlab.com/drti/pacman:latest
+      --tag registry.gitlab.com/drti/pacman:${CI_COMMIT_SHORT_SHA}
+      --tag registry.gitlab.com/drti/pacman:latest
+      .
+    - docker push registry.gitlab.com/drti/pacman:${CI_COMMIT_SHORT_SHA}
+    - docker push registry.gitlab.com/drti/pacman:latest
+  after_script:
+    - docker logout registry.gitlab.com
+  rules:
+    # Rebuild automatically whenever the image definition files change.
+    # This covers both the default branch and any feature branch that
+    # touches Dockerfile or a spack env spec.
+    - changes:
+        - Dockerfile
+        - spack_envs/*.yaml
+    # Always allow a manual trigger (e.g. force-refresh without file changes).
+    - when: manual
+      allow_failure: true
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Stage 1 – Debug build with code coverage
+# ─────────────────────────────────────────────────────────────────────────────
+
+test:debug-coverage:
+  stage: test
+  script:
+    # ── Configure (Debug + coverage instrumentation) ──────────────────────
+    - >
+      cmake
+      -G "${CMAKE_GENERATOR}"
+      -DCMAKE_BUILD_TYPE=Debug
+      -DBUILD_MODULE=ON
+      -DBUILD_TESTS=ON
+      -DENABLE_COVERAGE=ON
+      -S . -B "${BUILD_DEBUG}"
+    # ── Build ─────────────────────────────────────────────────────────────
+    - cmake --build "${BUILD_DEBUG}" -- -j$(nproc)
+    # ── Run test suite ────────────────────────────────────────────────────
+    - >
+      ctest
+      --test-dir "${BUILD_DEBUG}"
+      -j$(nproc)
+      --output-on-failure
+    # ── Collect coverage – Cobertura XML (GitLab MR coverage widget) ──────
+    - mkdir -p "${COVERAGE_DIR}"
+    - >
+      gcovr
+      --root .
+      --object-directory "${BUILD_DEBUG}"
+      --exclude '.*tests/.*'
+      --exclude '.*pybind11/.*'
+      --xml --output "${COVERAGE_DIR}/coverage.xml"
+    # ── Collect coverage – HTML report (browsable artifact) ───────────────
+    - >
+      gcovr
+      --root .
+      --object-directory "${BUILD_DEBUG}"
+      --exclude '.*tests/.*'
+      --exclude '.*pybind11/.*'
+      --html --html-details
+      --output "${COVERAGE_DIR}/index.html"
+    # ── Print summary line for the GitLab coverage badge ──────────────────
+    - >
+      gcovr
+      --root .
+      --object-directory "${BUILD_DEBUG}"
+      --exclude '.*tests/.*'
+      --exclude '.*pybind11/.*'
+  # GitLab parses the coverage percentage from gcovr's summary stdout line:
+  #   TOTAL   ...   42%
+  coverage: '/^TOTAL.*\s+(\d+\%)$/'
+  artifacts:
+    name: "coverage-${CI_COMMIT_SHORT_SHA}"
+    paths:
+      - "${COVERAGE_DIR}/"
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: "${COVERAGE_DIR}/coverage.xml"
+    expire_in: 1 week
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Stage 2 – Release build
+# Runs only when stage 1 (test:debug-coverage) succeeds.
+# ─────────────────────────────────────────────────────────────────────────────
+
+build:release:
+  stage: build
+  needs:
+    - job: test:debug-coverage
+  script:
+    - >
+      cmake
+      -G "${CMAKE_GENERATOR}"
+      -DCMAKE_BUILD_TYPE=Release
+      -DBUILD_MODULE=ON
+      -DBUILD_TESTS=ON
+      -S . -B "${BUILD_RELEASE}"
+    - cmake --build "${BUILD_RELEASE}" -- -j$(nproc)
+  artifacts:
+    name: "release-build-${CI_COMMIT_SHORT_SHA}"
+    paths:
+      - "${BUILD_RELEASE}/"
+    # Build tree is only needed by the next stage; discard after 1 day.
+    expire_in: 1 day
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Stage 3 – Release test suite
+# Runs only when stage 2 (build:release) succeeds.
+# ─────────────────────────────────────────────────────────────────────────────
+
+test:release:
+  stage: test-release
+  needs:
+    - job: build:release
+      artifacts: true
+  script:
+    - >
+      ctest
+      --test-dir "${BUILD_RELEASE}"
+      -j$(nproc)
+      --output-on-failure
+      --output-junit "${BUILD_RELEASE}/Testing/junit.xml"
+  artifacts:
+    name: "release-test-results-${CI_COMMIT_SHORT_SHA}"
+    when: always
+    paths:
+      - "${BUILD_RELEASE}/Testing/"
+    reports:
+      junit: "${BUILD_RELEASE}/Testing/junit.xml"
+    expire_in: 1 week
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Stage 4a – Build Doxygen documentation
+# Runs only when stage 3 (test:release) succeeds.
+#
+# Prerequisite: a `Doxyfile` must exist at the repository root.
+# Generate a baseline with: doxygen -g Doxyfile
+# Recommended settings:
+#   PROJECT_NAME     = "PACMAN"
+#   INPUT            = src/ README.md
+#   OUTPUT_DIRECTORY = docs/
+#   GENERATE_HTML    = YES
+#   RECURSIVE        = YES
+# ─────────────────────────────────────────────────────────────────────────────
+
+docs:build:
+  stage: docs
+  needs:
+    - job: test:release
+  script:
+    - doxygen Doxyfile
+  artifacts:
+    name: "docs-${CI_COMMIT_SHORT_SHA}"
+    paths:
+      - docs/html/
+    expire_in: 1 week
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Stage 4b – Deploy documentation to GitLab Pages
+# The `pages` job name is reserved by GitLab Pages.
+# Published URL: https://drti.gitlab.io/pacman/
+# ─────────────────────────────────────────────────────────────────────────────
+
+pages:
+  stage: docs
+  needs:
+    - job: docs:build
+      artifacts: true
+  script:
+    # GitLab Pages requires content in a `public/` directory.
+    - mv docs/html/ public/
+  artifacts:
+    paths:
+      - public/
+    expire_in: 1 week
+  rules:
+    # Only publish pages from the default branch.
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

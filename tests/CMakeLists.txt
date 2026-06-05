@@ -30,11 +30,29 @@ set_tests_properties(python_test_pybindings PROPERTIES
 #==== C++ interface test (equivalent of test_pybindings.py)
 add_executable(test_cpp_fe_interface ${CMAKE_CURRENT_SOURCE_DIR}/test_cpp_fe_interface.cpp)
 target_link_libraries(test_cpp_fe_interface PRIVATE pacman_interface_cpp)
+if (ENABLE_COVERAGE)
+    target_compile_options(test_cpp_fe_interface PRIVATE -g -O0 --coverage)
+    target_link_options(test_cpp_fe_interface PRIVATE --coverage)
+endif()
 add_test(NAME cpp_test_fe_interface COMMAND test_cpp_fe_interface)
+
+#==== Unit tests for FETools.hpp (IsBaryCoordInsideGeo, LagrangeSpaceGeo shape functions)
+add_executable(test_unit_fe_tools ${CMAKE_CURRENT_SOURCE_DIR}/test_unit_fe_tools.cpp)
+target_link_libraries(test_unit_fe_tools PRIVATE pacman_interface_cpp)
+target_include_directories(test_unit_fe_tools PRIVATE ${CMAKE_SOURCE_DIR}/src)
+if (ENABLE_COVERAGE)
+    target_compile_options(test_unit_fe_tools PRIVATE -g -O0 --coverage)
+    target_link_options(test_unit_fe_tools PRIVATE --coverage)
+endif()
+add_test(NAME unit_fe_tools COMMAND test_unit_fe_tools)
 
 #==== C++ RBF interface test (equivalent of test_rbf-pum.py — OpenMP only)
 add_executable(test_cpp_rbf_interface ${CMAKE_CURRENT_SOURCE_DIR}/test_cpp_rbf_interface.cpp)
 target_link_libraries(test_cpp_rbf_interface PRIVATE pacman_interface_cpp)
+if (ENABLE_COVERAGE)
+    target_compile_options(test_cpp_rbf_interface PRIVATE -g -O0 --coverage)
+    target_link_options(test_cpp_rbf_interface PRIVATE --coverage)
+endif()
 add_test(NAME cpp_test_rbf_interface COMMAND test_cpp_rbf_interface)
 
 #===== Tests FE/RBF interpolation methods and execution spaces
@@ -43,7 +61,7 @@ set(EXECSPACES SERIAL OPENMP CUDA HIP)
 # Tests FE
 include(PACMANAddFETests)
 set(FE_METHODS nearest_nearest interp_clamp interp_nearest interp_zerofill interp_extrap)
-set(FE_MESH_FILES triangle triangle6 quad quad8 tetra tetra10 pyramid pyramid13 wedge wedge15 hexahedron hexahedron20 aste)
+set(FE_MESH_FILES line line3 triangle triangle6 quad quad8 tetra tetra10 pyramid pyramid13 wedge wedge15 hexahedron hexahedron20 aste)
 
 foreach(exec_space IN LISTS EXECSPACES)
   foreach(mesh IN LISTS FE_MESH_FILES)
@@ -76,11 +94,19 @@ if (BUILD_FORTRAN_INTERFACE)
     add_executable(test_fortran_rbf_interface
         ${CMAKE_CURRENT_SOURCE_DIR}/test_fortran_rbf_interface.f90)
     target_link_libraries(test_fortran_rbf_interface PRIVATE pacman_interface_fortran)
+    if (ENABLE_COVERAGE)
+        target_compile_options(test_fortran_rbf_interface PRIVATE -g -O0 --coverage)
+        target_link_options(test_fortran_rbf_interface PRIVATE --coverage)
+    endif()
     add_test(NAME fortran_test_rbf_interface COMMAND test_fortran_rbf_interface)
 
     add_executable(test_fortran_fe_interface
         ${CMAKE_CURRENT_SOURCE_DIR}/test_fortran_fe_interface.f90)
     target_link_libraries(test_fortran_fe_interface PRIVATE pacman_interface_fortran)
+    if (ENABLE_COVERAGE)
+        target_compile_options(test_fortran_fe_interface PRIVATE -g -O0 --coverage)
+        target_link_options(test_fortran_fe_interface PRIVATE --coverage)
+    endif()
     add_test(NAME fortran_test_fe_interface COMMAND test_fortran_fe_interface)
 endif()
 

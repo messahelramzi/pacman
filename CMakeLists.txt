@@ -56,7 +56,7 @@ list(APPEND CMAKE_MODULE_PATH
 # -----------------------------------------------------
 find_package(Kokkos 5.0 REQUIRED)
 find_package(KokkosKernels 5.0 REQUIRED)
-find_package(ArborX 2.0 REQUIRED)
+find_package(ArborX 2.1 REQUIRED)
 
 # -----------------------------------------------------
 # Main Target (Interface) + optionnal Python bindings

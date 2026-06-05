@@ -207,6 +207,7 @@ KOKKOS_FUNCTION bool ApplyNewtonOnElement(
     CaseSwitch(CellType::VTK_QUADRATIC_TRIANGLE)
     CaseSwitch(CellType::VTK_QUADRATIC_WEDGE)
     CaseSwitch(CellType::VTK_WEDGE)
+// LCOV_EXCL_START    
     default:
       char errorMsg[] = "Unexpected element type XXX";
       errorMsg[sizeof(errorMsg) - 4] = '0' + ((int)type / 100);
@@ -214,6 +215,7 @@ KOKKOS_FUNCTION bool ApplyNewtonOnElement(
       errorMsg[sizeof(errorMsg) - 2] = '0' + ((int)type % 10);
       Kokkos::abort(errorMsg);
       return false;
+// LCOV_EXCL_STOP
   }
   // clang-format on
   return false;

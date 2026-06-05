@@ -27,9 +27,11 @@ namespace FiniteElements {
 /// @return Dimension in `{0,1,2,3}`, or `-1` for unsupported values.
 KOKKOS_INLINE_FUNCTION shortint_t getDimension(const CellType &type) {
   switch (type) {
+    // LCOV_EXCL_START
   case CellType::VTK_EMPTY_CELL:
   case CellType::VTK_VERTEX:
     return 0;
+    // LCOV_EXCL_STOP
   case CellType::VTK_LINE:
   case CellType::VTK_QUADRATIC_EDGE:
     return 1;
@@ -48,7 +50,9 @@ KOKKOS_INLINE_FUNCTION shortint_t getDimension(const CellType &type) {
   case CellType::VTK_QUADRATIC_PYRAMID:
     return 3;
   }
+  // LCOV_EXCL_START
   return -1;
+  // LCOV_EXCL_STOP
 };
 
 /// @brief Return the number of faces for 1D skin extraction tables.
@@ -57,14 +61,17 @@ KOKKOS_INLINE_FUNCTION shortint_t getDimension(const CellType &type) {
 KOKKOS_INLINE_FUNCTION shortint_t getNbFaceDim1(const CellType &type) {
 
   switch (type) {
+    // LCOV_EXCL_START
   case CellType::VTK_EMPTY_CELL:
     return -1;
   case CellType::VTK_VERTEX:
     return 1;
+    // LCOV_EXCL_STOP
   case CellType::VTK_LINE:
     return 2;
   case CellType::VTK_QUADRATIC_EDGE:
     return 2;
+    // LCOV_EXCL_START
   case CellType::VTK_TRIANGLE:
     return -1;
   case CellType::VTK_QUAD:
@@ -91,6 +98,7 @@ KOKKOS_INLINE_FUNCTION shortint_t getNbFaceDim1(const CellType &type) {
     return -1;
   default:
     return -1;
+    // LCOV_EXCL_STOP
   }
 };
 
@@ -100,6 +108,7 @@ KOKKOS_INLINE_FUNCTION shortint_t getNbFaceDim1(const CellType &type) {
 KOKKOS_INLINE_FUNCTION shortint_t getNbFaceDim2(const CellType &type) {
 
   switch (type) {
+    // LCOV_EXCL_START
   case CellType::VTK_EMPTY_CELL:
     return -1;
   case CellType::VTK_VERTEX:
@@ -108,6 +117,7 @@ KOKKOS_INLINE_FUNCTION shortint_t getNbFaceDim2(const CellType &type) {
     return 1;
   case CellType::VTK_QUADRATIC_EDGE:
     return 1;
+    // LCOV_EXCL_STOP
   case CellType::VTK_TRIANGLE:
     return 3;
   case CellType::VTK_QUAD:
@@ -116,6 +126,7 @@ KOKKOS_INLINE_FUNCTION shortint_t getNbFaceDim2(const CellType &type) {
     return 3;
   case CellType::VTK_QUADRATIC_QUAD:
     return 4;
+    // LCOV_EXCL_START
   case CellType::VTK_TETRA:
     return -1;
   case CellType::VTK_HEXAHEDRON:
@@ -134,6 +145,7 @@ KOKKOS_INLINE_FUNCTION shortint_t getNbFaceDim2(const CellType &type) {
     return -1;
   default:
     return -1;
+    // LCOV_EXCL_STOP
   }
 };
 
@@ -142,6 +154,7 @@ KOKKOS_INLINE_FUNCTION shortint_t getNbFaceDim2(const CellType &type) {
 /// @return Number of 3D faces, or `-1` when not applicable.
 KOKKOS_INLINE_FUNCTION shortint_t getNbFaceDim3(const CellType &type) {
   switch (type) {
+    // LCOV_EXCL_START
   case CellType::VTK_EMPTY_CELL:
     return -1;
   case CellType::VTK_VERTEX:
@@ -158,6 +171,7 @@ KOKKOS_INLINE_FUNCTION shortint_t getNbFaceDim3(const CellType &type) {
     return 1;
   case CellType::VTK_QUADRATIC_QUAD:
     return 1;
+    // LCOV_EXCL_STOP
   case CellType::VTK_TETRA:
     return 4;
   case CellType::VTK_HEXAHEDRON:
@@ -174,8 +188,10 @@ KOKKOS_INLINE_FUNCTION shortint_t getNbFaceDim3(const CellType &type) {
     return 5;
   case CellType::VTK_QUADRATIC_PYRAMID:
     return 5;
+    // LCOV_EXCL_START
   default:
     return -1;
+    // LCOV_EXCL_STOP
   }
 };
 
@@ -193,9 +209,11 @@ KOKKOS_INLINE_FUNCTION shortint_t getNbFace(const CellType &type) {
     return getNbFaceDim2(type);
   case 3:
     return getNbFaceDim3(type);
+    // LCOV_EXCL_START
   default:
     assert(false);
     return -1;
+    // LCOV_EXCL_STOP
   }
 };
 static std::vector<offset_t> elemDim1LinearFacesPaddedOffsets{
@@ -462,9 +480,11 @@ getLinearFacesPaddedOffsets(const int_t dimension) {
     return elemDim2LinearFacesPaddedOffsets;
   case 3:
     return elemDim3LinearFacesPaddedOffsets;
+    // LCOV_EXCL_START
   default:
     assert(false);
     return std::vector<offset_t>();
+    // LCOV_EXCL_STOP
   }
 };
 /// @brief Get padded linear-face entry table for a given dimension.
@@ -480,9 +500,11 @@ getLinearFacesPaddedEntries(const int_t dimension) {
     return elemDim2LinearFacesPaddedEntries;
   case 3:
     return elemDim3LinearFacesPaddedEntries;
+    // LCOV_EXCL_START
   default:
     assert(false);
     return std::vector<shortint_t>();
+    // LCOV_EXCL_STOP
   }
 };
 //=== triangularization
@@ -766,9 +788,11 @@ inline std::vector<offset_t> getTriFacesOffsets(const int_t dimension) {
     return elemDim2TriFacesOffsets;
   case 3:
     return elemDim3TriFacesOffsets;
+    // LCOV_EXCL_START
   default:
     assert(false);
     return std::vector<offset_t>();
+    // LCOV_EXCL_STOP
   }
 };
 /// @brief Get triangulated-face entry table for a given dimension.
@@ -782,9 +806,11 @@ inline std::vector<shortint_t> getTriFacesEntries(const int_t dimension) {
     return elemDim2TriFacesEntries;
   case 3:
     return elemDim3TriFacesEntries;
+    // LCOV_EXCL_START
   default:
     assert(false);
     return std::vector<shortint_t>();
+    // LCOV_EXCL_STOP
   }
 };
 static std::vector<offset_t> elemDim1TriLocFacesOffsets{
@@ -1012,9 +1038,11 @@ inline std::vector<offset_t> getTriLocFacesOffsets(const int_t dimension) {
     return elemDim2TriLocFacesOffsets;
   case 3:
     return elemDim3TriLocFacesOffsets;
+    // LCOV_EXCL_START
   default:
     assert(false);
     return std::vector<offset_t>();
+    // LCOV_EXCL_STOP
   }
 };
 /// @brief Get local triangulated-face entry table for a given dimension.
@@ -1028,9 +1056,11 @@ inline std::vector<shortint_t> getTriLocFacesEntries(const int_t dimension) {
     return elemDim2TriLocFacesEntries;
   case 3:
     return elemDim3TriLocFacesEntries;
+    // LCOV_EXCL_START
   default:
     assert(false);
     return std::vector<shortint_t>();
+    // LCOV_EXCL_STOP
   }
 };
 

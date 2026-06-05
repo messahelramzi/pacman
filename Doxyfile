@@ -1,0 +1,133 @@
+# Doxyfile for PACMAN
+# Portable Algorithms for Coupling, Mapping, and Adaptive iNterpolation
+
+#---------------------------------------------------------------------------
+# Project related configuration
+#---------------------------------------------------------------------------
+PROJECT_NAME           = "PACMAN"
+PROJECT_NUMBER         = 0.1.0
+PROJECT_BRIEF          = "Portable Algorithms for Coupling, Mapping, and Adaptive iNterpolation"
+PROJECT_LOGO           = docs/logo.png
+OUTPUT_DIRECTORY       = docs/doxygen
+
+#---------------------------------------------------------------------------
+# Build related configuration
+#---------------------------------------------------------------------------
+EXTRACT_ALL            = YES
+EXTRACT_PRIVATE        = NO
+EXTRACT_STATIC         = YES
+EXTRACT_LOCAL_CLASSES  = YES
+RESOLVE_UNNAMED_PARAMS = YES
+HIDE_UNDOC_MEMBERS     = NO
+HIDE_UNDOC_CLASSES     = NO
+BRIEF_MEMBER_DESC      = YES
+REPEAT_BRIEF           = YES
+ALWAYS_DETAILED_SEC    = NO
+INLINE_INHERITED_MEMB  = NO
+FULL_PATH_NAMES        = NO
+JAVADOC_AUTOBRIEF      = YES
+QT_AUTOBRIEF           = NO
+MULTILINE_CPP_IS_BRIEF = NO
+INHERIT_DOCS           = YES
+SEPARATE_MEMBER_PAGES  = NO
+TAB_SIZE               = 4
+
+#---------------------------------------------------------------------------
+# Input configuration
+#---------------------------------------------------------------------------
+INPUT                  = src \
+                         README.md
+INPUT_ENCODING         = UTF-8
+FILE_PATTERNS          = *.hpp \
+                         *.h \
+                         *.cpp \
+                         *.f90 \
+                         *.md
+RECURSIVE              = YES
+EXCLUDE                = src/pybindings
+EXCLUDE_PATTERNS       = */build/* \
+                         */build-debug/* \
+                         */build-release/* \
+                         *_eti_cuda.cpp \
+                         *_eti_hip.cpp \
+                         *_eti_sycl.cpp \
+                         *_eti_openmp.cpp \
+                         *_eti_threads.cpp \
+                         *_eti_serial.cpp
+EXCLUDE_SYMBOLS        =
+USE_MDFILE_AS_MAINPAGE = README.md
+
+#---------------------------------------------------------------------------
+# Source browsing
+#---------------------------------------------------------------------------
+SOURCE_BROWSER         = YES
+INLINE_SOURCES         = NO
+STRIP_CODE_COMMENTS    = YES
+REFERENCED_BY_RELATION = YES
+REFERENCES_RELATION    = YES
+REFERENCES_LINK_SOURCE = YES
+VERBATIM_HEADERS       = YES
+
+#---------------------------------------------------------------------------
+# Output formats
+#---------------------------------------------------------------------------
+GENERATE_HTML          = YES
+HTML_OUTPUT            = html
+HTML_FILE_EXTENSION    = .html
+HTML_TIMESTAMP         = YES
+HTML_DYNAMIC_SECTIONS  = YES
+HTML_INDEX_NUM_ENTRIES = 100
+HTML_EXTRA_STYLESHEET  = docs/doxygen_extra.css
+GENERATE_TREEVIEW      = YES
+TREEVIEW_WIDTH         = 250
+DISABLE_INDEX          = NO
+ENUM_VALUES_PER_LINE   = 4
+USE_MATHJAX            = YES
+MATHJAX_FORMAT         = HTML-CSS
+
+GENERATE_LATEX         = NO
+GENERATE_MAN           = NO
+GENERATE_XML           = NO
+GENERATE_DOCBOOK       = NO
+
+#---------------------------------------------------------------------------
+# Preprocessing
+#---------------------------------------------------------------------------
+ENABLE_PREPROCESSING   = YES
+MACRO_EXPANSION        = YES
+EXPAND_ONLY_PREDEF     = NO
+SEARCH_INCLUDES        = YES
+INCLUDE_PATH           =
+PREDEFINED             = KOKKOS_ENABLED \
+                         DOXYGEN_SHOULD_SKIP_THIS
+SKIP_FUNCTION_MACROS   = YES
+
+#---------------------------------------------------------------------------
+# Dot / graph configuration
+#---------------------------------------------------------------------------
+HAVE_DOT               = NO
+DOT_NUM_THREADS        = 0
+CLASS_GRAPH            = YES
+COLLABORATION_GRAPH    = YES
+GROUP_GRAPHS           = YES
+UML_LOOK               = NO
+TEMPLATE_RELATIONS     = YES
+INCLUDE_GRAPH          = YES
+INCLUDED_BY_GRAPH      = YES
+CALL_GRAPH             = NO
+CALLER_GRAPH           = NO
+GRAPHICAL_HIERARCHY    = YES
+DIRECTORY_GRAPH        = YES
+DOT_IMAGE_FORMAT       = svg
+INTERACTIVE_SVG        = YES
+DOT_PATH               =
+DOT_GRAPH_MAX_NODES    = 100
+MAX_DOT_GRAPH_DEPTH    = 3
+DOT_TRANSPARENT        = YES
+DOT_CLEANUP            = YES
+
+#---------------------------------------------------------------------------
+# Search engine
+#---------------------------------------------------------------------------
+SEARCHENGINE           = YES
+SERVER_BASED_SEARCH    = NO

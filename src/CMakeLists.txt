@@ -60,6 +60,11 @@ set_target_properties(pacman_interface_cpp PROPERTIES
     INSTALL_RPATH_USE_LINK_PATH TRUE
 )
 
+if (ENABLE_COVERAGE)
+    target_compile_options(pacman_interface_cpp PRIVATE -g -O0 --coverage)
+    target_link_options(pacman_interface_cpp PRIVATE --coverage)
+endif()
+
 # -----------------------------------------------------
 # Fortran module library (optional — requires BUILD_FORTRAN_INTERFACE)
 # Compiles pacman_fortran.f90 into a Fortran module and links to
@@ -84,6 +89,10 @@ if (BUILD_FORTRAN_INTERFACE)
         BUILD_WITH_INSTALL_RPATH FALSE
         INSTALL_RPATH_USE_LINK_PATH TRUE
     )
+    if (ENABLE_COVERAGE)
+        target_compile_options(pacman_interface_fortran PRIVATE -g -O0 --coverage)
+        target_link_options(pacman_interface_fortran PRIVATE --coverage)
+    endif()
 endif()
 
 # -----------------------------------------------------

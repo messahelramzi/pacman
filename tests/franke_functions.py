@@ -11,6 +11,63 @@ functional tests so they stay consistent across test files.
 
 import numpy as np
 
+def franke_1d(x):
+    """Evaluate a smooth 1-D reference function on NumPy arrays or scalars.
+
+    Parameters
+    ----------
+    x : array_like
+        Coordinates in the normalized domain [0, 1].
+
+    Returns
+    -------
+    numpy.ndarray or float
+        Analytic reference values at ``x``.
+    """
+    return np.sin(np.pi * x) + 0.5 * np.sin(2.0 * np.pi * x)
+
+def franke_1d(x):
+    """Evaluate the 1D Franke function on NumPy arrays or scalars.
+
+    Parameters
+    ----------
+    x : array_like
+        Coordinates in the normalized domain.
+
+    Returns
+    -------
+    numpy.ndarray or float
+        Analytic reference values at ``x``.
+    """
+    return (
+        0.75
+        * np.exp(
+            -(
+                ((9.0 * x - 2.0) * (9.0 * x - 2.0))
+            )
+            / 4.0
+        )
+        + 0.75
+        * np.exp(
+            -(
+                ((9.0 * x + 1.0) * (9.0 * x + 1.0)) / 49.0
+            )
+        )
+        + 0.5
+        * np.exp(
+            -(
+                ((9.0 * x - 7.0) * (9.0 * x - 7.0))
+            )
+            / 4.0
+        )
+        - 0.2
+        * np.exp(
+            -(
+                ((9.0 * x - 4.0) * (9.0 * x - 4.0))
+            )
+        )
+    )
+
 def franke_2d(x, y):
     """Evaluate the 2D Franke function on NumPy arrays or scalars.
 

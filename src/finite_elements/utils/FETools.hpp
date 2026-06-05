@@ -2019,79 +2019,66 @@ public:
   UpdateShapeFunctionsDerDerValues(const int_t i, const fp_t xi, const fp_t eta,
                                    const fp_t phi,
                                    Kokkos::View<fp_t **, ExecSpace> sfddv) {
+    if (Kokkos::abs(1.0 - phi) < 1e-6) {
+      sfddv(0, 0) = 0.0;
+      sfddv(0, 1) = 0.0;
+      sfddv(0, 2) = 0.0;
+      sfddv(1, 0) = 0.0;
+      sfddv(1, 1) = 0.0;
+      sfddv(1, 2) = 0.0;
+      sfddv(2, 0) = 0.0;
+      sfddv(2, 1) = 0.0;
+      sfddv(2, 2) = 0.0;
+      return;
+    }
+    // t = 1 - phi,  N0=N2 and N1=N3 share the same Hessian structure.
+    // Derived from N{0,2} = ((xi +/- t)^2 - eta^2) / (4t)
+    //              N{1,3} = ((eta +/- t)^2 - xi^2 ) / (4t)
     switch (i) {
-    case 0: {
-      const fp_t x0 = 1.0 - phi;
-      const fp_t x1 = 1.0 / x0;
-      const fp_t x2 = 1.0 * x1;
-      const fp_t x3 = phi - 1;
-      const fp_t x4 = -eta - x3;
-      const fp_t x5 = Kokkos::pow(x0, -2);
-      const fp_t x6 = 1.0 * x5;
-      const fp_t x7 = x2 - x4 * x6;
-      const fp_t x8 = -x3 - xi;
-      const fp_t x9 = x2 - x6 * x8;
-      const fp_t x10 = 2.0 * x5;
-      sfddv(0, 1) = x2;
-      sfddv(0, 2) = x7;
-      sfddv(1, 0) = x2;
-      sfddv(1, 2) = x9;
-      sfddv(2, 0) = x7;
-      sfddv(2, 1) = x9;
-      sfddv(2, 2) =
-          2.0 * x1 - x10 * x4 - x10 * x8 + 2.0 * x4 * x8 / Kokkos::pow(x0, 3);
-      break;
-    }
-    case 1: {
-      const fp_t x0 = 1.0 - phi;
-      const fp_t x1 = 1.0 / x0;
-      const fp_t x2 = -x1;
-      const fp_t x3 = Kokkos::pow(x0, -2);
-      const fp_t x4 = -eta - phi + 1;
-      const fp_t x5 = -x1 + 1.0 * x3 * x4;
-      const fp_t x6 = -1.0 * x3 * xi;
-      sfddv(0, 1) = x2;
-      sfddv(0, 2) = x5;
-      sfddv(1, 0) = x2;
-      sfddv(1, 2) = x6;
-      sfddv(2, 0) = x5;
-      sfddv(2, 1) = x6;
-      sfddv(2, 2) = -2.0 * x3 * xi + 2.0 * x4 * xi / Kokkos::pow(x0, 3);
-      break;
-    }
+    case 0:
     case 2: {
-      const fp_t x0 = 1.0 - phi;
-      const fp_t x1 = 1.0 / x0;
-      const fp_t x2 = 1.0 / Kokkos::pow(x0, 2);
-      const fp_t x3 = eta * x2;
-      const fp_t x4 = x2 * xi;
-      sfddv(0, 1) = x1;
-      sfddv(0, 2) = x3;
-      sfddv(1, 0) = x1;
-      sfddv(1, 2) = x4;
-      sfddv(2, 0) = x3;
-      sfddv(2, 1) = x4;
-      sfddv(2, 2) = 2.0 * eta * xi / Kokkos::pow(x0, 3);
+      const fp_t t = 1.0 - phi;
+      const fp_t inv_2t = 0.5 / t;
+      const fp_t inv_2t2 = 0.5 / (t * t);
+      const fp_t inv_2t3 = 0.5 / (t * t * t);
+      sfddv(0, 0) = inv_2t;
+      sfddv(0, 1) = 0.0;
+      sfddv(0, 2) = xi * inv_2t2;
+      sfddv(1, 0) = 0.0;
+      sfddv(1, 1) = -inv_2t;
+      sfddv(1, 2) = -eta * inv_2t2;
+      sfddv(2, 0) = xi * inv_2t2;
+      sfddv(2, 1) = -eta * inv_2t2;
+      sfddv(2, 2) = (xi * xi - eta * eta) * inv_2t3;
       break;
     }
+    case 1:
     case 3: {
-      const fp_t x0 = 1.0 - phi;
-      const fp_t x1 = 1.0 / x0;
-      const fp_t x2 = -x1;
-      const fp_t x3 = Kokkos::pow(x0, -2);
-      const fp_t x4 = -1.0 * eta * x3;
-      const fp_t x5 = -phi - xi + 1;
-      const fp_t x6 = -x1 + 1.0 * x3 * x5;
-      sfddv(0, 1) = x2;
-      sfddv(0, 2) = x4;
-      sfddv(1, 0) = x2;
-      sfddv(1, 2) = x6;
-      sfddv(2, 0) = x4;
-      sfddv(2, 1) = x6;
-      sfddv(2, 2) = -2.0 * eta * x3 + 2.0 * eta * x5 / Kokkos::pow(x0, 3);
+      const fp_t t = 1.0 - phi;
+      const fp_t inv_2t = 0.5 / t;
+      const fp_t inv_2t2 = 0.5 / (t * t);
+      const fp_t inv_2t3 = 0.5 / (t * t * t);
+      sfddv(0, 0) = -inv_2t;
+      sfddv(0, 1) = 0.0;
+      sfddv(0, 2) = -xi * inv_2t2;
+      sfddv(1, 0) = 0.0;
+      sfddv(1, 1) = inv_2t;
+      sfddv(1, 2) = eta * inv_2t2;
+      sfddv(2, 0) = -xi * inv_2t2;
+      sfddv(2, 1) = eta * inv_2t2;
+      sfddv(2, 2) = (eta * eta - xi * xi) * inv_2t3;
       break;
     }
     case 4: {
+      sfddv(0, 0) = 0.0;
+      sfddv(0, 1) = 0.0;
+      sfddv(0, 2) = 0.0;
+      sfddv(1, 0) = 0.0;
+      sfddv(1, 1) = 0.0;
+      sfddv(1, 2) = 0.0;
+      sfddv(2, 0) = 0.0;
+      sfddv(2, 1) = 0.0;
+      sfddv(2, 2) = 0.0;
       break;
     }
     }
@@ -2165,7 +2152,7 @@ public:
     if (Kokkos::abs(1 - phi) < 1e-6) {
       sfdv(2, 0) = 1.0;
       sfdv(2, 0) = 1.0;
-      sfdv(2, 0) = 1.0;
+      sfdv(2, 0) = 0.5;
       sfdv(2, 1) = -1.0;
       sfdv(2, 1) = 0.0;
       sfdv(2, 1) = 0.0;
@@ -2177,7 +2164,7 @@ public:
       sfdv(2, 3) = 0.0;
       sfdv(2, 4) = 0.0;
       sfdv(2, 4) = 0.0;
-      sfdv(2, 4) = 3.0;
+      sfdv(2, 4) = 1.5;
       sfdv(2, 5) = 0.0;
       sfdv(2, 5) = 0.0;
       sfdv(2, 5) = 0.0;
@@ -2192,7 +2179,7 @@ public:
       sfdv(2, 8) = 0.0;
       sfdv(2, 9) = -4.0;
       sfdv(2, 9) = -4.0;
-      sfdv(2, 9) = -4.0;
+      sfdv(2, 9) = -2.0;
       sfdv(2, 10) = 4.0;
       sfdv(2, 10) = 0.0;
       sfdv(2, 10) = 0.0;

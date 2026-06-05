@@ -1,16 +1,35 @@
-# PACMAN (**P**ortable **A**lgorithms for **C**oupling, **M**apping, and **A**daptive i**N**terpolation)
+# PACMAN (Portable Algorithms for Coupling, Mapping, and Adaptive iNterpolation)
 
 <p align="center">
   <img src="docs/logo.png" alt="PACMAN logo" height="300" width="350"/>
 </p>
 
+<p align="center">
+  <a href="https://gitlab.com/messahel.ramzi/pacman/-/pipelines">
+    <img src="https://gitlab.com/messahel.ramzi/pacman/badges/main/pipeline.svg" alt="pipeline status"/>
+  </a>
+  <a href="https://messahel.ramzi.gitlab.io/pacman/coverage/">
+    <img src="https://gitlab.com/messahel.ramzi/pacman/badges/main/coverage.svg" alt="coverage"/>
+  </a>
+  <a href="https://messahel.ramzi.gitlab.io/pacman/">
+    <img src="https://img.shields.io/badge/docs-doxygen-blue" alt="documentation"/>
+  </a>
+</p>
+
 ## Description
 
-PACMAN is a C++ library with Python/Fortran bindings that provides portable algorithms for coupling, mapping, and adaptive interpolation of scientific data. Code & Performance portability is leverage thanks to Kokkos and it supports multiple CPU (Serial, OpenMP, Threads) and GPU (CUDA, HIP, SYCL) execution spaces through Kokkos, and offers both [finite element](https://gitlab.com/drti/muscat.git) and [RBF-PUM](https://doi.org/10.1137/24M1663843) interpolation methods. The library is designed to be flexible and efficient, allowing users to easily integrate it into their workflows for data transfer between different meshes or point clouds.
+PACMAN is a C++ library with Python/Fortran bindings that provides portable algorithms for coupling, mapping, and adaptive interpolation of scientific data based on [ArborX library](https://github.com/arborx/ArborX). Code & Performance portability is leverage thanks to Kokkos and it supports multiple CPU (Serial, OpenMP, Threads) and GPU (CUDA, HIP, SYCL) execution spaces through Kokkos, and offers both [finite element](https://gitlab.com/drti/muscat.git) and [RBF-PUM](https://doi.org/10.1137/24M1663843) interpolation methods. The library is designed to be flexible and efficient, allowing users to easily integrate it into their workflows for data transfer between different meshes or point clouds.
 
 Intereseted in contributing? Please check the [contributing guidelines](CONTRIBUTING.md) and the [code of conduct](CODE_OF_CONDUCT.md).
 
 PACMAN and its approach to code and performance portability were presented at [HPSFcon 2026](https://youtu.be/UNFvSxrhdzE?si=2-sNa9MvkNIiDLX3) in the context of Safran's industrial applications.
+
+## Resources
+
+| Resource | URL |
+|----------|-----|
+| API Documentation (Doxygen) | https://messahel.ramzi.gitlab.io/pacman/ |
+| Coverage Report | https://messahel.ramzi.gitlab.io/pacman/coverage/ |
 
 ## Get the source code
 

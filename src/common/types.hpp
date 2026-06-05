@@ -95,10 +95,12 @@ KOKKOS_INLINE_FUNCTION consteval fp_t one(void) {
   return static_cast<fp_t>(1.0);
 }
 KOKKOS_INLINE_FUNCTION consteval fp_t epsilon(void) { return 1.0e-14; }
+// LCOV_EXCL_START
 constexpr unsigned int precision = std::numeric_limits<fp_t>::max_digits10;
 inline auto set_precision(void) {
   return std::setprecision(fp_consts::precision);
 }
+// LCOV_EXCL_STOP
 }; // namespace fp_consts
 
 } // namespace PACMAN
