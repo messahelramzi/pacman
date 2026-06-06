@@ -64,7 +64,8 @@ void SetupTransferClass(Transfer<ExecSpace, Dim> &transfer,
                         const index_t targetPointsSize,
                         coordinates_t *pSourcePoints, fp_t *pSourceValues,
                         int_t *pConnVal, offset_t *pConnOff, cell_t *pCellTypes,
-                        coordinates_t *pTargetPoints) {
+                        coordinates_t *pTargetPoints, bool fortranIndexing = false)
+{
   const std::string _region_name = "SetupTransferClass";
   using MemorySpace = typename ExecSpace::memory_space;
 
@@ -149,14 +150,29 @@ void SetupTransferClass(Transfer<ExecSpace, Dim> &transfer,
   transfer.nbSpaceDimElements = -99;
   // No need of conn for these methods
   if (transfer.method != TransferMethods::NEAREST_NEAREST &&
-      transfer.method != TransferMethods::RBF_PUM) {
+      transfer.method != TransferMethods::RBF_PUM && 
+      transfer.method != TransferMethods::MLS) {
 
     auto unmanagedHost_cv =
         Kokkos::View<int_t *, Kokkos::DefaultHostExecutionSpace::memory_space,
                      Kokkos::MemoryTraits<Kokkos::Unmanaged>>(pConnVal,
                                                               connValSize);
-    transfer.connValues =
-        Kokkos::create_mirror_view_and_copy(execspace2, unmanagedHost_cv);
+    if(fortranIndexing)
+    {
+        auto connValues = Kokkos::View<int_t *, Kokkos::DefaultHostExecutionSpace::memory_space>(
+            Kokkos::view_alloc(hostspace, Kokkos::WithoutInitializing,
+                            "Fortran connValues"), connValSize);
+        Kokkos::parallel_for(
+            _region_name + "::copy connectivity values",
+            Kokkos::RangePolicy(hostspace, 0, connValSize),
+            KOKKOS_LAMBDA(const index_t &i) { connValues(i) = unmanagedHost_cv(i)-1; });
+
+        transfer.connValues = Kokkos::create_mirror_view_and_copy(execspace2, connValues);
+    }
+    else
+    {
+        transfer.connValues = Kokkos::create_mirror_view_and_copy(execspace2, unmanagedHost_cv);
+    }
 
     auto unmanagedHost_co =
         Kokkos::View<int_t *, Kokkos::DefaultHostExecutionSpace::memory_space,

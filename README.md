@@ -47,7 +47,7 @@ Host-only interpolator requirements (Serial, Threads, OpenMP):
 - `cmake@3.31+`
 - `kokkos@5+`
 - `kokkoskernels@5+`
-- `ArborX@2.0+`
+- `ArborX@2.1+`
 
 Additional device requirements:
 

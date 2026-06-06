@@ -10,6 +10,7 @@
 
 #include "common/types.hpp"
 #include "pybindings/fe_bindings.hpp"
+#include "pybindings/mls_bindings.hpp"
 #include "pybindings/rbf_bindings.hpp"
 
 namespace PACMAN {
@@ -119,6 +120,17 @@ PYBIND11_MODULE(pacman, m) {
   fe.def("vtk_cell_dim", &PyBindingsFiniteElements::vtk_cell_dim,
          py::arg("cell_type"),
          "Return VTK cell dimension from a vtk cell type int");
+
+  auto MLS = m.def_submodule("MLS",
+                              "Moving Least Squares interpolator (CPU/GPU)");
+  MLS.def("interpolate",               // Python Func Name
+          &PyBindingsMLS::Interpolate, // C++ Corresponding Function
+          py::arg("space_dimension"),  // #1 Arg
+          py::arg("execspace"),        // #2 Arg
+          py::arg("source_points"),    // #3 Arg
+          py::arg("source_values"),    // #4 Arg
+          py::arg("target_points")     // #5 Arg
+  );
 }
 
 } // namespace PACMAN

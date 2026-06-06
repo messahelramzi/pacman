@@ -9,8 +9,8 @@
 #   4. docs          – Doxygen HTML generation + GitLab Pages deployment
 #
 # Required tools in the runner image (registry.gitlab.com/drti/pacman:latest)
-#   cmake >= 3.31, ninja, gcc >= 13 (C++20), gcovr, doxygen
-#   kokkos >= 5, kokkos-kernels >= 5, arborx >= 2.0
+#   cmake >= 3.31, gcc >= 13 (C++20), gcovr, doxygen
+#   kokkos >= 5, kokkos-kernels >= 5, arborx >= 2.1
 #   pybind11 >= 3, numpy >= 2.3
 #
 # The CI image is built from the provided Dockerfile.
@@ -18,6 +18,22 @@
 # All other pipelines skip stage 0 and reuse the already-pushed :latest image.
 # To force a rebuild without touching those files, trigger the job manually.
 # ─────────────────────────────────────────────────────────────────────────────
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Pipeline trigger policy
+#
+#  • MR targeting main  → full pipeline runs (test, build, docs build)
+#  • Push / merge to main → pages deployment job is also unlocked
+#  • All other events (pushes to feature branches, tags, …) → no pipeline
+# ─────────────────────────────────────────────────────────────────────────────
+workflow:
+  rules:
+    # MR pipeline targeting the default branch (main)
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $CI_DEFAULT_BRANCH
+    # Push / merge to the default branch (required for GitLab Pages deployment)
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    # Explicitly block everything else (feature branch pushes, tags, etc.)
+    - when: never
 
 stages:
   - docker-image
@@ -41,9 +57,6 @@ variables:
 
   # ── Coverage output ────────────────────────────────────────────────────────
   COVERAGE_DIR: "coverage"
-
-  # ── CMake generator ────────────────────────────────────────────────────────
-  CMAKE_GENERATOR: "Ninja"
 
 default:
   image: $CI_IMAGE
@@ -108,10 +121,10 @@ test:debug-coverage:
     # ── Configure (Debug + coverage instrumentation) ──────────────────────
     - >
       cmake
-      -G "${CMAKE_GENERATOR}"
       -DCMAKE_BUILD_TYPE=Debug
       -DBUILD_MODULE=ON
       -DBUILD_TESTS=ON
+      -DBUILD_FORTRAN_INTERFACE=ON
       -DENABLE_COVERAGE=ON
       -S . -B "${BUILD_DEBUG}"
     # ── Build ─────────────────────────────────────────────────────────────
@@ -172,10 +185,10 @@ build:release:
   script:
     - >
       cmake
-      -G "${CMAKE_GENERATOR}"
       -DCMAKE_BUILD_TYPE=Release
       -DBUILD_MODULE=ON
       -DBUILD_TESTS=ON
+      -DBUILD_FORTRAN_INTERFACE=ON
       -S . -B "${BUILD_RELEASE}"
     - cmake --build "${BUILD_RELEASE}" -- -j$(nproc)
   artifacts:
@@ -234,7 +247,7 @@ docs:build:
   artifacts:
     name: "docs-${CI_COMMIT_SHORT_SHA}"
     paths:
-      - docs/html/
+      - docs/doxygen/html/
     expire_in: 1 week
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -252,8 +265,8 @@ pages:
       artifacts: true
   script:
     # GitLab Pages requires content in a `public/` directory.
-    - mv docs/html/ public/
-    # Embed the coverage HTML report so it is permanently accessible at /coverage/
+    - mv docs/doxygen/html/ public/
+    # Publish the coverage HTML report at <pages-url>/coverage/
     - mv "${COVERAGE_DIR}/" public/coverage/
   artifacts:
     paths:

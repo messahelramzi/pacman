@@ -54,7 +54,8 @@ enum PACMAN_FeMethod {
   PACMAN_FE_INTERP_CLAMP = 0xF1,
   PACMAN_FE_INTERP_NEAREST = 0xF2,
   PACMAN_FE_INTERP_ZEROFILL = 0xF3,
-  PACMAN_FE_INTERP_EXTRAP = 0xF4
+  PACMAN_FE_INTERP_EXTRAP = 0xF4,
+  PACMAN_MLS = 0xF6
 };
 
 /* ------------------------------------------------------------------ */
@@ -151,6 +152,31 @@ int pacman_fe_interpolate_c(int spaceDimension, int execSpace, int method,
                             int connOffSize, const int *cellTypes,
                             const double *targetPoints, int nTargetPoints,
                             double *targetValues, int *targetStatus);
+
+/* ------------------------------------------------------------------ */
+/* MLS interpolation                                                   */
+/* ------------------------------------------------------------------ */
+
+/**
+ * @brief C shim for PACMAN::mls_interpolate.
+ *
+ * @param spaceDimension  Geometric dimension (1, 2, or 3).
+ * @param execSpace       Execution-space selector (PACMAN_ExecSpace).
+ * @param sourcePoints    Row-major source points [nSourcePoints ×
+ * spaceDimension].
+ * @param nSourcePoints   Number of source points.
+ * @param sourceValues    Source scalar values, length @p nSourcePoints.
+ * @param targetPoints    Row-major target points [nTargetPoints ×
+ * spaceDimension].
+ * @param nTargetPoints   Number of target points.
+ * @param targetValues    Caller-allocated output, length @p nTargetPoints.
+ * @return 0 on success, non-zero on error.
+ */
+int pacman_mls_interpolate_c(int spaceDimension, int execSpace,
+                             const double *sourcePoints, int nSourcePoints,
+                             const double *sourceValues,
+                             const double *targetPoints, int nTargetPoints,
+                             double *targetValues);
 
 /* ------------------------------------------------------------------ */
 /* Cell-type helpers                                                   */

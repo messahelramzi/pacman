@@ -232,7 +232,7 @@ void checkDerDer(const std::string &name,
 void testIsInside() {
   using namespace PACMAN::FiniteElements;
   using PACMAN::GeoSupport;
-  constexpr double eps = 1e-6;
+
   const std::string name = "IsBaryCoordInsideGeo";
 
   // POINT – always inside

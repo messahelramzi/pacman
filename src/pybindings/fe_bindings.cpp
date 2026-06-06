@@ -126,6 +126,7 @@ requires IsValidDim<Dim> // 1 <= Dim <= 3
 /// @param[in] connOff Optional connectivity offsets (CSR layout).
 /// @param[in] cellTypes Optional PACMAN cell type identifiers.
 /// @param[in] targetPoints Target points array shaped `(m, spaceDimension)`.
+///
 /// @return Tuple `(target_values, transfer_status)` where both arrays have
 /// length `m`.
 /// @throws std::invalid_argument when array dimensions/shapes are inconsistent.

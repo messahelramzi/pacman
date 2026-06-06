@@ -65,6 +65,9 @@ struct FeInterpolateResult {
 /// @param targetPoints    Row-major target points `[nTargetPoints ×
 /// spaceDimension]`.
 /// @param nTargetPoints   Number of target points.
+/// @param fortranIndexing  Whether the connectivity arrays use 1-based indexing (true)
+///                        or 0-based indexing (false, default).  Only relevant
+///                        if `connVal` and `connOff` are provided.
 /// @return FeInterpolateResult with `targetValues` and `targetStatus` of length
 ///         `nTargetPoints`.
 /// @throws std::invalid_argument on inconsistent sizes.
@@ -74,7 +77,7 @@ fe_interpolate(int_t spaceDimension, unsigned char execSpace, method_t method,
                coordinates_t *sourcePoints, int_t nSourcePoints,
                fp_t *sourceValues, int_t *connVal, int_t connValSize,
                offset_t *connOff, int_t connOffSize, cell_t *cellTypes,
-               coordinates_t *targetPoints, int_t nTargetPoints);
+               coordinates_t *targetPoints, int_t nTargetPoints, bool fortranIndexing = false);
 
 /// @brief Convert an array of VTK cell type IDs to PACMAN CellType enum values.
 ///
@@ -131,5 +134,39 @@ rbf_interpolate(int_t spaceDimension, unsigned char execSpace,
                 unsigned char rbfFunction, coordinates_t *sourcePoints,
                 int_t nSourcePoints, fp_t *sourceValues,
                 coordinates_t *targetPoints, int_t nTargetPoints);
+
+// ---------------------------------------------------------------------------
+// MLS C++ interface
+// ---------------------------------------------------------------------------
+
+/// @brief Result of a Moving Least Squares interpolation call.
+struct MLSInterpolateResult {
+  std::vector<fp_t>
+      targetValues; ///< Interpolated scalar value per target point.
+};
+
+/// @brief C++ interface for Moving Least Squares (MLS) interpolation.
+///
+/// Mirrors `pacman.MLS.interpolate` from the Python bindings, accepting raw
+/// pointers instead of NumPy arrays.  Points arrays are row-major
+/// `[nPoints × spaceDimension]`.
+///
+/// @param spaceDimension  Geometric dimension (1, 2, or 3).
+/// @param execSpace       Execution-space selector (@see ExecSpaces constants).
+/// @param sourcePoints    Row-major source points `[nSourcePoints ×
+/// spaceDimension]`.
+/// @param nSourcePoints   Number of source points.
+/// @param sourceValues    Source scalar values, length `nSourcePoints`.
+/// @param targetPoints    Row-major target points `[nTargetPoints ×
+/// spaceDimension]`.
+/// @param nTargetPoints   Number of target points.
+/// @return MLSInterpolateResult with `targetValues` of length `nTargetPoints`.
+/// @throws std::invalid_argument on inconsistent sizes / null pointers.
+/// @throws std::runtime_error if `spaceDimension` is not in {1, 2, 3}.
+MLSInterpolateResult
+MLS_interpolate(int_t spaceDimension, unsigned char execSpace,
+                coordinates_t *sourcePoints, int_t nSourcePoints,
+                fp_t *sourceValues, coordinates_t *targetPoints,
+                int_t nTargetPoints);
 
 } // namespace PACMAN

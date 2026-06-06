@@ -1,5 +1,7 @@
 .vscode/
 build*
+coverage*
+docs/doxygen/
 install/
 .mypy_cache
 

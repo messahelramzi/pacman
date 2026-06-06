@@ -6,6 +6,6 @@ spack:
     - cmake
     - kokkos@5 +rocm amdgpu_target=gfx942 +openmp +serial
     - kokkos-kernels@5 +openmp +serial
-    - arborx@2 ~mpi +rocm amdgpu_target=gfx942 +openmp +serial
+    - arborx@2.1 ~mpi +rocm amdgpu_target=gfx942 +openmp +serial
     - py-pybind11
     - py-numpy

@@ -8,6 +8,7 @@
 # -----------------------------------------------------
 add_subdirectory(rbf_pum)
 add_subdirectory(finite_elements)
+add_subdirectory(mls)
 
 # -----------------------------------------------------
 # Create the public target which will be exported
@@ -47,6 +48,13 @@ add_library(pacman_interface_cpp
     rbf_interface_eti_cuda.cpp
     rbf_interface_eti_hip.cpp
     rbf_interface_eti_sycl.cpp
+    mls_interface.cpp
+    mls_interface_eti_serial.cpp
+    mls_interface_eti_openmp.cpp
+    mls_interface_eti_threads.cpp
+    mls_interface_eti_cuda.cpp
+    mls_interface_eti_hip.cpp
+    mls_interface_eti_sycl.cpp
 )
 add_library(PACMAN::pacman_interface_cpp ALIAS pacman_interface_cpp)
 target_link_libraries(pacman_interface_cpp PUBLIC PACMAN)

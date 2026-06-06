@@ -55,6 +55,15 @@ if (ENABLE_COVERAGE)
 endif()
 add_test(NAME cpp_test_rbf_interface COMMAND test_cpp_rbf_interface)
 
+#==== C++ MLS interface test (equivalent of test_cpp_rbf_interface for MLS)
+add_executable(test_cpp_mls_interface ${CMAKE_CURRENT_SOURCE_DIR}/test_cpp_mls_interface.cpp)
+target_link_libraries(test_cpp_mls_interface PRIVATE pacman_interface_cpp)
+if (ENABLE_COVERAGE)
+    target_compile_options(test_cpp_mls_interface PRIVATE -g -O0 --coverage)
+    target_link_options(test_cpp_mls_interface PRIVATE --coverage)
+endif()
+add_test(NAME cpp_test_mls_interface COMMAND test_cpp_mls_interface)
+
 #===== Tests FE/RBF interpolation methods and execution spaces
 set(EXECSPACES SERIAL OPENMP CUDA HIP)
 
@@ -89,6 +98,13 @@ foreach(exec_space IN LISTS EXECSPACES)
   endforeach()
 endforeach()
 
+# Tests MLS
+include(PACMANAddMLSTests)
+
+foreach(exec_space IN LISTS EXECSPACES)
+  add_mls_test(${exec_space})
+endforeach()
+
 #==== Fortran interface tests
 if (BUILD_FORTRAN_INTERFACE)
     add_executable(test_fortran_rbf_interface
@@ -108,6 +124,15 @@ if (BUILD_FORTRAN_INTERFACE)
         target_link_options(test_fortran_fe_interface PRIVATE --coverage)
     endif()
     add_test(NAME fortran_test_fe_interface COMMAND test_fortran_fe_interface)
+
+    add_executable(test_fortran_mls_interface
+        ${CMAKE_CURRENT_SOURCE_DIR}/test_fortran_mls_interface.f90)
+    target_link_libraries(test_fortran_mls_interface PRIVATE pacman_interface_fortran)
+    if (ENABLE_COVERAGE)
+        target_compile_options(test_fortran_mls_interface PRIVATE -g -O0 --coverage)
+        target_link_options(test_fortran_mls_interface PRIVATE --coverage)
+    endif()
+    add_test(NAME fortran_test_mls_interface COMMAND test_fortran_mls_interface)
 endif()
 
 # Add skip test property when test returns exit code 77

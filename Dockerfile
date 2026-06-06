@@ -46,7 +46,7 @@ RUN apt-get update -qq && \
         gnupg \
         libssl-dev \
         patchelf \
-        python3 \
+        python3-dev \
         python3-pip \
         unzip \
         xz-utils \

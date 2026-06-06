@@ -33,6 +33,7 @@ enum class TransferMethods : method_t {
   INTERP_ZEROFILL = 0xF3,
   INTERP_EXTRAP = 0xF4,
   RBF_PUM = 0xF5,
+  MLS = 0xF6,
 };
 
 enum class TransferStatus : status_t {

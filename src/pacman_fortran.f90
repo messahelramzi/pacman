@@ -37,6 +37,7 @@ module pacman_mod
   public :: pacman_best_execspace
   public :: pacman_rbf_interpolate
   public :: pacman_fe_interpolate
+  public :: pacman_mls_interpolate
   public :: pacman_vtk_to_pacman_cell_type
   public :: pacman_vtk_cell_dim
 
@@ -69,6 +70,11 @@ module pacman_mod
   integer(c_int), parameter, public :: PACMAN_FE_INTERP_NEAREST  = 242
   integer(c_int), parameter, public :: PACMAN_FE_INTERP_ZEROFILL = 243
   integer(c_int), parameter, public :: PACMAN_FE_INTERP_EXTRAP   = 244
+
+  ! -----------------------------------------------------------------
+  ! MLS constant (match PACMAN::TransferMethods::MLS = 0xF6 = 246)
+  ! -----------------------------------------------------------------
+  integer(c_int), parameter, public :: PACMAN_MLS = 246
 
   ! -----------------------------------------------------------------
   ! ISO C interfaces to the plain-C shim (fortran_interface.cpp)
@@ -128,6 +134,23 @@ module pacman_mod
       integer(c_int), value :: nTargetPoints
       type(c_ptr),    value :: targetValues
       type(c_ptr),    value :: targetStatus
+      integer(c_int)        :: ierr
+    end function
+
+    function pacman_mls_interpolate_c(                                  &
+        spaceDimension, execSpace,                                       &
+        sourcePoints, nSourcePoints, sourceValues,                       &
+        targetPoints, nTargetPoints, targetValues) result(ierr)          &
+        bind(C, name='pacman_mls_interpolate_c')
+      import :: c_int, c_ptr
+      integer(c_int), value :: spaceDimension
+      integer(c_int), value :: execSpace
+      type(c_ptr),    value :: sourcePoints
+      integer(c_int), value :: nSourcePoints
+      type(c_ptr),    value :: sourceValues
+      type(c_ptr),    value :: targetPoints
+      integer(c_int), value :: nTargetPoints
+      type(c_ptr),    value :: targetValues
       integer(c_int)        :: ierr
     end function
 
@@ -247,17 +270,62 @@ contains
     integer(c_int), intent(out), optional :: ierr
 
     integer(c_int) :: ret, nsrc, ntgt, nconnval, nconnoff
+    integer :: i 
 
     nsrc     = int(size(sourceValues), c_int)
     ntgt     = int(size(targetValues), c_int)
     nconnval = int(size(connVal),      c_int)
     nconnoff = int(size(connOff),      c_int)
-
+    write(*,*) 'DEBUG: nsrc=', nsrc, ' ntgt=', ntgt, ' nconnval=', nconnval, ' nconnoff=', nconnoff, &
+     ' size(connVal)=', size(connVal), ' size(connOff)=', size(connOff)                              
+    do i = 1, size(connVal)
+      if (connVal(i) < 0) then
+        write(*,'(A,I0,A,I0)') 'ERROR: connVal(', i, ') = ', connVal(i)
+        if (present(ierr)) ierr = -1
+        return
+      end if
+    end do
     ret = pacman_fe_interpolate_c(                                             &
               int(spaceDimension, c_int), execSpace, method,                   &
               c_loc(sourcePoints), nsrc,  c_loc(sourceValues),                 &
               c_loc(connVal), nconnval, c_loc(connOff), nconnoff, c_loc(cellTypes), &
               c_loc(targetPoints), ntgt, c_loc(targetValues), c_loc(targetStatus))
+    if (present(ierr)) ierr = ret
+  end subroutine
+
+  ! -----------------------------------------------------------------
+  ! MLS interpolation
+  ! -----------------------------------------------------------------
+
+  !> @brief Interpolate scalar values from source to target points using
+  !>        Moving Least Squares (no mesh connectivity required).
+  !>
+  !> @param spaceDimension  Geometric dimension (1, 2, or 3).
+  !> @param execSpace       Execution-space constant (e.g. PACMAN_OPENMP).
+  !> @param sourcePoints    Source coordinates, shape (spaceDimension, nSource).
+  !> @param sourceValues    Source scalar values, shape (nSource).
+  !> @param targetPoints    Target coordinates, shape (spaceDimension, nTarget).
+  !> @param targetValues    Interpolated output, shape (nTarget).  Must be
+  !>                        allocated by the caller before the call.
+  !> @param ierr            Optional error code: 0 = success.
+  subroutine pacman_mls_interpolate(spaceDimension, execSpace, &
+      sourcePoints, sourceValues, targetPoints, targetValues, ierr)
+    integer,        intent(in)            :: spaceDimension
+    integer(c_int), intent(in)            :: execSpace
+    real(c_double), intent(in),  contiguous, target :: sourcePoints(:,:)
+    real(c_double), intent(in),  contiguous, target :: sourceValues(:)
+    real(c_double), intent(in),  contiguous, target :: targetPoints(:,:)
+    real(c_double), intent(out), contiguous, target :: targetValues(:)
+    integer(c_int), intent(out), optional :: ierr
+
+    integer(c_int) :: ret, nsrc, ntgt
+
+    nsrc = int(size(sourceValues), c_int)
+    ntgt = int(size(targetValues), c_int)
+    ret  = pacman_mls_interpolate_c(                                        &
+               int(spaceDimension, c_int), execSpace,                       &
+               c_loc(sourcePoints), nsrc, c_loc(sourceValues),              &
+               c_loc(targetPoints), ntgt, c_loc(targetValues))
     if (present(ierr)) ierr = ret
   end subroutine
 

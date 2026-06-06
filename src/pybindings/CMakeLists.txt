@@ -24,6 +24,14 @@ pybind11_add_module(pacman
     fe_eti_cuda.cpp
     fe_eti_hip.cpp
     fe_eti_sycl.cpp
+    # MLS explicit template instantiation — one TU per exec space (3 dims each).
+    mls_bindings.cpp
+    mls_eti_serial.cpp
+    mls_eti_openmp.cpp
+    mls_eti_threads.cpp
+    mls_eti_cuda.cpp
+    mls_eti_hip.cpp
+    mls_eti_sycl.cpp
 )
 target_link_libraries(pacman PRIVATE PACMAN)
 set_target_properties(pacman PROPERTIES

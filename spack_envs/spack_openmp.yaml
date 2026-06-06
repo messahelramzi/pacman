@@ -6,6 +6,6 @@ spack:
     - cmake
     - kokkos@5 +openmp +serial
     - kokkos-kernels@5 +openmp +serial
-    - arborx ~mpi +openmp +serial
+    - arborx@2.1 ~mpi +openmp +serial
     - py-pybind11
     - py-numpy

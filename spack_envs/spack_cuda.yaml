@@ -6,6 +6,6 @@ spack:
     - cmake
     - kokkos@5 +cuda cuda_arch=86 +wrapper +openmp +serial
     - kokkos-kernels@5 +cuda cuda_arch=86 +openmp +serial
-    - arborx@2 ~mpi +cuda cuda_arch=86 +openmp +serial
+    - arborx@2.1 ~mpi +cuda cuda_arch=86 +openmp +serial
     - py-pybind11
     - py-numpy

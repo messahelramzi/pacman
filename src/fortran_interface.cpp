@@ -102,10 +102,6 @@ int pacman_fe_interpolate_c(int spaceDimension, int execSpace, int method,
                             const double *targetPoints, int nTargetPoints,
                             double *targetValues, int *targetStatus) {
   try {
-    for (int i = 0; i < connValSize; ++i)
-      const_cast<int *>(
-          connVal)[i]--; // Convert from Fortran 1-based to C++ 0-based indexing
-
     PACMAN::FeInterpolateResult result = PACMAN::fe_interpolate(
         static_cast<PACMAN::int_t>(spaceDimension),
         static_cast<unsigned char>(execSpace),
@@ -119,7 +115,7 @@ int pacman_fe_interpolate_c(int spaceDimension, int execSpace, int method,
         static_cast<PACMAN::int_t>(connOffSize),
         const_cast<PACMAN::cell_t *>(cellTypes),
         const_cast<PACMAN::coordinates_t *>(targetPoints),
-        static_cast<PACMAN::int_t>(nTargetPoints));
+        static_cast<PACMAN::int_t>(nTargetPoints), true);
 
     for (int i = 0; i < nTargetPoints; ++i) {
       targetValues[i] = result.targetValues[static_cast<std::size_t>(i)];
@@ -131,6 +127,39 @@ int pacman_fe_interpolate_c(int spaceDimension, int execSpace, int method,
     return -1;
   } catch (...) {
     std::cerr << "pacman_fe_interpolate_c: unknown exception\n";
+    return -2;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// MLS interpolation
+// ---------------------------------------------------------------------------
+
+int pacman_mls_interpolate_c(int spaceDimension, int execSpace,
+                             const double *sourcePoints, int nSourcePoints,
+                             const double *sourceValues,
+                             const double *targetPoints, int nTargetPoints,
+                             double *targetValues) {
+  
+  try {
+    PACMAN::MLSInterpolateResult result = PACMAN::MLS_interpolate(
+        static_cast<PACMAN::int_t>(spaceDimension),
+        static_cast<unsigned char>(execSpace),
+        const_cast<PACMAN::coordinates_t *>(sourcePoints),
+        static_cast<PACMAN::int_t>(nSourcePoints),
+        const_cast<PACMAN::fp_t *>(sourceValues),
+        const_cast<PACMAN::coordinates_t *>(targetPoints),
+        static_cast<PACMAN::int_t>(nTargetPoints));
+
+    for (int i = 0; i < nTargetPoints; ++i)
+      targetValues[i] = result.targetValues[static_cast<std::size_t>(i)];
+
+    return 0;
+  } catch (const std::exception &e) {
+    std::cerr << "pacman_mls_interpolate_c: " << e.what() << "\n";
+    return -1;
+  } catch (...) {
+    std::cerr << "pacman_mls_interpolate_c: unknown exception\n";
     return -2;
   }
 }

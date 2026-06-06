@@ -32,11 +32,11 @@ RunInterpolate(PACMAN::method_t method, PACMAN::coordinates_t *pSourcePoints,
                PACMAN::int_t *pConnVal, PACMAN::int_t connValSize,
                PACMAN::offset_t *pConnOff, PACMAN::int_t connOffSize,
                PACMAN::cell_t *pCellTypes, PACMAN::coordinates_t *pTargetPoints,
-               PACMAN::int_t nTargetPoints) {
+               PACMAN::int_t nTargetPoints, bool fortranIndexing) {
   PACMAN::Transfer<ExecSpace, Dim> transfer(method);
   PACMAN::SetupTransferClass(transfer, nSourcePoints, connValSize, connOffSize,
                              nTargetPoints, pSourcePoints, pSourceValues,
-                             pConnVal, pConnOff, pCellTypes, pTargetPoints);
+                             pConnVal, pConnOff, pCellTypes, pTargetPoints, fortranIndexing);
   PACMAN::Interpolate(transfer);
 
   PACMAN::FeInterpolateResult result;
@@ -66,13 +66,13 @@ Dispatch(unsigned char execSpace, PACMAN::method_t method,
          PACMAN::fp_t *pSourceValues, PACMAN::int_t *pConnVal,
          PACMAN::int_t connValSize, PACMAN::offset_t *pConnOff,
          PACMAN::int_t connOffSize, PACMAN::cell_t *pCellTypes,
-         PACMAN::coordinates_t *pTargetPoints, PACMAN::int_t nTargetPoints) {
+         PACMAN::coordinates_t *pTargetPoints, PACMAN::int_t nTargetPoints, bool fortranIndexing) {
   return std::visit(
       [&](auto execSpaceObj) {
         return RunInterpolate<decltype(execSpaceObj), Dim>(
             method, pSourcePoints, nSourcePoints, pSourceValues, pConnVal,
             connValSize, pConnOff, connOffSize, pCellTypes, pTargetPoints,
-            nTargetPoints);
+            nTargetPoints, fortranIndexing);
       },
       PACMAN::MakeExecSpace(execSpace));
 }
@@ -90,7 +90,7 @@ fe_interpolate(int_t spaceDimension, unsigned char execSpace, method_t method,
                coordinates_t *sourcePoints, int_t nSourcePoints,
                fp_t *sourceValues, int_t *connVal, int_t connValSize,
                offset_t *connOff, int_t connOffSize, cell_t *cellTypes,
-               coordinates_t *targetPoints, int_t nTargetPoints) {
+               coordinates_t *targetPoints, int_t nTargetPoints, bool fortranIndexing) {
   const std::string _region_name = "PACMAN::fe_interpolate";
   const Kokkos::Profiling::ScopedRegion region(_region_name);
 
@@ -105,15 +105,15 @@ fe_interpolate(int_t spaceDimension, unsigned char execSpace, method_t method,
   case 1:
     return Dispatch<1>(execSpace, method, sourcePoints, nSourcePoints,
                        sourceValues, connVal, connValSize, connOff, connOffSize,
-                       cellTypes, targetPoints, nTargetPoints);
+                       cellTypes, targetPoints, nTargetPoints, fortranIndexing);
   case 2:
     return Dispatch<2>(execSpace, method, sourcePoints, nSourcePoints,
                        sourceValues, connVal, connValSize, connOff, connOffSize,
-                       cellTypes, targetPoints, nTargetPoints);
+                       cellTypes, targetPoints, nTargetPoints, fortranIndexing);
   case 3:
     return Dispatch<3>(execSpace, method, sourcePoints, nSourcePoints,
                        sourceValues, connVal, connValSize, connOff, connOffSize,
-                       cellTypes, targetPoints, nTargetPoints);
+                       cellTypes, targetPoints, nTargetPoints, fortranIndexing);
   default:
     throw std::runtime_error(
         "The dimension of the points can only be: 1, 2 or 3.\n");
