@@ -82,7 +82,7 @@ jobs:
         ctest        
 
         lcov --ignore-errors mismatch --gcov-tool /usr/bin/gcov-14 --capture --directory . --output-file coverage.info
-        lcov --remove coverage.info '14/*' '/opt/view/*' --output-file coverage.info
+        lcov --remove coverage.info '14/*' '/opt/view/*' '/opt/spack/*' --output-file coverage.info
         genhtml coverage.info --synthesize-missing --output-directory coverage
 
         cd ..
@@ -92,12 +92,7 @@ jobs:
         mkdir -p deploy
         cp -r docs deploy/docs
         cp -r build-debug/coverage deploy/coverage
-
-        echo "<h1>Project Documentation</h1>
-              <ul>
-                <li><a href='docs/doxygen/html/index.html'>Doxygen Docs</a></li>
-                <li><a href='coverage/index.html'>Coverage Report</a></li>
-              </ul>" > deploy/index.html
+        cp .github/index.html deploy/index.html
 
     - name: Deploy Coverage & Documentation
       uses: peaceiris/actions-gh-pages@v4
