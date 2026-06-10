@@ -21,8 +21,8 @@ spack:
       require: 'target=x86_64_v3'
 
   mirrors:
-    sphiros-ci-buildcache-linux:
-      url: oci://ghcr.io/messahelramzi/sphiros-ci-buildcache-linux:latest
+    pacman-ci-buildcache-linux-openmp:
+      url: oci://ghcr.io/messahelramzi/pacman-ci-buildcache-linux-openmp:latest
       binary: true
       signed: false
       access_pair:
