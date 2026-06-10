@@ -37,7 +37,7 @@
           </tr>
           <tr>
             <td class="headerItem">Test Date:</td>
-            <td class="headerValue">2026-06-10 22:52:52</td>
+            <td class="headerValue">2026-06-10 22:56:19</td>
             <td></td>
             <td class="headerItem">Functions:</td>
             <td class="headerCovTableEntryHi">100.0&nbsp;%</td>
@@ -299,25 +299,25 @@
 <span id="L237"><span class="lineNum">     237</span> <span class="tlaGNC">       16709 :           ++curr;</span></span>
 <span id="L238"><span class="lineNum">     238</span>              :         }</span>
 <span id="L239"><span class="lineNum">     239</span>              :         // For all elements starting with vect(0)</span>
-<span id="L240"><span class="lineNum">     240</span> <span class="tlaGNC">      170655 :         while (curr &lt;= nbLinFaces - 1 &amp;&amp;</span></span>
-<span id="L241"><span class="lineNum">     241</span> <span class="tlaGNC">       85301 :                linFaces(permutationVector(curr), 0) == vect(0)) {</span></span>
-<span id="L242"><span class="lineNum">     242</span> <span class="tlaGNC">       70485 :           if (curr == i) { // skip current</span></span>
+<span id="L240"><span class="lineNum">     240</span> <span class="tlaGNC">      170651 :         while (curr &lt;= nbLinFaces - 1 &amp;&amp;</span></span>
+<span id="L241"><span class="lineNum">     241</span> <span class="tlaGNC">       85299 :                linFaces(permutationVector(curr), 0) == vect(0)) {</span></span>
+<span id="L242"><span class="lineNum">     242</span> <span class="tlaGNC">       70483 :           if (curr == i) { // skip current</span></span>
 <span id="L243"><span class="lineNum">     243</span> <span class="tlaGNC">       15965 :             ++curr;</span></span>
 <span id="L244"><span class="lineNum">     244</span> <span class="tlaGNC">       15965 :             continue;</span></span>
 <span id="L245"><span class="lineNum">     245</span>              :           }</span>
-<span id="L246"><span class="lineNum">     246</span> <span class="tlaGNC">       54520 :           bool diff = false;</span></span>
+<span id="L246"><span class="lineNum">     246</span> <span class="tlaGNC">       54518 :           bool diff = false;</span></span>
 <span id="L247"><span class="lineNum">     247</span>              :           // Check if identical</span>
-<span id="L248"><span class="lineNum">     248</span> <span class="tlaGNC">       68879 :           for (index_t t = 1; t &lt; nodesPerFace + 1; ++t)</span></span>
-<span id="L249"><span class="lineNum">     249</span> <span class="tlaGNC">       66687 :             if (linFaces(permutationVector(curr), t) != vect(t)) {</span></span>
-<span id="L250"><span class="lineNum">     250</span> <span class="tlaGNC">       52328 :               diff = true;</span></span>
-<span id="L251"><span class="lineNum">     251</span> <span class="tlaGNC">       52328 :               break;</span></span>
+<span id="L248"><span class="lineNum">     248</span> <span class="tlaGNC">       68874 :           for (index_t t = 1; t &lt; nodesPerFace + 1; ++t)</span></span>
+<span id="L249"><span class="lineNum">     249</span> <span class="tlaGNC">       66682 :             if (linFaces(permutationVector(curr), t) != vect(t)) {</span></span>
+<span id="L250"><span class="lineNum">     250</span> <span class="tlaGNC">       52326 :               diff = true;</span></span>
+<span id="L251"><span class="lineNum">     251</span> <span class="tlaGNC">       52326 :               break;</span></span>
 <span id="L252"><span class="lineNum">     252</span>              :             }</span>
-<span id="L253"><span class="lineNum">     253</span> <span class="tlaGNC">       54520 :           if (!diff) {</span></span>
+<span id="L253"><span class="lineNum">     253</span> <span class="tlaGNC">       54518 :           if (!diff) {</span></span>
 <span id="L254"><span class="lineNum">     254</span> <span class="tlaGNC">        2192 :             ++curr_row_occur;</span></span>
 <span id="L255"><span class="lineNum">     255</span>              :             // if (curr_row_occur == 2)</span>
 <span id="L256"><span class="lineNum">     256</span> <span class="tlaGNC">        2192 :             break;</span></span>
 <span id="L257"><span class="lineNum">     257</span>              :           }</span>
-<span id="L258"><span class="lineNum">     258</span> <span class="tlaGNC">       52328 :           ++curr;</span></span>
+<span id="L258"><span class="lineNum">     258</span> <span class="tlaGNC">       52326 :           ++curr;</span></span>
 <span id="L259"><span class="lineNum">     259</span>              :         }</span>
 <span id="L260"><span class="lineNum">     260</span> <span class="tlaGNC">       17061 :         if (curr_row_occur == 2) {</span></span>
 <span id="L261"><span class="lineNum">     261</span> <span class="tlaGNC">        2192 :           allFaceId(index) = -1;</span></span>
