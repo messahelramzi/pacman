@@ -1,0 +1,25 @@
+var searchData=
+[
+  ['about_20the_20use_20of_20kokkos_0',['Additional notes about the use of Kokkos',['../index.html#autotoc_md30',1,'']]],
+  ['accesstraits_3c_20pacman_3a_3afiniteelements_3a_3apointcloudnearest_3c_20memoryspace_2c_20dim_20_3e_20_3e_1',['AccessTraits&lt; PACMAN::FiniteElements::PointCloudNearest&lt; MemorySpace, Dim &gt; &gt;',['../structArborX_1_1AccessTraits_3_01PACMAN_1_1FiniteElements_1_1PointCloudNearest_3_01MemorySpace_00_01Dim_01_4_01_4.html',1,'ArborX']]],
+  ['accesstraits_3c_20pacman_3a_3afiniteelements_3a_3apointintersect_3c_20memoryspace_2c_20dim_20_3e_20_3e_2',['AccessTraits&lt; PACMAN::FiniteElements::PointIntersect&lt; MemorySpace, Dim &gt; &gt;',['../structArborX_1_1AccessTraits_3_01PACMAN_1_1FiniteElements_1_1PointIntersect_3_01MemorySpace_00_01Dim_01_4_01_4.html',1,'ArborX']]],
+  ['accesstraits_3c_20pacman_3a_3afiniteelements_3a_3apointnearest_3c_20viewtype_20_3e_20_3e_3',['AccessTraits&lt; PACMAN::FiniteElements::PointNearest&lt; ViewType &gt; &gt;',['../structArborX_1_1AccessTraits_3_01PACMAN_1_1FiniteElements_1_1PointNearest_3_01ViewType_01_4_01_4.html',1,'ArborX']]],
+  ['accesstraits_3c_20pacman_3a_3arbfpum_3a_3adistancetoknearest_3c_20viewtype_20_3e_20_3e_4',['AccessTraits&lt; PACMAN::RbfPum::DistanceToKNearest&lt; ViewType &gt; &gt;',['../structArborX_1_1AccessTraits_3_01PACMAN_1_1RbfPum_1_1DistanceToKNearest_3_01ViewType_01_4_01_4.html',1,'ArborX']]],
+  ['accesstraits_3c_20pacman_3a_3arbfpum_3a_3agetclusterspoints_3c_20viewtype_20_3e_20_3e_5',['AccessTraits&lt; PACMAN::RbfPum::GetClustersPoints&lt; ViewType &gt; &gt;',['../structArborX_1_1AccessTraits_3_01PACMAN_1_1RbfPum_1_1GetClustersPoints_3_01ViewType_01_4_01_4.html',1,'ArborX']]],
+  ['accesstraits_3c_20pacman_3a_3arbfpum_3a_3aprojection_3c_20viewtype_20_3e_20_3e_6',['AccessTraits&lt; PACMAN::RbfPum::Projection&lt; ViewType &gt; &gt;',['../structArborX_1_1AccessTraits_3_01PACMAN_1_1RbfPum_1_1Projection_3_01ViewType_01_4_01_4.html',1,'ArborX']]],
+  ['accesstraits_3c_20pacman_3a_3arbfpum_3a_3atagemptycenters_3c_20viewtype_20_3e_20_3e_7',['AccessTraits&lt; PACMAN::RbfPum::TagEmptyCenters&lt; ViewType &gt; &gt;',['../structArborX_1_1AccessTraits_3_01PACMAN_1_1RbfPum_1_1TagEmptyCenters_3_01ViewType_01_4_01_4.html',1,'ArborX']]],
+  ['accesstraits_3c_20pacman_3a_3arbfpum_3a_3atransformtonearest_3c_20viewtype_20_3e_20_3e_8',['AccessTraits&lt; PACMAN::RbfPum::TransformToNearest&lt; ViewType &gt; &gt;',['../structArborX_1_1AccessTraits_3_01PACMAN_1_1RbfPum_1_1TransformToNearest_3_01ViewType_01_4_01_4.html',1,'ArborX']]],
+  ['adaptive_20interpolation_9',['PACMAN (Portable Algorithms for Coupling, Mapping, and Adaptive iNterpolation)',['../index.html',1,'']]],
+  ['additional_20notes_20about_20the_20use_20of_20kokkos_10',['Additional notes about the use of Kokkos',['../index.html#autotoc_md30',1,'']]],
+  ['algorithms_20for_20coupling_20mapping_20and_20adaptive_20interpolation_11',['PACMAN (Portable Algorithms for Coupling, Mapping, and Adaptive iNterpolation)',['../index.html',1,'']]],
+  ['aliases_12',['Type aliases',['../index.html#autotoc_md20',1,'']]],
+  ['analytic_20reference_3a_20tt_20tests_20franke_5ffunctions_20py_20tt_13',['Shared analytic reference: &lt;tt&gt;tests/franke_functions.py&lt;/tt&gt;',['../index.html#autotoc_md10',1,'']]],
+  ['and_20adaptive_20interpolation_14',['PACMAN (Portable Algorithms for Coupling, Mapping, and Adaptive iNterpolation)',['../index.html',1,'']]],
+  ['and_20rbf_20constants_15',['Execution-space and RBF constants',['../index.html#autotoc_md21',1,'']]],
+  ['applynewton_16',['ApplyNewton',['../namespacePACMAN_1_1FiniteElements.html#aff35abe3e9c39b4ee3c674a920609d41',1,'PACMAN::FiniteElements']]],
+  ['applynewtononelement_17',['ApplyNewtonOnElement',['../namespacePACMAN_1_1FiniteElements.html#ac588efd172f16e3314a9648739f735b5',1,'PACMAN::FiniteElements']]],
+  ['arborx_18',['ArborX',['../namespaceArborX.html',1,'']]],
+  ['arborxcallbacks_2ehpp_19',['ArborXCallbacks.hpp',['../ArborXCallbacks_8hpp.html',1,'']]],
+  ['array_20layout_20convention_20',['Array layout convention',['../index.html#autotoc_md24',1,'']]],
+  ['availableexecspaces_21',['AvailableExecSpaces',['../namespacePACMAN.html#a9bdd9b27e72cd5c30364289c26ae8151',1,'PACMAN']]]
+];

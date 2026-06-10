@@ -1,0 +1,116 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+
+<html lang="en">
+
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <title>LCOV - coverage.info - src/finite_elements/FTInterpZero.hpp</title>
+  <link rel="stylesheet" type="text/css" href="../../gcov.css">
+</head>
+
+<body>
+
+          <table width="100%" border=0 cellspacing=0 cellpadding=0>
+            <tr><td class="title">LCOV - code coverage report</td></tr>
+            <tr><td class="ruler"><img src="../../glass.png" width=3 height=3 alt=""></td></tr>
+
+            <tr>
+              <td width="100%">
+                <table cellpadding=1 border=0 width="100%">
+          <tr>
+            <td width="10%" class="headerItem">Current view:</td>
+            <td width="10%" class="headerValue"><a href="../../index.html">top level</a> - <a href="index.html">src/finite_elements</a> - FTInterpZero.hpp<span style="font-size: 80%;"> (source / <a href="FTInterpZero.hpp.func-c.html">functions</a>)</span></td>
+            <td width="5%"></td>
+            <td width="5%"></td>
+            <td width="5%" class="headerCovTableHead">Coverage</td>
+            <td width="5%" class="headerCovTableHead" title="Covered + Uncovered code">Total</td>
+            <td width="5%" class="headerCovTableHead" title="Exercised code only">Hit</td>
+          </tr>
+          <tr>
+            <td class="headerItem">Test:</td>
+            <td class="headerValue">coverage.info</td>
+            <td></td>
+            <td class="headerItem">Lines:</td>
+            <td class="headerCovTableEntryHi">100.0&nbsp;%</td>
+            <td class="headerCovTableEntry">7</td>
+            <td class="headerCovTableEntry">7</td>
+          </tr>
+          <tr>
+            <td class="headerItem">Test Date:</td>
+            <td class="headerValue">2026-06-10 14:03:48</td>
+            <td></td>
+            <td class="headerItem">Functions:</td>
+            <td class="headerCovTableEntryHi">100.0&nbsp;%</td>
+            <td class="headerCovTableEntry">6</td>
+            <td class="headerCovTableEntry">6</td>
+          </tr>
+                  <tr><td><img src="../../glass.png" width=3 height=3 alt=""></td></tr>
+                </table>
+              </td>
+            </tr>
+
+            <tr><td class="ruler"><img src="../../glass.png" width=3 height=3 alt=""></td></tr>
+          </table>
+
+          <table cellpadding=0 cellspacing=0 border=0>
+            <tr>
+              <td><br></td>
+            </tr>
+            <tr>
+              <td>
+<pre class="sourceHeading">            Line data    Source code</pre>
+<pre class="source">
+<span id="L1"><span class="lineNum">       1</span>              : //</span>
+<span id="L2"><span class="lineNum">       2</span>              : // This file is subject to the terms and conditions defined in</span>
+<span id="L3"><span class="lineNum">       3</span>              : // file 'LICENSE', which is part of this source code package.</span>
+<span id="L4"><span class="lineNum">       4</span>              : //</span>
+<span id="L5"><span class="lineNum">       5</span>              : </span>
+<span id="L6"><span class="lineNum">       6</span>              : #pragma once</span>
+<span id="L7"><span class="lineNum">       7</span>              : </span>
+<span id="L8"><span class="lineNum">       8</span>              : #include &quot;finite_elements/utils/ArborXCallbacks.hpp&quot;</span>
+<span id="L9"><span class="lineNum">       9</span>              : #include &quot;finite_elements/utils/FTUtils.hpp&quot;</span>
+<span id="L10"><span class="lineNum">      10</span>              : #include &lt;Kokkos_Core.hpp&gt;</span>
+<span id="L11"><span class="lineNum">      11</span>              : </span>
+<span id="L12"><span class="lineNum">      12</span>              : namespace PACMAN {</span>
+<span id="L13"><span class="lineNum">      13</span>              : </span>
+<span id="L14"><span class="lineNum">      14</span>              : namespace FiniteElements {</span>
+<span id="L15"><span class="lineNum">      15</span>              : </span>
+<span id="L16"><span class="lineNum">      16</span>              : /**</span>
+<span id="L17"><span class="lineNum">      17</span>              :  * @brief Interpolate target points from FE cells, zero-filling points outside</span>
+<span id="L18"><span class="lineNum">      18</span>              :  * the source mesh.</span>
+<span id="L19"><span class="lineNum">      19</span>              :  * @tparam ExecSpace Kokkos execution space used for the intersection/query</span>
+<span id="L20"><span class="lineNum">      20</span>              :  * kernels.</span>
+<span id="L21"><span class="lineNum">      21</span>              :  * @tparam Dim Spatial dimension of the interpolation problem.</span>
+<span id="L22"><span class="lineNum">      22</span>              :  * @param[in,out] transfer Transfer descriptor holding interpolation data.</span>
+<span id="L23"><span class="lineNum">      23</span>              :  * Reads: source mesh/field data and target points.</span>
+<span id="L24"><span class="lineNum">      24</span>              :  * Writes: `targetValues` and `targetStatus`.</span>
+<span id="L25"><span class="lineNum">      25</span>              :  * @note Points that do not intersect any source element are assigned a zero</span>
+<span id="L26"><span class="lineNum">      26</span>              :  * value.</span>
+<span id="L27"><span class="lineNum">      27</span>              :  */</span>
+<span id="L28"><span class="lineNum">      28</span>              : template &lt;typename ExecSpace, int Dim&gt;</span>
+<span id="L29"><span class="lineNum">      29</span> <span class="tlaGNC tlaBgGNC">          28 : void FTInterZero(Transfer&lt;ExecSpace, Dim&gt; &amp;transfer) {</span></span>
+<span id="L30"><span class="lineNum">      30</span>              : </span>
+<span id="L31"><span class="lineNum">      31</span> <span class="tlaGNC">          56 :   Kokkos::Profiling::pushRegion(&quot;FiniteElement::FTInterpZero&quot;);</span></span>
+<span id="L32"><span class="lineNum">      32</span>              : </span>
+<span id="L33"><span class="lineNum">      33</span> <span class="tlaGNC">          28 :   Kokkos::Profiling::pushRegion(&quot;Compute target point FE intersection&quot;);</span></span>
+<span id="L34"><span class="lineNum">      34</span> <span class="tlaGNC">          28 :   ComputeBoxTargetPointIntersection&lt;ExecSpace, Dim&gt;(transfer);</span></span>
+<span id="L35"><span class="lineNum">      35</span> <span class="tlaGNC">          28 :   Kokkos::Profiling::popRegion(); // Compute target point FE intersection</span></span>
+<span id="L36"><span class="lineNum">      36</span>              : </span>
+<span id="L37"><span class="lineNum">      37</span> <span class="tlaGNC">          28 :   Kokkos::Profiling::popRegion(); // FTInterpZero</span></span>
+<span id="L38"><span class="lineNum">      38</span> <span class="tlaGNC">          28 : }</span></span>
+<span id="L39"><span class="lineNum">      39</span>              : } // namespace FiniteElements</span>
+<span id="L40"><span class="lineNum">      40</span>              : } // namespace PACMAN</span>
+        </pre>
+              </td>
+            </tr>
+          </table>
+          <br>
+
+          <table width="100%" border=0 cellspacing=0 cellpadding=0>
+            <tr><td class="ruler"><img src="../../glass.png" width=3 height=3 alt=""></td></tr>
+            <tr><td class="versionInfo">Generated by: <a href="https://github.com//linux-test-project/lcov" target="_parent">LCOV version 2.0-1</a></td></tr>
+          </table>
+          <br>
+
+</body>
+</html>

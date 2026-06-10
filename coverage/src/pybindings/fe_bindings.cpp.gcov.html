@@ -1,0 +1,351 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+
+<html lang="en">
+
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <title>LCOV - coverage.info - src/pybindings/fe_bindings.cpp</title>
+  <link rel="stylesheet" type="text/css" href="../../gcov.css">
+</head>
+
+<body>
+
+          <table width="100%" border=0 cellspacing=0 cellpadding=0>
+            <tr><td class="title">LCOV - code coverage report</td></tr>
+            <tr><td class="ruler"><img src="../../glass.png" width=3 height=3 alt=""></td></tr>
+
+            <tr>
+              <td width="100%">
+                <table cellpadding=1 border=0 width="100%">
+          <tr>
+            <td width="10%" class="headerItem">Current view:</td>
+            <td width="10%" class="headerValue"><a href="../../index.html">top level</a> - <a href="index.html">src/pybindings</a> - fe_bindings.cpp<span style="font-size: 80%;"> (source / <a href="fe_bindings.cpp.func-c.html">functions</a>)</span></td>
+            <td width="5%"></td>
+            <td width="5%"></td>
+            <td width="5%" class="headerCovTableHead">Coverage</td>
+            <td width="5%" class="headerCovTableHead" title="Covered + Uncovered code">Total</td>
+            <td width="5%" class="headerCovTableHead" title="Exercised code only">Hit</td>
+          </tr>
+          <tr>
+            <td class="headerItem">Test:</td>
+            <td class="headerValue">coverage.info</td>
+            <td></td>
+            <td class="headerItem">Lines:</td>
+            <td class="headerCovTableEntryMed">80.7&nbsp;%</td>
+            <td class="headerCovTableEntry">83</td>
+            <td class="headerCovTableEntry">67</td>
+          </tr>
+          <tr>
+            <td class="headerItem">Test Date:</td>
+            <td class="headerValue">2026-06-10 14:03:48</td>
+            <td></td>
+            <td class="headerItem">Functions:</td>
+            <td class="headerCovTableEntryHi">100.0&nbsp;%</td>
+            <td class="headerCovTableEntry">19</td>
+            <td class="headerCovTableEntry">19</td>
+          </tr>
+                  <tr><td><img src="../../glass.png" width=3 height=3 alt=""></td></tr>
+                </table>
+              </td>
+            </tr>
+
+            <tr><td class="ruler"><img src="../../glass.png" width=3 height=3 alt=""></td></tr>
+          </table>
+
+          <table cellpadding=0 cellspacing=0 border=0>
+            <tr>
+              <td><br></td>
+            </tr>
+            <tr>
+              <td>
+<pre class="sourceHeading">            Line data    Source code</pre>
+<pre class="source">
+<span id="L1"><span class="lineNum">       1</span>              : //</span>
+<span id="L2"><span class="lineNum">       2</span>              : // This file is subject to the terms and conditions defined in</span>
+<span id="L3"><span class="lineNum">       3</span>              : // file 'LICENSE', which is part of this source code package.</span>
+<span id="L4"><span class="lineNum">       4</span>              : //</span>
+<span id="L5"><span class="lineNum">       5</span>              : </span>
+<span id="L6"><span class="lineNum">       6</span>              : #include &quot;pybindings/fe_bindings.hpp&quot;</span>
+<span id="L7"><span class="lineNum">       7</span>              : </span>
+<span id="L8"><span class="lineNum">       8</span>              : #include &lt;Kokkos_Core.hpp&gt;</span>
+<span id="L9"><span class="lineNum">       9</span>              : #include &lt;Kokkos_Profiling_ScopedRegion.hpp&gt;</span>
+<span id="L10"><span class="lineNum">      10</span>              : </span>
+<span id="L11"><span class="lineNum">      11</span>              : #include &quot;common/transfer.hxx&quot;</span>
+<span id="L12"><span class="lineNum">      12</span>              : #include &quot;common/types.hpp&quot;</span>
+<span id="L13"><span class="lineNum">      13</span>              : #include &quot;interpolate.hpp&quot;</span>
+<span id="L14"><span class="lineNum">      14</span>              : #include &quot;pybindings/bindings.hpp&quot;</span>
+<span id="L15"><span class="lineNum">      15</span>              : </span>
+<span id="L16"><span class="lineNum">      16</span>              : /**</span>
+<span id="L17"><span class="lineNum">      17</span>              :  * @file fe_bindings.cpp</span>
+<span id="L18"><span class="lineNum">      18</span>              :  * @brief Python bindings for PACMAN finite-elements interpolation APIs.</span>
+<span id="L19"><span class="lineNum">      19</span>              :  */</span>
+<span id="L20"><span class="lineNum">      20</span>              : </span>
+<span id="L21"><span class="lineNum">      21</span>              : namespace PACMAN {</span>
+<span id="L22"><span class="lineNum">      22</span>              : namespace PyBindingsFiniteElements {</span>
+<span id="L23"><span class="lineNum">      23</span>              : </span>
+<span id="L24"><span class="lineNum">      24</span>              : /// @brief Internal typed entry point that builds a `Transfer` object,</span>
+<span id="L25"><span class="lineNum">      25</span>              : /// dispatches interpolation, and copies results back to NumPy arrays.</span>
+<span id="L26"><span class="lineNum">      26</span>              : /// @tparam ExecSpace Kokkos execution space selected at runtime.</span>
+<span id="L27"><span class="lineNum">      27</span>              : /// @tparam Dim Spatial dimension of the interpolation problem.</span>
+<span id="L28"><span class="lineNum">      28</span>              : /// @param[in] method PACMAN transfer method to execute.</span>
+<span id="L29"><span class="lineNum">      29</span>              : /// @param[in,out] rSourcePoints Source points array `(n, Dim)`.</span>
+<span id="L30"><span class="lineNum">      30</span>              : /// @param[in,out] rSourceValues Source scalar values array `(n)`.</span>
+<span id="L31"><span class="lineNum">      31</span>              : /// @param[in,out] rConnVal Optional flattened connectivity values.</span>
+<span id="L32"><span class="lineNum">      32</span>              : /// @param[in,out] rConnOff Optional connectivity offsets (CSR layout).</span>
+<span id="L33"><span class="lineNum">      33</span>              : /// @param[in,out] rCellTypes Optional PACMAN cell types associated with</span>
+<span id="L34"><span class="lineNum">      34</span>              : /// connectivity entries.</span>
+<span id="L35"><span class="lineNum">      35</span>              : /// @param[in,out] rTargetPoints Target points array `(m, Dim)`.</span>
+<span id="L36"><span class="lineNum">      36</span>              : /// @return Tuple `(target_values, transfer_status)` where both arrays have</span>
+<span id="L37"><span class="lineNum">      37</span>              : /// length `m`.</span>
+<span id="L38"><span class="lineNum">      38</span>              : template &lt;typename ExecSpace, int_t Dim&gt;</span>
+<span id="L39"><span class="lineNum">      39</span>              : std::tuple&lt;np_array&lt;fp_t&gt;, np_array&lt;int_t&gt;&gt;</span>
+<span id="L40"><span class="lineNum">      40</span> <span class="tlaGNC tlaBgGNC">         143 : RunInterpolate(const method_t method, np_array&lt;coordinates_t&gt; &amp;rSourcePoints,</span></span>
+<span id="L41"><span class="lineNum">      41</span>              :                np_array&lt;fp_t&gt; &amp;rSourceValues,</span>
+<span id="L42"><span class="lineNum">      42</span>              :                optional_np_array&lt;int_t&gt; &amp;rConnVal,</span>
+<span id="L43"><span class="lineNum">      43</span>              :                optional_np_array&lt;offset_t&gt; &amp;rConnOff,</span>
+<span id="L44"><span class="lineNum">      44</span>              :                optional_np_array&lt;cell_t&gt; &amp;rCellTypes,</span>
+<span id="L45"><span class="lineNum">      45</span>              :                np_array&lt;coordinates_t&gt; &amp;rTargetPoints) {</span>
+<span id="L46"><span class="lineNum">      46</span>              :   auto *p_source_points =</span>
+<span id="L47"><span class="lineNum">      47</span> <span class="tlaGNC">         143 :       static_cast&lt;coordinates_t *&gt;(rSourcePoints.mutable_data());</span></span>
+<span id="L48"><span class="lineNum">      48</span> <span class="tlaGNC">         143 :   auto *p_source_values = static_cast&lt;fp_t *&gt;(rSourceValues.mutable_data());</span></span>
+<span id="L49"><span class="lineNum">      49</span>              :   auto *p_target_points =</span>
+<span id="L50"><span class="lineNum">      50</span> <span class="tlaGNC">         143 :       static_cast&lt;coordinates_t *&gt;(rTargetPoints.mutable_data());</span></span>
+<span id="L51"><span class="lineNum">      51</span> <span class="tlaGNC">         143 :   auto *p_conn_val = static_cast&lt;int_t *&gt;(</span></span>
+<span id="L52"><span class="lineNum">      52</span> <span class="tlaGNC">         286 :       rConnVal.has_value() ? rConnVal.value().mutable_data() : nullptr);</span></span>
+<span id="L53"><span class="lineNum">      53</span> <span class="tlaGNC">         143 :   auto *p_conn_offsets = static_cast&lt;offset_t *&gt;(</span></span>
+<span id="L54"><span class="lineNum">      54</span> <span class="tlaGNC">         286 :       rConnOff.has_value() ? rConnOff.value().mutable_data() : nullptr);</span></span>
+<span id="L55"><span class="lineNum">      55</span> <span class="tlaGNC">         143 :   auto *p_cell_types = static_cast&lt;cell_t *&gt;(</span></span>
+<span id="L56"><span class="lineNum">      56</span> <span class="tlaGNC">         286 :       rCellTypes.has_value() ? rCellTypes.value().mutable_data() : nullptr);</span></span>
+<span id="L57"><span class="lineNum">      57</span>              : </span>
+<span id="L58"><span class="lineNum">      58</span> <span class="tlaGNC">         143 :   Transfer&lt;ExecSpace, Dim&gt; transfer(method);</span></span>
+<span id="L59"><span class="lineNum">      59</span> <span class="tlaGNC">         429 :   SetupTransferClass(transfer, rSourcePoints.shape(0),</span></span>
+<span id="L60"><span class="lineNum">      60</span> <span class="tlaGNC">         286 :                      rConnVal.has_value() ? rConnVal.value().shape(0) : 0,</span></span>
+<span id="L61"><span class="lineNum">      61</span> <span class="tlaGNC">         143 :                      rConnOff.has_value() ? rConnOff.value().shape(0) : 0,</span></span>
+<span id="L62"><span class="lineNum">      62</span> <span class="tlaGNC">         143 :                      rTargetPoints.shape(0), p_source_points, p_source_values,</span></span>
+<span id="L63"><span class="lineNum">      63</span>              :                      p_conn_val, p_conn_offsets, p_cell_types, p_target_points);</span>
+<span id="L64"><span class="lineNum">      64</span> <span class="tlaGNC">         143 :   Interpolate(transfer);</span></span>
+<span id="L65"><span class="lineNum">      65</span> <span class="tlaGNC">         143 :   auto target_values_np_array = np_array&lt;fp_t&gt;(rTargetPoints.shape(0));</span></span>
+<span id="L66"><span class="lineNum">      66</span> <span class="tlaGNC">         143 :   auto transfer_status_np_array = np_array&lt;int_t&gt;(rTargetPoints.shape(0));</span></span>
+<span id="L67"><span class="lineNum">      67</span> <span class="tlaGNC">         143 :   auto *p_target_values = target_values_np_array.mutable_data();</span></span>
+<span id="L68"><span class="lineNum">      68</span>              :   auto *p_transfer_status = reinterpret_cast&lt;PACMAN::TransferStatus *&gt;(</span>
+<span id="L69"><span class="lineNum">      69</span> <span class="tlaGNC">         143 :       transfer_status_np_array.mutable_data());</span></span>
+<span id="L70"><span class="lineNum">      70</span> <span class="tlaGNC">         143 :   auto unmanaged_host_tv =</span></span>
+<span id="L71"><span class="lineNum">      71</span>              :       Kokkos::View&lt;fp_t *, Kokkos::DefaultHostExecutionSpace::memory_space,</span>
+<span id="L72"><span class="lineNum">      72</span>              :                    Kokkos::MemoryTraits&lt;Kokkos::Unmanaged&gt;&gt;(</span>
+<span id="L73"><span class="lineNum">      73</span>              :           p_target_values, rTargetPoints.shape(0));</span>
+<span id="L74"><span class="lineNum">      74</span> <span class="tlaGNC">         143 :   auto unmanaged_host_ts =</span></span>
+<span id="L75"><span class="lineNum">      75</span>              :       Kokkos::View&lt;PACMAN::TransferStatus *,</span>
+<span id="L76"><span class="lineNum">      76</span>              :                    Kokkos::DefaultHostExecutionSpace::memory_space,</span>
+<span id="L77"><span class="lineNum">      77</span>              :                    Kokkos::MemoryTraits&lt;Kokkos::Unmanaged&gt;&gt;(</span>
+<span id="L78"><span class="lineNum">      78</span>              :           p_transfer_status, rTargetPoints.shape(0));</span>
+<span id="L79"><span class="lineNum">      79</span> <span class="tlaGNC">         143 :   Kokkos::deep_copy(unmanaged_host_tv, transfer.targetValues);</span></span>
+<span id="L80"><span class="lineNum">      80</span> <span class="tlaGNC">         143 :   Kokkos::deep_copy(unmanaged_host_ts, transfer.targetStatus);</span></span>
+<span id="L81"><span class="lineNum">      81</span> <span class="tlaGNC">         286 :   return std::make_tuple(target_values_np_array, transfer_status_np_array);</span></span>
+<span id="L82"><span class="lineNum">      82</span> <span class="tlaGNC">         143 : }</span></span>
+<span id="L83"><span class="lineNum">      83</span>              : </span>
+<span id="L84"><span class="lineNum">      84</span>              : /// @brief This function allows us to pass runtime parameters as template</span>
+<span id="L85"><span class="lineNum">      85</span>              : /// arguments, using a type union `std::variant` (`AvailableExecSpaces`)</span>
+<span id="L86"><span class="lineNum">      86</span>              : /// @tparam Dim The space dimension of the problem, here the dimension is</span>
+<span id="L87"><span class="lineNum">      87</span>              : /// checked to be between 1 and 3 (included)</span>
+<span id="L88"><span class="lineNum">      88</span>              : /// @note The pattern using a `std::variant` and `std::visit` has multiple</span>
+<span id="L89"><span class="lineNum">      89</span>              : /// advantages: it allows us to dispatch safely the runtime arguments to</span>
+<span id="L90"><span class="lineNum">      90</span>              : /// templated function, with no big switch or polymorphism (which can be</span>
+<span id="L91"><span class="lineNum">      91</span>              : /// confusing), also, we are sure that all of the cases are handled properly, as</span>
+<span id="L92"><span class="lineNum">      92</span>              : /// we won't be able to compule the code until all the union values have their</span>
+<span id="L93"><span class="lineNum">      93</span>              : /// value handled.</span>
+<span id="L94"><span class="lineNum">      94</span>              : ///       In short: it is safer, implies no heap allocation, no virtual dispatch</span>
+<span id="L95"><span class="lineNum">      95</span>              : ///       and allows the compiler to check and optimise everything properly</span>
+<span id="L96"><span class="lineNum">      96</span>              : template &lt;int_t Dim&gt;</span>
+<span id="L97"><span class="lineNum">      97</span>              : requires IsValidDim&lt;Dim&gt; // 1 &lt;= Dim &lt;= 3</span>
+<span id="L98"><span class="lineNum">      98</span>              :     std::tuple&lt;np_array&lt;fp_t&gt;, np_array&lt;int_t&gt;&gt;</span>
+<span id="L99"><span class="lineNum">      99</span> <span class="tlaGNC">         143 :     Dispatch(const unsigned char execSpace, const method_t method,</span></span>
+<span id="L100"><span class="lineNum">     100</span>              :              np_array&lt;coordinates_t&gt; &amp;rSourcePoints,</span>
+<span id="L101"><span class="lineNum">     101</span>              :              np_array&lt;fp_t&gt; &amp;rSourceValues, optional_np_array&lt;int_t&gt; &amp;rConnVal,</span>
+<span id="L102"><span class="lineNum">     102</span>              :              optional_np_array&lt;offset_t&gt; &amp;rConnOff,</span>
+<span id="L103"><span class="lineNum">     103</span>              :              optional_np_array&lt;cell_t&gt; &amp;rCellTypes,</span>
+<span id="L104"><span class="lineNum">     104</span>              :              np_array&lt;coordinates_t&gt; &amp;rTargetPoints) {</span>
+<span id="L105"><span class="lineNum">     105</span>              :   return std::visit(</span>
+<span id="L106"><span class="lineNum">     106</span> <span class="tlaGNC">         143 :       [&amp;](auto execSpaceObj) {</span></span>
+<span id="L107"><span class="lineNum">     107</span>              :         return RunInterpolate&lt;decltype(execSpaceObj), Dim&gt;(</span>
+<span id="L108"><span class="lineNum">     108</span>              :             method, rSourcePoints, rSourceValues, rConnVal, rConnOff,</span>
+<span id="L109"><span class="lineNum">     109</span> <span class="tlaGNC">         143 :             rCellTypes, rTargetPoints);</span></span>
+<span id="L110"><span class="lineNum">     110</span>              :       },</span>
+<span id="L111"><span class="lineNum">     111</span> <span class="tlaGNC">         143 :       MakeExecSpace(execSpace));</span></span>
+<span id="L112"><span class="lineNum">     112</span>              : }</span>
+<span id="L113"><span class="lineNum">     113</span>              : </span>
+<span id="L114"><span class="lineNum">     114</span>              : /// @brief Python-facing finite-elements interpolation binding.</span>
+<span id="L115"><span class="lineNum">     115</span>              : ///</span>
+<span id="L116"><span class="lineNum">     116</span>              : /// Validates NumPy input arrays, dispatches the call according to</span>
+<span id="L117"><span class="lineNum">     117</span>              : /// `spaceDimension` and `execSpace`, and returns interpolated values plus</span>
+<span id="L118"><span class="lineNum">     118</span>              : /// transfer status for each target point.</span>
+<span id="L119"><span class="lineNum">     119</span>              : ///</span>
+<span id="L120"><span class="lineNum">     120</span>              : /// @param[in] spaceDimension Geometric dimension of points (`1`, `2`, or `3`).</span>
+<span id="L121"><span class="lineNum">     121</span>              : /// @param[in] execSpace Runtime execution-space selector.</span>
+<span id="L122"><span class="lineNum">     122</span>              : /// @param[in] method Transfer method selector from PACMAN FE methods.</span>
+<span id="L123"><span class="lineNum">     123</span>              : /// @param[in] sourcePoints Source points array shaped `(n, spaceDimension)`.</span>
+<span id="L124"><span class="lineNum">     124</span>              : /// @param[in] sourceValues Source scalar values array shaped `(n)`.</span>
+<span id="L125"><span class="lineNum">     125</span>              : /// @param[in] connVal Optional flattened connectivity values.</span>
+<span id="L126"><span class="lineNum">     126</span>              : /// @param[in] connOff Optional connectivity offsets (CSR layout).</span>
+<span id="L127"><span class="lineNum">     127</span>              : /// @param[in] cellTypes Optional PACMAN cell type identifiers.</span>
+<span id="L128"><span class="lineNum">     128</span>              : /// @param[in] targetPoints Target points array shaped `(m, spaceDimension)`.</span>
+<span id="L129"><span class="lineNum">     129</span>              : ///</span>
+<span id="L130"><span class="lineNum">     130</span>              : /// @return Tuple `(target_values, transfer_status)` where both arrays have</span>
+<span id="L131"><span class="lineNum">     131</span>              : /// length `m`.</span>
+<span id="L132"><span class="lineNum">     132</span>              : /// @throws std::invalid_argument when array dimensions/shapes are inconsistent.</span>
+<span id="L133"><span class="lineNum">     133</span>              : /// @throws std::runtime_error when `spaceDimension` is not in `{1,2,3}`.</span>
+<span id="L134"><span class="lineNum">     134</span>              : std::tuple&lt;np_array&lt;fp_t&gt;, np_array&lt;int_t&gt;&gt;</span>
+<span id="L135"><span class="lineNum">     135</span> <span class="tlaGNC">         143 : Interpolate(const int_t spaceDimension, const unsigned char execSpace,</span></span>
+<span id="L136"><span class="lineNum">     136</span>              :             const method_t method, np_array&lt;coordinates_t&gt; sourcePoints,</span>
+<span id="L137"><span class="lineNum">     137</span>              :             np_array&lt;fp_t&gt; sourceValues, optional_np_array&lt;int_t&gt; connVal,</span>
+<span id="L138"><span class="lineNum">     138</span>              :             optional_np_array&lt;offset_t&gt; connOff,</span>
+<span id="L139"><span class="lineNum">     139</span>              :             optional_np_array&lt;cell_t&gt; cellTypes,</span>
+<span id="L140"><span class="lineNum">     140</span>              :             np_array&lt;coordinates_t&gt; targetPoints) {</span>
+<span id="L141"><span class="lineNum">     141</span> <span class="tlaGNC">         143 :   const std::string _region_name = &quot;PyBindingsFiniteElements::Interpolate&quot;;</span></span>
+<span id="L142"><span class="lineNum">     142</span> <span class="tlaGNC">         143 :   const Kokkos::Profiling::ScopedRegion region(_region_name);</span></span>
+<span id="L143"><span class="lineNum">     143</span>              : </span>
+<span id="L144"><span class="lineNum">     144</span> <span class="tlaGNC">         143 :   if (sourcePoints.ndim() != 2) {</span></span>
+<span id="L145"><span class="lineNum">     145</span> <span class="tlaUNC tlaBgUNC">           0 :     throw std::invalid_argument(&quot;Source points must be a 2-d numpy array!&quot;);</span></span>
+<span id="L146"><span class="lineNum">     146</span>              :   }</span>
+<span id="L147"><span class="lineNum">     147</span> <span class="tlaGNC tlaBgGNC">         143 :   if (targetPoints.ndim() != 2) {</span></span>
+<span id="L148"><span class="lineNum">     148</span> <span class="tlaUNC tlaBgUNC">           0 :     throw std::invalid_argument(&quot;Target points must be a 2-d numpy array!&quot;);</span></span>
+<span id="L149"><span class="lineNum">     149</span>              :   }</span>
+<span id="L150"><span class="lineNum">     150</span> <span class="tlaGNC tlaBgGNC">         143 :   if (sourcePoints.shape(1) != targetPoints.shape(1)) {</span></span>
+<span id="L151"><span class="lineNum">     151</span>              :     throw std::invalid_argument(</span>
+<span id="L152"><span class="lineNum">     152</span>              :         &quot;Dimensions mismatch between source points and target &quot;</span>
+<span id="L153"><span class="lineNum">     153</span> <span class="tlaUNC tlaBgUNC">           0 :         &quot;points!\nProvided source points dimension: &quot; +</span></span>
+<span id="L154"><span class="lineNum">     154</span> <span class="tlaUNC">           0 :         std::to_string(sourcePoints.shape(1)) +</span></span>
+<span id="L155"><span class="lineNum">     155</span> <span class="tlaUNC">           0 :         &quot;\nProvided target points dimension: &quot; +</span></span>
+<span id="L156"><span class="lineNum">     156</span> <span class="tlaUNC">           0 :         std::to_string(targetPoints.shape(1)) + &quot;\n&quot;);</span></span>
+<span id="L157"><span class="lineNum">     157</span>              :   }</span>
+<span id="L158"><span class="lineNum">     158</span> <span class="tlaGNC tlaBgGNC">         143 :   if (sourcePoints.shape(0) != sourceValues.shape(0)) {</span></span>
+<span id="L159"><span class="lineNum">     159</span>              :     throw std::invalid_argument(</span>
+<span id="L160"><span class="lineNum">     160</span>              :         &quot;Each source point must have its corresponding value in &quot;</span>
+<span id="L161"><span class="lineNum">     161</span>              :         &quot;the &quot;</span>
+<span id="L162"><span class="lineNum">     162</span> <span class="tlaUNC tlaBgUNC">           0 :         &quot;source values!\nNumber of source points: &quot; +</span></span>
+<span id="L163"><span class="lineNum">     163</span> <span class="tlaUNC">           0 :         std::to_string(sourcePoints.shape(0)) + &quot;\nNumber of source values: &quot; +</span></span>
+<span id="L164"><span class="lineNum">     164</span> <span class="tlaUNC">           0 :         std::to_string(sourceValues.shape(0)) + &quot;\n&quot;);</span></span>
+<span id="L165"><span class="lineNum">     165</span>              :   }</span>
+<span id="L166"><span class="lineNum">     166</span>              : </span>
+<span id="L167"><span class="lineNum">     167</span> <span class="tlaGNC tlaBgGNC">         143 :   switch (spaceDimension) {</span></span>
+<span id="L168"><span class="lineNum">     168</span> <span class="tlaGNC">          20 :   case 1:</span></span>
+<span id="L169"><span class="lineNum">     169</span>              :     return Dispatch&lt;1&gt;(execSpace, method, sourcePoints, sourceValues, connVal,</span>
+<span id="L170"><span class="lineNum">     170</span> <span class="tlaGNC">          20 :                        connOff, cellTypes, targetPoints);</span></span>
+<span id="L171"><span class="lineNum">     171</span> <span class="tlaGNC">          41 :   case 2:</span></span>
+<span id="L172"><span class="lineNum">     172</span>              :     return Dispatch&lt;2&gt;(execSpace, method, sourcePoints, sourceValues, connVal,</span>
+<span id="L173"><span class="lineNum">     173</span> <span class="tlaGNC">          41 :                        connOff, cellTypes, targetPoints);</span></span>
+<span id="L174"><span class="lineNum">     174</span> <span class="tlaGNC">          82 :   case 3:</span></span>
+<span id="L175"><span class="lineNum">     175</span>              :     return Dispatch&lt;3&gt;(execSpace, method, sourcePoints, sourceValues, connVal,</span>
+<span id="L176"><span class="lineNum">     176</span> <span class="tlaGNC">          82 :                        connOff, cellTypes, targetPoints);</span></span>
+<span id="L177"><span class="lineNum">     177</span> <span class="tlaUNC tlaBgUNC">           0 :   default:</span></span>
+<span id="L178"><span class="lineNum">     178</span>              :     throw new std::runtime_error(</span>
+<span id="L179"><span class="lineNum">     179</span> <span class="tlaUNC">           0 :         &quot;The dimension of the points can only be: 1, 2 or 3.\n&quot;);</span></span>
+<span id="L180"><span class="lineNum">     180</span>              :   }</span>
+<span id="L181"><span class="lineNum">     181</span> <span class="tlaGNC tlaBgGNC">         143 : }</span></span>
+<span id="L182"><span class="lineNum">     182</span>              : </span>
+<span id="L183"><span class="lineNum">     183</span>              : /// @brief Convert VTK/vtk cell type identifiers to PACMAN cell type codes.</span>
+<span id="L184"><span class="lineNum">     184</span>              : /// @param[in] cell_type 1D NumPy array of VTK cell type identifiers.</span>
+<span id="L185"><span class="lineNum">     185</span>              : /// @return 1D NumPy array of PACMAN cell type identifiers with same length.</span>
+<span id="L186"><span class="lineNum">     186</span>              : /// @throws std::runtime_error if at least one VTK cell type is unsupported.</span>
+<span id="L187"><span class="lineNum">     187</span> <span class="tlaGNC">         143 : np_array&lt;int_t&gt; vtk_to_pacman_cell_type(const np_array&lt;int_t&gt; cell_type) {</span></span>
+<span id="L188"><span class="lineNum">     188</span>              :   static const std::unordered_map&lt;int_t, PACMAN::CellType&gt; vtk_to_pacman = {</span>
+<span id="L189"><span class="lineNum">     189</span>              :       // 0D</span>
+<span id="L190"><span class="lineNum">     190</span>              :       {1, PACMAN::CellType::VTK_VERTEX},              // VTK_VERTEX</span>
+<span id="L191"><span class="lineNum">     191</span>              :                                                       // 1D</span>
+<span id="L192"><span class="lineNum">     192</span>              :       {3, PACMAN::CellType::VTK_LINE},                // VTK_LINE</span>
+<span id="L193"><span class="lineNum">     193</span>              :       {21, PACMAN::CellType::VTK_QUADRATIC_EDGE},     // VTK_QUADRATIC_EDGE</span>
+<span id="L194"><span class="lineNum">     194</span>              :                                                       // 2D</span>
+<span id="L195"><span class="lineNum">     195</span>              :       {5, PACMAN::CellType::VTK_TRIANGLE},            // VTK_TRIANGLE</span>
+<span id="L196"><span class="lineNum">     196</span>              :       {9, PACMAN::CellType::VTK_QUAD},                // VTK_QUAD</span>
+<span id="L197"><span class="lineNum">     197</span>              :       {22, PACMAN::CellType::VTK_QUADRATIC_TRIANGLE}, // VTK_QUADRATIC_TRIANGLE</span>
+<span id="L198"><span class="lineNum">     198</span>              :       {23, PACMAN::CellType::VTK_QUADRATIC_QUAD},     // VTK_QUADRATIC_QUAD</span>
+<span id="L199"><span class="lineNum">     199</span>              :                                                       // 3D</span>
+<span id="L200"><span class="lineNum">     200</span>              :       {10, PACMAN::CellType::VTK_TETRA},              // VTK_TETRA</span>
+<span id="L201"><span class="lineNum">     201</span>              :       {12, PACMAN::CellType::VTK_HEXAHEDRON},         // VTK_HEXAHEDRON</span>
+<span id="L202"><span class="lineNum">     202</span>              :       {13, PACMAN::CellType::VTK_WEDGE},              // VTK_WEDGE</span>
+<span id="L203"><span class="lineNum">     203</span>              :       {14, PACMAN::CellType::VTK_PYRAMID},            // VTK_PYRAMID</span>
+<span id="L204"><span class="lineNum">     204</span>              :       {24, PACMAN::CellType::VTK_QUADRATIC_TETRA},    // VTK_QUADRATIC_TETRA</span>
+<span id="L205"><span class="lineNum">     205</span>              :       {25,</span>
+<span id="L206"><span class="lineNum">     206</span>              :        PACMAN::CellType::VTK_QUADRATIC_HEXAHEDRON},  // VTK_QUADRATIC_HEXAHEDRON</span>
+<span id="L207"><span class="lineNum">     207</span>              :       {26, PACMAN::CellType::VTK_QUADRATIC_WEDGE},   // VTK_QUADRATIC_WEDGE</span>
+<span id="L208"><span class="lineNum">     208</span>              :       {27, PACMAN::CellType::VTK_QUADRATIC_PYRAMID}, // VTK_QUADRATIC_PYRAMID</span>
+<span id="L209"><span class="lineNum">     209</span> <span class="tlaGNC">         429 :   };</span></span>
+<span id="L210"><span class="lineNum">     210</span>              : </span>
+<span id="L211"><span class="lineNum">     211</span> <span class="tlaGNC">         143 :   auto pacman_cell_type_np_array = np_array&lt;int_t&gt;(cell_type.shape(0));</span></span>
+<span id="L212"><span class="lineNum">     212</span> <span class="tlaGNC">         143 :   auto *p_pct = pacman_cell_type_np_array.mutable_data();</span></span>
+<span id="L213"><span class="lineNum">     213</span>              :   auto unmanaged_pct =</span>
+<span id="L214"><span class="lineNum">     214</span>              :       Kokkos::View&lt;int_t *, Kokkos::DefaultHostExecutionSpace::memory_space,</span>
+<span id="L215"><span class="lineNum">     215</span>              :                    Kokkos::MemoryTraits&lt;Kokkos::Unmanaged&gt;&gt;(</span>
+<span id="L216"><span class="lineNum">     216</span> <span class="tlaGNC">         143 :           p_pct, pacman_cell_type_np_array.shape(0));</span></span>
+<span id="L217"><span class="lineNum">     217</span>              : </span>
+<span id="L218"><span class="lineNum">     218</span> <span class="tlaGNC">         143 :   auto ct_buf = cell_type.unchecked&lt;1&gt;();</span></span>
+<span id="L219"><span class="lineNum">     219</span>              : </span>
+<span id="L220"><span class="lineNum">     220</span> <span class="tlaGNC">         143 :   Kokkos::parallel_for(</span></span>
+<span id="L221"><span class="lineNum">     221</span>              :       &quot;vtk celltype to pacman celltype&quot;,</span>
+<span id="L222"><span class="lineNum">     222</span> <span class="tlaGNC">         143 :       Kokkos::RangePolicy&lt;Kokkos::DefaultHostExecutionSpace&gt;(</span></span>
+<span id="L223"><span class="lineNum">     223</span> <span class="tlaGNC">         143 :           Kokkos::DefaultHostExecutionSpace{}, 0,</span></span>
+<span id="L224"><span class="lineNum">     224</span> <span class="tlaGNC">         143 :           pacman_cell_type_np_array.shape(0)),</span></span>
+<span id="L225"><span class="lineNum">     225</span> <span class="tlaGNC">         143 :       [=](const index_t &amp;i) {</span></span>
+<span id="L226"><span class="lineNum">     226</span> <span class="tlaGNC">       15746 :         auto it = vtk_to_pacman.find(ct_buf(i));</span></span>
+<span id="L227"><span class="lineNum">     227</span> <span class="tlaGNC">       15746 :         if (it == vtk_to_pacman.end()) {</span></span>
+<span id="L228"><span class="lineNum">     228</span> <span class="tlaUNC tlaBgUNC">           0 :           throw std::runtime_error(&quot;Unsupported VTK cell type: &quot; +</span></span>
+<span id="L229"><span class="lineNum">     229</span> <span class="tlaUNC">           0 :                                    std::to_string(ct_buf(i)));</span></span>
+<span id="L230"><span class="lineNum">     230</span>              :         }</span>
+<span id="L231"><span class="lineNum">     231</span> <span class="tlaGNC tlaBgGNC">       31492 :         unmanaged_pct(i) =</span></span>
+<span id="L232"><span class="lineNum">     232</span> <span class="tlaGNC">       15746 :             static_cast&lt;int_t&gt;(static_cast&lt;cell_t&gt;((it-&gt;second)));</span></span>
+<span id="L233"><span class="lineNum">     233</span> <span class="tlaGNC">       15746 :       });</span></span>
+<span id="L234"><span class="lineNum">     234</span>              : </span>
+<span id="L235"><span class="lineNum">     235</span> <span class="tlaGNC">         143 :   return pacman_cell_type_np_array;</span></span>
+<span id="L236"><span class="lineNum">     236</span> <span class="tlaUNC tlaBgUNC">           0 : }</span></span>
+<span id="L237"><span class="lineNum">     237</span>              : </span>
+<span id="L238"><span class="lineNum">     238</span>              : /// @brief Return the topological dimension associated with one VTK cell type.</span>
+<span id="L239"><span class="lineNum">     239</span>              : /// @param[in] cell_type Single VTK/vtk cell type identifier.</span>
+<span id="L240"><span class="lineNum">     240</span>              : /// @return Cell dimension (`0`, `1`, `2`, or `3`).</span>
+<span id="L241"><span class="lineNum">     241</span>              : /// @throws std::runtime_error if the given cell type is unsupported.</span>
+<span id="L242"><span class="lineNum">     242</span> <span class="tlaGNC tlaBgGNC">         140 : int_t vtk_cell_dim(const int_t &amp;cell_type) {</span></span>
+<span id="L243"><span class="lineNum">     243</span>              :   static const std::unordered_map&lt;int_t, int_t&gt; vtk_dim = {</span>
+<span id="L244"><span class="lineNum">     244</span>              :       //== 0D</span>
+<span id="L245"><span class="lineNum">     245</span>              :       {1, 0}, // VTK_VERTEX</span>
+<span id="L246"><span class="lineNum">     246</span>              :       //== 1D</span>
+<span id="L247"><span class="lineNum">     247</span>              :       {3, 1},  // VTK_LINE</span>
+<span id="L248"><span class="lineNum">     248</span>              :       {21, 1}, // VTK_QUADRATIC_EDGE</span>
+<span id="L249"><span class="lineNum">     249</span>              :       //== 2D</span>
+<span id="L250"><span class="lineNum">     250</span>              :       {5, 2},  // VTK_TRIANGLE</span>
+<span id="L251"><span class="lineNum">     251</span>              :       {9, 2},  // VTK_QUAD</span>
+<span id="L252"><span class="lineNum">     252</span>              :       {22, 2}, // VTK_QUADRATIC_TRIANGLE</span>
+<span id="L253"><span class="lineNum">     253</span>              :       {23, 2}, // VTK_QUADRATIC_QUAD</span>
+<span id="L254"><span class="lineNum">     254</span>              :       //== 3D</span>
+<span id="L255"><span class="lineNum">     255</span>              :       {10, 3}, // VTK_TETRA</span>
+<span id="L256"><span class="lineNum">     256</span>              :       {12, 3}, // VTK_HEXAHEDRON</span>
+<span id="L257"><span class="lineNum">     257</span>              :       {13, 3}, // VTK_WEDGE</span>
+<span id="L258"><span class="lineNum">     258</span>              :       {14, 3}, // VTK_PYRAMID</span>
+<span id="L259"><span class="lineNum">     259</span>              :       {24, 3}, // VTK_QUADRATIC_TETRA</span>
+<span id="L260"><span class="lineNum">     260</span>              :       {25, 3}, // VTK_QUADRATIC_HEXAHEDRON</span>
+<span id="L261"><span class="lineNum">     261</span>              :       {26, 3}, // VTK_QUADRATIC_WEDGE</span>
+<span id="L262"><span class="lineNum">     262</span>              :       {27, 3}, // VTK_QUADRATIC_PYRAMID</span>
+<span id="L263"><span class="lineNum">     263</span> <span class="tlaGNC">         420 :   };</span></span>
+<span id="L264"><span class="lineNum">     264</span>              : </span>
+<span id="L265"><span class="lineNum">     265</span> <span class="tlaGNC">         140 :   auto it = vtk_dim.find(cell_type);</span></span>
+<span id="L266"><span class="lineNum">     266</span> <span class="tlaGNC">         140 :   if (it == vtk_dim.end()) {</span></span>
+<span id="L267"><span class="lineNum">     267</span> <span class="tlaUNC tlaBgUNC">           0 :     throw std::runtime_error(&quot;Unsupported Vtk cell type: &quot; +</span></span>
+<span id="L268"><span class="lineNum">     268</span> <span class="tlaUNC">           0 :                              std::to_string(cell_type));</span></span>
+<span id="L269"><span class="lineNum">     269</span>              :   }</span>
+<span id="L270"><span class="lineNum">     270</span> <span class="tlaGNC tlaBgGNC">         280 :   return it-&gt;second;</span></span>
+<span id="L271"><span class="lineNum">     271</span>              : }</span>
+<span id="L272"><span class="lineNum">     272</span>              : </span>
+<span id="L273"><span class="lineNum">     273</span>              : } // namespace PyBindingsFiniteElements</span>
+<span id="L274"><span class="lineNum">     274</span>              : </span>
+<span id="L275"><span class="lineNum">     275</span>              : } // namespace PACMAN</span>
+        </pre>
+              </td>
+            </tr>
+          </table>
+          <br>
+
+          <table width="100%" border=0 cellspacing=0 cellpadding=0>
+            <tr><td class="ruler"><img src="../../glass.png" width=3 height=3 alt=""></td></tr>
+            <tr><td class="versionInfo">Generated by: <a href="https://github.com//linux-test-project/lcov" target="_parent">LCOV version 2.0-1</a></td></tr>
+          </table>
+          <br>
+
+</body>
+</html>

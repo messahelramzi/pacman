@@ -1,0 +1,1 @@
+genhtml coverage.info --synthesize-missing --output-directory coverage

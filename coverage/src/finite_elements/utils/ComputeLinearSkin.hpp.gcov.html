@@ -1,0 +1,409 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+
+<html lang="en">
+
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <title>LCOV - coverage.info - src/finite_elements/utils/ComputeLinearSkin.hpp</title>
+  <link rel="stylesheet" type="text/css" href="../../../gcov.css">
+</head>
+
+<body>
+
+          <table width="100%" border=0 cellspacing=0 cellpadding=0>
+            <tr><td class="title">LCOV - code coverage report</td></tr>
+            <tr><td class="ruler"><img src="../../../glass.png" width=3 height=3 alt=""></td></tr>
+
+            <tr>
+              <td width="100%">
+                <table cellpadding=1 border=0 width="100%">
+          <tr>
+            <td width="10%" class="headerItem">Current view:</td>
+            <td width="10%" class="headerValue"><a href="../../../index.html">top level</a> - <a href="index.html">src/finite_elements/utils</a> - ComputeLinearSkin.hpp<span style="font-size: 80%;"> (source / <a href="ComputeLinearSkin.hpp.func-c.html">functions</a>)</span></td>
+            <td width="5%"></td>
+            <td width="5%"></td>
+            <td width="5%" class="headerCovTableHead">Coverage</td>
+            <td width="5%" class="headerCovTableHead" title="Covered + Uncovered code">Total</td>
+            <td width="5%" class="headerCovTableHead" title="Exercised code only">Hit</td>
+          </tr>
+          <tr>
+            <td class="headerItem">Test:</td>
+            <td class="headerValue">coverage.info</td>
+            <td></td>
+            <td class="headerItem">Lines:</td>
+            <td class="headerCovTableEntryHi">100.0&nbsp;%</td>
+            <td class="headerCovTableEntry">173</td>
+            <td class="headerCovTableEntry">173</td>
+          </tr>
+          <tr>
+            <td class="headerItem">Test Date:</td>
+            <td class="headerValue">2026-06-10 14:03:48</td>
+            <td></td>
+            <td class="headerItem">Functions:</td>
+            <td class="headerCovTableEntryHi">100.0&nbsp;%</td>
+            <td class="headerCovTableEntry">30</td>
+            <td class="headerCovTableEntry">30</td>
+          </tr>
+                  <tr><td><img src="../../../glass.png" width=3 height=3 alt=""></td></tr>
+                </table>
+              </td>
+            </tr>
+
+            <tr><td class="ruler"><img src="../../../glass.png" width=3 height=3 alt=""></td></tr>
+          </table>
+
+          <table cellpadding=0 cellspacing=0 border=0>
+            <tr>
+              <td><br></td>
+            </tr>
+            <tr>
+              <td>
+<pre class="sourceHeading">            Line data    Source code</pre>
+<pre class="source">
+<span id="L1"><span class="lineNum">       1</span>              : //</span>
+<span id="L2"><span class="lineNum">       2</span>              : // This file is subject to the terms and conditions defined in</span>
+<span id="L3"><span class="lineNum">       3</span>              : // file 'LICENSE', which is part of this source code package.</span>
+<span id="L4"><span class="lineNum">       4</span>              : //</span>
+<span id="L5"><span class="lineNum">       5</span>              : </span>
+<span id="L6"><span class="lineNum">       6</span>              : #pragma once</span>
+<span id="L7"><span class="lineNum">       7</span>              : </span>
+<span id="L8"><span class="lineNum">       8</span>              : #include &lt;Kokkos_Core.hpp&gt;</span>
+<span id="L9"><span class="lineNum">       9</span>              : #include &lt;stdexcept&gt;</span>
+<span id="L10"><span class="lineNum">      10</span>              : </span>
+<span id="L11"><span class="lineNum">      11</span>              : #include &quot;common/concepts.hpp&quot;</span>
+<span id="L12"><span class="lineNum">      12</span>              : #include &quot;common/transfer.hxx&quot;</span>
+<span id="L13"><span class="lineNum">      13</span>              : #include &quot;common/types.hpp&quot;</span>
+<span id="L14"><span class="lineNum">      14</span>              : </span>
+<span id="L15"><span class="lineNum">      15</span>              : namespace PACMAN {</span>
+<span id="L16"><span class="lineNum">      16</span>              : namespace FiniteElements {</span>
+<span id="L17"><span class="lineNum">      17</span>              : </span>
+<span id="L18"><span class="lineNum">      18</span>              : /**</span>
+<span id="L19"><span class="lineNum">      19</span>              :  * @brief Small helper to canonicalize face-node ordering for row comparison.</span>
+<span id="L20"><span class="lineNum">      20</span>              :  * @tparam T 1D Kokkos subview type containing one face row.</span>
+<span id="L21"><span class="lineNum">      21</span>              :  * @tparam Dim Spatial dimension controlling expected face arity.</span>
+<span id="L22"><span class="lineNum">      22</span>              :  */</span>
+<span id="L23"><span class="lineNum">      23</span>              : template &lt;KokkosViewRank&lt;1&gt; T, int_t Dim&gt; struct permute {</span>
+<span id="L24"><span class="lineNum">      24</span>              :   /// @brief In-place permutation used to keep equivalent faces sortable.</span>
+<span id="L25"><span class="lineNum">      25</span>              :   /// @param[in,out] kokkos_sv Face row subview to reorder.</span>
+<span id="L26"><span class="lineNum">      26</span>              :   KOKKOS_INLINE_FUNCTION</span>
+<span id="L27"><span class="lineNum">      27</span> <span class="tlaGNC tlaBgGNC">       17061 :   static void permuteCol(T kokkos_sv) {</span></span>
+<span id="L28"><span class="lineNum">      28</span>              :     if constexpr (Dim &gt;= 2) {</span>
+<span id="L29"><span class="lineNum">      29</span> <span class="tlaGNC">       16965 :       if (kokkos_sv(0) &gt; kokkos_sv(1)) {</span></span>
+<span id="L30"><span class="lineNum">      30</span> <span class="tlaGNC">        6965 :         Kokkos::kokkos_swap(kokkos_sv(0), kokkos_sv(1));</span></span>
+<span id="L31"><span class="lineNum">      31</span>              :       }</span>
+<span id="L32"><span class="lineNum">      32</span>              :     }</span>
+<span id="L33"><span class="lineNum">      33</span>              : </span>
+<span id="L34"><span class="lineNum">      34</span>              :     if constexpr (Dim &gt;= 3) {</span>
+<span id="L35"><span class="lineNum">      35</span> <span class="tlaGNC">       16624 :       if (kokkos_sv(2) &gt; kokkos_sv(3)) {</span></span>
+<span id="L36"><span class="lineNum">      36</span> <span class="tlaGNC">         672 :         Kokkos::kokkos_swap(kokkos_sv(2), kokkos_sv(3));</span></span>
+<span id="L37"><span class="lineNum">      37</span>              :       }</span>
+<span id="L38"><span class="lineNum">      38</span> <span class="tlaGNC">       16624 :       if (kokkos_sv(0) &gt; kokkos_sv(2)) {</span></span>
+<span id="L39"><span class="lineNum">      39</span> <span class="tlaGNC">        5604 :         Kokkos::kokkos_swap(kokkos_sv(0), kokkos_sv(2));</span></span>
+<span id="L40"><span class="lineNum">      40</span>              :       }</span>
+<span id="L41"><span class="lineNum">      41</span> <span class="tlaGNC">       16624 :       if (kokkos_sv(1) &gt; kokkos_sv(3)) {</span></span>
+<span id="L42"><span class="lineNum">      42</span> <span class="tlaGNC">          16 :         Kokkos::kokkos_swap(kokkos_sv(1), kokkos_sv(3));</span></span>
+<span id="L43"><span class="lineNum">      43</span>              :       }</span>
+<span id="L44"><span class="lineNum">      44</span> <span class="tlaGNC">       16624 :       if (kokkos_sv(1) &gt; kokkos_sv(2)) {</span></span>
+<span id="L45"><span class="lineNum">      45</span> <span class="tlaGNC">        9916 :         Kokkos::kokkos_swap(kokkos_sv(1), kokkos_sv(2));</span></span>
+<span id="L46"><span class="lineNum">      46</span>              :       }</span>
+<span id="L47"><span class="lineNum">      47</span>              :     }</span>
+<span id="L48"><span class="lineNum">      48</span> <span class="tlaGNC">       17061 :   }</span></span>
+<span id="L49"><span class="lineNum">      49</span>              : };</span>
+<span id="L50"><span class="lineNum">      50</span>              : </span>
+<span id="L51"><span class="lineNum">      51</span>              : /**</span>
+<span id="L52"><span class="lineNum">      52</span>              :  * @brief Build tetrahedralized boundary skin from source elements.</span>
+<span id="L53"><span class="lineNum">      53</span>              :  *</span>
+<span id="L54"><span class="lineNum">      54</span>              :  * The routine enumerates candidate element faces, removes interior duplicates,</span>
+<span id="L55"><span class="lineNum">      55</span>              :  * triangulates surviving boundary faces, then stores the resulting skin faces</span>
+<span id="L56"><span class="lineNum">      56</span>              :  * and parent element ids in the transfer object.</span>
+<span id="L57"><span class="lineNum">      57</span>              :  *</span>
+<span id="L58"><span class="lineNum">      58</span>              :  * @tparam ExecSpace Kokkos execution space used for scans, sorting, and</span>
+<span id="L59"><span class="lineNum">      59</span>              :  * compaction.</span>
+<span id="L60"><span class="lineNum">      60</span>              :  * @tparam Dim Spatial dimension of the problem (`1`, `2`, or `3`).</span>
+<span id="L61"><span class="lineNum">      61</span>              :  * @param[in,out] transfer Transfer descriptor containing source connectivity</span>
+<span id="L62"><span class="lineNum">      62</span>              :  * and metadata.</span>
+<span id="L63"><span class="lineNum">      63</span>              :  * Reads: `sourcePoints`, `connValues`, `connOffsets`, `cellTypes`,</span>
+<span id="L64"><span class="lineNum">      64</span>              :  * `nbLinearSkinFaces`.</span>
+<span id="L65"><span class="lineNum">      65</span>              :  * Writes: `skinFaces`, `skinParents`.</span>
+<span id="L66"><span class="lineNum">      66</span>              :  */</span>
+<span id="L67"><span class="lineNum">      67</span>              : template &lt;typename ExecSpace, int_t Dim&gt;</span>
+<span id="L68"><span class="lineNum">      68</span> <span class="tlaGNC">          61 : void ComputeLinearSkin(Transfer&lt;ExecSpace, Dim&gt; &amp;transfer) {</span></span>
+<span id="L69"><span class="lineNum">      69</span> <span class="tlaGNC">          61 :   Kokkos::Profiling::pushRegion(&quot;Compute Linear Skin&quot;);</span></span>
+<span id="L70"><span class="lineNum">      70</span>              : </span>
+<span id="L71"><span class="lineNum">      71</span>              :   using MemorySpace = typename ExecSpace::memory_space;</span>
+<span id="L72"><span class="lineNum">      72</span> <span class="tlaGNC">          61 :   ExecSpace execSpace{};</span></span>
+<span id="L73"><span class="lineNum">      73</span>              : </span>
+<span id="L74"><span class="lineNum">      74</span>              :   // TODO: Rewrite -&gt; Ugly !</span>
+<span id="L75"><span class="lineNum">      75</span> <span class="tlaGNC">          61 :   auto LFPE_val_vec = getLinearFacesPaddedEntries(Dim);</span></span>
+<span id="L76"><span class="lineNum">      76</span> <span class="tlaGNC">          61 :   auto LFPE_val = Kokkos::View&lt;shortint_t *,</span></span>
+<span id="L77"><span class="lineNum">      77</span>              :                                Kokkos::DefaultHostExecutionSpace::memory_space,</span>
+<span id="L78"><span class="lineNum">      78</span>              :                                Kokkos::MemoryTraits&lt;Kokkos::Unmanaged&gt;&gt;(</span>
+<span id="L79"><span class="lineNum">      79</span>              :       LFPE_val_vec.data(), LFPE_val_vec.size());</span>
+<span id="L80"><span class="lineNum">      80</span>              :   auto linearFacesPadded_val =</span>
+<span id="L81"><span class="lineNum">      81</span> <span class="tlaGNC">          61 :       Kokkos::create_mirror_view_and_copy(execSpace, LFPE_val);</span></span>
+<span id="L82"><span class="lineNum">      82</span> <span class="tlaGNC">          61 :   auto LFPE_off_vec = getLinearFacesPaddedOffsets(Dim);</span></span>
+<span id="L83"><span class="lineNum">      83</span> <span class="tlaGNC">          61 :   auto LFPE_off =</span></span>
+<span id="L84"><span class="lineNum">      84</span>              :       Kokkos::View&lt;offset_t *, Kokkos::DefaultHostExecutionSpace::memory_space,</span>
+<span id="L85"><span class="lineNum">      85</span>              :                    Kokkos::MemoryTraits&lt;Kokkos::Unmanaged&gt;&gt;(</span>
+<span id="L86"><span class="lineNum">      86</span>              :           LFPE_off_vec.data(), LFPE_off_vec.size());</span>
+<span id="L87"><span class="lineNum">      87</span>              :   auto linearFacesPadded_off =</span>
+<span id="L88"><span class="lineNum">      88</span> <span class="tlaGNC">          61 :       Kokkos::create_mirror_view_and_copy(execSpace, LFPE_off);</span></span>
+<span id="L89"><span class="lineNum">      89</span>              : </span>
+<span id="L90"><span class="lineNum">      90</span> <span class="tlaGNC">          61 :   auto TF_val_vec = getTriFacesEntries(Dim);</span></span>
+<span id="L91"><span class="lineNum">      91</span> <span class="tlaGNC">          61 :   auto TF_val = Kokkos::View&lt;shortint_t *,</span></span>
+<span id="L92"><span class="lineNum">      92</span>              :                              Kokkos::DefaultHostExecutionSpace::memory_space,</span>
+<span id="L93"><span class="lineNum">      93</span>              :                              Kokkos::MemoryTraits&lt;Kokkos::Unmanaged&gt;&gt;(</span>
+<span id="L94"><span class="lineNum">      94</span>              :       TF_val_vec.data(), TF_val_vec.size());</span>
+<span id="L95"><span class="lineNum">      95</span> <span class="tlaGNC">          61 :   auto TriFaces_val = Kokkos::create_mirror_view_and_copy(execSpace, TF_val);</span></span>
+<span id="L96"><span class="lineNum">      96</span> <span class="tlaGNC">          61 :   auto TF_off_vec = getTriFacesOffsets(Dim);</span></span>
+<span id="L97"><span class="lineNum">      97</span> <span class="tlaGNC">          61 :   auto TF_off =</span></span>
+<span id="L98"><span class="lineNum">      98</span>              :       Kokkos::View&lt;offset_t *, Kokkos::DefaultHostExecutionSpace::memory_space,</span>
+<span id="L99"><span class="lineNum">      99</span>              :                    Kokkos::MemoryTraits&lt;Kokkos::Unmanaged&gt;&gt;(TF_off_vec.data(),</span>
+<span id="L100"><span class="lineNum">     100</span>              :                                                             TF_off_vec.size());</span>
+<span id="L101"><span class="lineNum">     101</span> <span class="tlaGNC">          61 :   auto TriFaces_off = Kokkos::create_mirror_view_and_copy(execSpace, TF_off);</span></span>
+<span id="L102"><span class="lineNum">     102</span>              : </span>
+<span id="L103"><span class="lineNum">     103</span> <span class="tlaGNC">          61 :   auto TLF_val_vec = getTriLocFacesEntries(Dim);</span></span>
+<span id="L104"><span class="lineNum">     104</span> <span class="tlaGNC">          61 :   auto TLF_val = Kokkos::View&lt;shortint_t *,</span></span>
+<span id="L105"><span class="lineNum">     105</span>              :                               Kokkos::DefaultHostExecutionSpace::memory_space,</span>
+<span id="L106"><span class="lineNum">     106</span>              :                               Kokkos::MemoryTraits&lt;Kokkos::Unmanaged&gt;&gt;(</span>
+<span id="L107"><span class="lineNum">     107</span>              :       TLF_val_vec.data(), TLF_val_vec.size());</span>
+<span id="L108"><span class="lineNum">     108</span>              :   auto TriLocFaces_val =</span>
+<span id="L109"><span class="lineNum">     109</span> <span class="tlaGNC">          61 :       Kokkos::create_mirror_view_and_copy(execSpace, TLF_val);</span></span>
+<span id="L110"><span class="lineNum">     110</span> <span class="tlaGNC">          61 :   auto TLF_off_vec = getTriLocFacesOffsets(Dim);</span></span>
+<span id="L111"><span class="lineNum">     111</span> <span class="tlaGNC">          61 :   auto TLF_off =</span></span>
+<span id="L112"><span class="lineNum">     112</span>              :       Kokkos::View&lt;offset_t *, Kokkos::DefaultHostExecutionSpace::memory_space,</span>
+<span id="L113"><span class="lineNum">     113</span>              :                    Kokkos::MemoryTraits&lt;Kokkos::Unmanaged&gt;&gt;(TLF_off_vec.data(),</span>
+<span id="L114"><span class="lineNum">     114</span>              :                                                             TLF_off_vec.size());</span>
+<span id="L115"><span class="lineNum">     115</span>              :   auto TriLocFaces_off =</span>
+<span id="L116"><span class="lineNum">     116</span> <span class="tlaGNC">          61 :       Kokkos::create_mirror_view_and_copy(execSpace, TLF_off);</span></span>
+<span id="L117"><span class="lineNum">     117</span>              : </span>
+<span id="L118"><span class="lineNum">     118</span> <span class="tlaGNC">          61 :   auto nbNode = transfer.sourcePoints.extent_int(0);</span></span>
+<span id="L119"><span class="lineNum">     119</span> <span class="tlaGNC">          61 :   auto nbLinFaces = transfer.nbLinearSkinFaces;</span></span>
+<span id="L120"><span class="lineNum">     120</span> <span class="tlaGNC">          61 :   auto CellTypesPtr = transfer.cellTypes;</span></span>
+<span id="L121"><span class="lineNum">     121</span> <span class="tlaGNC">          61 :   auto connValPtr = transfer.connValues;</span></span>
+<span id="L122"><span class="lineNum">     122</span> <span class="tlaGNC">          61 :   auto connOffPtr = transfer.connOffsets;</span></span>
+<span id="L123"><span class="lineNum">     123</span>              : </span>
+<span id="L124"><span class="lineNum">     124</span> <span class="tlaGNC">          61 :   auto nbElem = CellTypesPtr.extent(0);</span></span>
+<span id="L125"><span class="lineNum">     125</span>              : </span>
+<span id="L126"><span class="lineNum">     126</span> <span class="tlaGNC">          61 :   int_t nodesPerFace = -1;</span></span>
+<span id="L127"><span class="lineNum">     127</span>              :   switch (Dim) {</span>
+<span id="L128"><span class="lineNum">     128</span>              :   case 0:</span>
+<span id="L129"><span class="lineNum">     129</span>              :     nodesPerFace = 0;</span>
+<span id="L130"><span class="lineNum">     130</span>              :     break;</span>
+<span id="L131"><span class="lineNum">     131</span>              :   case 1:</span>
+<span id="L132"><span class="lineNum">     132</span> <span class="tlaGNC">           8 :     nodesPerFace = 1;</span></span>
+<span id="L133"><span class="lineNum">     133</span> <span class="tlaGNC">           8 :     break;</span></span>
+<span id="L134"><span class="lineNum">     134</span>              :   case 2:</span>
+<span id="L135"><span class="lineNum">     135</span> <span class="tlaGNC">          19 :     nodesPerFace = 2;</span></span>
+<span id="L136"><span class="lineNum">     136</span> <span class="tlaGNC">          19 :     break;</span></span>
+<span id="L137"><span class="lineNum">     137</span>              :   case 3:</span>
+<span id="L138"><span class="lineNum">     138</span> <span class="tlaGNC">          34 :     nodesPerFace = 4;</span></span>
+<span id="L139"><span class="lineNum">     139</span> <span class="tlaGNC">          34 :     break;</span></span>
+<span id="L140"><span class="lineNum">     140</span>              :   default:</span>
+<span id="L141"><span class="lineNum">     141</span>              :     std::cerr &lt;&lt; &quot;Invalid Dim &quot; &lt;&lt; Dim &lt;&lt; std::endl;</span>
+<span id="L142"><span class="lineNum">     142</span>              :     assert(false);</span>
+<span id="L143"><span class="lineNum">     143</span>              :     break;</span>
+<span id="L144"><span class="lineNum">     144</span>              :   }</span>
+<span id="L145"><span class="lineNum">     145</span>              : </span>
+<span id="L146"><span class="lineNum">     146</span> <span class="tlaGNC">          61 :   auto linFaces = Kokkos::View&lt;int_t **, ExecSpace&gt;(</span></span>
+<span id="L147"><span class="lineNum">     147</span> <span class="tlaGNC">          61 :       Kokkos::view_alloc(execSpace, Kokkos::WithoutInitializing, &quot;linFaces&quot;),</span></span>
+<span id="L148"><span class="lineNum">     148</span> <span class="tlaGNC">          61 :       nbLinFaces, nodesPerFace + 1); // last column is CellType</span></span>
+<span id="L149"><span class="lineNum">     149</span> <span class="tlaGNC">          61 :   auto allFaceId = Kokkos::View&lt;int_t *, ExecSpace&gt;(</span></span>
+<span id="L150"><span class="lineNum">     150</span> <span class="tlaGNC">         122 :       Kokkos::view_alloc(execSpace, Kokkos::WithoutInitializing, &quot;allFaceId&quot;),</span></span>
+<span id="L151"><span class="lineNum">     151</span>              :       nbLinFaces); // global linface id and local element face id</span>
+<span id="L152"><span class="lineNum">     152</span> <span class="tlaGNC">          61 :   auto allFaceLocId = Kokkos::View&lt;int_t *, ExecSpace&gt;(</span></span>
+<span id="L153"><span class="lineNum">     153</span> <span class="tlaGNC">         122 :       Kokkos::view_alloc(execSpace, Kokkos::WithoutInitializing,</span></span>
+<span id="L154"><span class="lineNum">     154</span>              :                          &quot;allFaceLocId&quot;),</span>
+<span id="L155"><span class="lineNum">     155</span>              :       nbLinFaces); // global linface id and local element face id</span>
+<span id="L156"><span class="lineNum">     156</span> <span class="tlaGNC">          61 :   auto allParents = Kokkos::View&lt;int_t *, ExecSpace&gt;(</span></span>
+<span id="L157"><span class="lineNum">     157</span> <span class="tlaGNC">         122 :       Kokkos::view_alloc(execSpace, Kokkos::WithoutInitializing, &quot;allParents&quot;),</span></span>
+<span id="L158"><span class="lineNum">     158</span>              :       nbLinFaces);</span>
+<span id="L159"><span class="lineNum">     159</span>              : </span>
+<span id="L160"><span class="lineNum">     160</span> <span class="tlaGNC">          61 :   constexpr int_t maxi = std::numeric_limits&lt;int_t&gt;::max();</span></span>
+<span id="L161"><span class="lineNum">     161</span>              : </span>
+<span id="L162"><span class="lineNum">     162</span> <span class="tlaGNC">          61 :   Kokkos::Profiling::pushRegion(&quot;Fill all faces and sort per row permute&quot;);</span></span>
+<span id="L163"><span class="lineNum">     163</span>              :   // Avoid branching but very ugly: to change !</span>
+<span id="L164"><span class="lineNum">     164</span> <span class="tlaGNC">          61 :   Kokkos::parallel_scan(</span></span>
+<span id="L165"><span class="lineNum">     165</span>              :       &quot;Fill all faces and sort per row : Col permutation&quot;,</span>
+<span id="L166"><span class="lineNum">     166</span> <span class="tlaGNC">          61 :       Kokkos::RangePolicy(execSpace, 0, nbElem),</span></span>
+<span id="L167"><span class="lineNum">     167</span> <span class="tlaGNC">       22022 :       KOKKOS_LAMBDA(const index_t &amp;i, index_t &amp;partial_sum, bool is_final) {</span></span>
+<span id="L168"><span class="lineNum">     168</span> <span class="tlaGNC">       21900 :         auto ielType = static_cast&lt;cell_t&gt;(CellTypesPtr(i));</span></span>
+<span id="L169"><span class="lineNum">     169</span> <span class="tlaGNC">       65700 :         auto facesPadded = Kokkos::subview(</span></span>
+<span id="L170"><span class="lineNum">     170</span> <span class="tlaGNC">       21900 :             linearFacesPadded_val,</span></span>
+<span id="L171"><span class="lineNum">     171</span> <span class="tlaGNC">       21900 :             Kokkos::make_pair(linearFacesPadded_off(ielType),</span></span>
+<span id="L172"><span class="lineNum">     172</span> <span class="tlaGNC">       21900 :                               linearFacesPadded_off(ielType + 1)));</span></span>
+<span id="L173"><span class="lineNum">     173</span> <span class="tlaGNC">       21900 :         auto localnbFaces = facesPadded.extent_int(0) / nodesPerFace;</span></span>
+<span id="L174"><span class="lineNum">     174</span> <span class="tlaGNC">       21900 :         auto firstIndex = partial_sum;</span></span>
+<span id="L175"><span class="lineNum">     175</span> <span class="tlaGNC">       21900 :         partial_sum += localnbFaces;</span></span>
+<span id="L176"><span class="lineNum">     176</span> <span class="tlaGNC">       21900 :         if (is_final) {</span></span>
+<span id="L177"><span class="lineNum">     177</span> <span class="tlaGNC">       43794 :           auto localConnectivity = Kokkos::subview(</span></span>
+<span id="L178"><span class="lineNum">     178</span> <span class="tlaGNC">       29196 :               connValPtr, Kokkos::make_pair(connOffPtr(i), connOffPtr(i + 1)));</span></span>
+<span id="L179"><span class="lineNum">     179</span> <span class="tlaGNC">       31659 :           for (index_t j = 0; j &lt; localnbFaces; j++) { // loop on element faces</span></span>
+<span id="L180"><span class="lineNum">     180</span> <span class="tlaGNC">       17061 :             auto linFaces_sv =</span></span>
+<span id="L181"><span class="lineNum">     181</span> <span class="tlaGNC">       17061 :                 Kokkos::subview(linFaces, firstIndex + j, Kokkos::ALL());</span></span>
+<span id="L182"><span class="lineNum">     182</span> <span class="tlaGNC">       17061 :             allParents(firstIndex + j) = i;</span></span>
+<span id="L183"><span class="lineNum">     183</span> <span class="tlaGNC">       17061 :             allFaceId(firstIndex + j) = firstIndex + j;</span></span>
+<span id="L184"><span class="lineNum">     184</span> <span class="tlaGNC">       17061 :             allFaceLocId(firstIndex + j) = j;</span></span>
+<span id="L185"><span class="lineNum">     185</span> <span class="tlaGNC">       67274 :             for (index_t k = 0; k &lt; nodesPerFace - 1;</span></span>
+<span id="L186"><span class="lineNum">     186</span>              :                  k++) { // loop on non-padded face connectivity</span>
+<span id="L187"><span class="lineNum">     187</span> <span class="tlaGNC">       50213 :               auto index = facesPadded(j * nodesPerFace + k);</span></span>
+<span id="L188"><span class="lineNum">     188</span> <span class="tlaGNC">       50213 :               linFaces_sv(k) = localConnectivity(index);</span></span>
+<span id="L189"><span class="lineNum">     189</span>              :             }</span>
+<span id="L190"><span class="lineNum">     190</span> <span class="tlaGNC">       17061 :             auto index = facesPadded((j + 1) * nodesPerFace - 1);</span></span>
+<span id="L191"><span class="lineNum">     191</span> <span class="tlaGNC">       17061 :             linFaces_sv(nodesPerFace - 1) =</span></span>
+<span id="L192"><span class="lineNum">     192</span> <span class="tlaGNC">       17061 :                 (index == -1) ? maxi : localConnectivity(index);</span></span>
+<span id="L193"><span class="lineNum">     193</span>              :             using subviewType = decltype(linFaces_sv);</span>
+<span id="L194"><span class="lineNum">     194</span> <span class="tlaGNC">       17061 :             permute&lt;subviewType, Dim&gt;::permuteCol(linFaces_sv);</span></span>
+<span id="L195"><span class="lineNum">     195</span> <span class="tlaGNC">       17061 :             linFaces_sv(nodesPerFace) = ielType;</span></span>
+<span id="L196"><span class="lineNum">     196</span>              :           }</span>
+<span id="L197"><span class="lineNum">     197</span> <span class="tlaGNC">       14598 :         }</span></span>
+<span id="L198"><span class="lineNum">     198</span>              :       });</span>
+<span id="L199"><span class="lineNum">     199</span> <span class="tlaGNC">          61 :   Kokkos::Profiling::popRegion();</span></span>
+<span id="L200"><span class="lineNum">     200</span>              : </span>
+<span id="L201"><span class="lineNum">     201</span> <span class="tlaGNC">          61 :   Kokkos::Profiling::pushRegion(</span></span>
+<span id="L202"><span class="lineNum">     202</span>              :       &quot;Create permutation vector to sort linFaces by row&quot;);</span>
+<span id="L203"><span class="lineNum">     203</span> <span class="tlaGNC">          61 :   auto firstNodeIds = Kokkos::subview(linFaces, Kokkos::ALL(), 0);</span></span>
+<span id="L204"><span class="lineNum">     204</span>              : </span>
+<span id="L205"><span class="lineNum">     205</span>              :   using IdViewType = decltype(firstNodeIds);</span>
+<span id="L206"><span class="lineNum">     206</span>              :   using CompType = Kokkos::BinOp1D&lt;IdViewType&gt;;</span>
+<span id="L207"><span class="lineNum">     207</span>              :   using DeviceType = Kokkos::Device&lt;ExecSpace, MemorySpace&gt;;</span>
+<span id="L208"><span class="lineNum">     208</span>              : </span>
+<span id="L209"><span class="lineNum">     209</span> <span class="tlaGNC">          61 :   Kokkos::BinSort&lt;IdViewType, CompType, DeviceType, int_t&gt; bin_sort(</span></span>
+<span id="L210"><span class="lineNum">     210</span> <span class="tlaGNC">          61 :       firstNodeIds, CompType(nbLinFaces, 0, nbNode), true /*sort within*/);</span></span>
+<span id="L211"><span class="lineNum">     211</span> <span class="tlaGNC">          61 :   bin_sort.create_permute_vector();</span></span>
+<span id="L212"><span class="lineNum">     212</span> <span class="tlaGNC">          61 :   auto permutationVector = bin_sort.get_permute_vector();</span></span>
+<span id="L213"><span class="lineNum">     213</span> <span class="tlaGNC">          61 :   Kokkos::Profiling::popRegion();</span></span>
+<span id="L214"><span class="lineNum">     214</span>              : </span>
+<span id="L215"><span class="lineNum">     215</span> <span class="tlaGNC">          61 :   Kokkos::Profiling::pushRegion(&quot;Permute and Compute Nbtris&quot;);</span></span>
+<span id="L216"><span class="lineNum">     216</span>              : </span>
+<span id="L217"><span class="lineNum">     217</span> <span class="tlaGNC">          61 :   index_t nbTris = 0;</span></span>
+<span id="L218"><span class="lineNum">     218</span> <span class="tlaGNC">          61 :   Kokkos::parallel_reduce(</span></span>
+<span id="L219"><span class="lineNum">     219</span>              :       &quot;Permute and Compute NbTris&quot;,</span>
+<span id="L220"><span class="lineNum">     220</span> <span class="tlaGNC">          61 :       Kokkos::RangePolicy(execSpace, 0, nbLinFaces),</span></span>
+<span id="L221"><span class="lineNum">     221</span> <span class="tlaGNC">       17183 :       KOKKOS_LAMBDA(const index_t &amp;i, index_t &amp;sum) {</span></span>
+<span id="L222"><span class="lineNum">     222</span> <span class="tlaGNC">       17061 :         auto index = permutationVector(i);</span></span>
+<span id="L223"><span class="lineNum">     223</span>              : </span>
+<span id="L224"><span class="lineNum">     224</span>              :         // vector who would be at pos &quot;i&quot; in the (first column)-sorted matrix</span>
+<span id="L225"><span class="lineNum">     225</span>              :         // faces</span>
+<span id="L226"><span class="lineNum">     226</span> <span class="tlaGNC">       17061 :         auto vect = Kokkos::subview(linFaces, index, Kokkos::ALL());</span></span>
+<span id="L227"><span class="lineNum">     227</span>              : </span>
+<span id="L228"><span class="lineNum">     228</span> <span class="tlaGNC">       17061 :         index_t curr_row_occur =</span></span>
+<span id="L229"><span class="lineNum">     229</span>              :             1; // Number of occurrences of the row (excluding current)</span>
+<span id="L230"><span class="lineNum">     230</span> <span class="tlaGNC">       17061 :         index_t curr = i;</span></span>
+<span id="L231"><span class="lineNum">     231</span>              :         // Find the first row starting with vect(0)</span>
+<span id="L232"><span class="lineNum">     232</span> <span class="tlaGNC">       66980 :         while (curr &gt; 0 &amp;&amp; linFaces(permutationVector(curr), 0) == vect(0)) {</span></span>
+<span id="L233"><span class="lineNum">     233</span> <span class="tlaGNC">       49919 :           --curr;</span></span>
+<span id="L234"><span class="lineNum">     234</span>              :         }</span>
+<span id="L235"><span class="lineNum">     235</span>              :         // In case curr is 0, we do not increase</span>
+<span id="L236"><span class="lineNum">     236</span> <span class="tlaGNC">       17061 :         if (linFaces(permutationVector(curr), 0) != vect(0)) {</span></span>
+<span id="L237"><span class="lineNum">     237</span> <span class="tlaGNC">       16709 :           ++curr;</span></span>
+<span id="L238"><span class="lineNum">     238</span>              :         }</span>
+<span id="L239"><span class="lineNum">     239</span>              :         // For all elements starting with vect(0)</span>
+<span id="L240"><span class="lineNum">     240</span> <span class="tlaGNC">      170627 :         while (curr &lt;= nbLinFaces - 1 &amp;&amp;</span></span>
+<span id="L241"><span class="lineNum">     241</span> <span class="tlaGNC">       85287 :                linFaces(permutationVector(curr), 0) == vect(0)) {</span></span>
+<span id="L242"><span class="lineNum">     242</span> <span class="tlaGNC">       70471 :           if (curr == i) { // skip current</span></span>
+<span id="L243"><span class="lineNum">     243</span> <span class="tlaGNC">       15965 :             ++curr;</span></span>
+<span id="L244"><span class="lineNum">     244</span> <span class="tlaGNC">       15965 :             continue;</span></span>
+<span id="L245"><span class="lineNum">     245</span>              :           }</span>
+<span id="L246"><span class="lineNum">     246</span> <span class="tlaGNC">       54506 :           bool diff = false;</span></span>
+<span id="L247"><span class="lineNum">     247</span>              :           // Check if identical</span>
+<span id="L248"><span class="lineNum">     248</span> <span class="tlaGNC">       68861 :           for (index_t t = 1; t &lt; nodesPerFace + 1; ++t)</span></span>
+<span id="L249"><span class="lineNum">     249</span> <span class="tlaGNC">       66669 :             if (linFaces(permutationVector(curr), t) != vect(t)) {</span></span>
+<span id="L250"><span class="lineNum">     250</span> <span class="tlaGNC">       52314 :               diff = true;</span></span>
+<span id="L251"><span class="lineNum">     251</span> <span class="tlaGNC">       52314 :               break;</span></span>
+<span id="L252"><span class="lineNum">     252</span>              :             }</span>
+<span id="L253"><span class="lineNum">     253</span> <span class="tlaGNC">       54506 :           if (!diff) {</span></span>
+<span id="L254"><span class="lineNum">     254</span> <span class="tlaGNC">        2192 :             ++curr_row_occur;</span></span>
+<span id="L255"><span class="lineNum">     255</span>              :             // if (curr_row_occur == 2)</span>
+<span id="L256"><span class="lineNum">     256</span> <span class="tlaGNC">        2192 :             break;</span></span>
+<span id="L257"><span class="lineNum">     257</span>              :           }</span>
+<span id="L258"><span class="lineNum">     258</span> <span class="tlaGNC">       52314 :           ++curr;</span></span>
+<span id="L259"><span class="lineNum">     259</span>              :         }</span>
+<span id="L260"><span class="lineNum">     260</span> <span class="tlaGNC">       17061 :         if (curr_row_occur == 2) {</span></span>
+<span id="L261"><span class="lineNum">     261</span> <span class="tlaGNC">        2192 :           allFaceId(index) = -1;</span></span>
+<span id="L262"><span class="lineNum">     262</span>              :         } else {</span>
+<span id="L263"><span class="lineNum">     263</span> <span class="tlaGNC">       14869 :           auto ielType = (int)CellTypesPtr(allParents(index));</span></span>
+<span id="L264"><span class="lineNum">     264</span> <span class="tlaGNC">       44607 :           auto iTriLocFaces = Kokkos::subview(</span></span>
+<span id="L265"><span class="lineNum">     265</span> <span class="tlaGNC">       29738 :               TriLocFaces_val, Kokkos::make_pair(TriLocFaces_off(ielType),</span></span>
+<span id="L266"><span class="lineNum">     266</span> <span class="tlaGNC">       14869 :                                                  TriLocFaces_off(ielType + 1)));</span></span>
+<span id="L267"><span class="lineNum">     267</span> <span class="tlaGNC">       14869 :           auto iloc = allFaceLocId(index);</span></span>
+<span id="L268"><span class="lineNum">     268</span> <span class="tlaGNC">       14869 :           sum += (iTriLocFaces(iloc + 1) - iTriLocFaces(iloc)) / Dim;</span></span>
+<span id="L269"><span class="lineNum">     269</span>              :         }</span>
+<span id="L270"><span class="lineNum">     270</span> <span class="tlaGNC">       17061 :       },</span></span>
+<span id="L271"><span class="lineNum">     271</span>              :       nbTris);</span>
+<span id="L272"><span class="lineNum">     272</span> <span class="tlaGNC">          61 :   Kokkos::Profiling::popRegion();</span></span>
+<span id="L273"><span class="lineNum">     273</span>              : </span>
+<span id="L274"><span class="lineNum">     274</span> <span class="tlaGNC">          61 :   Kokkos::Profiling::pushRegion(&quot;Remove&quot;);</span></span>
+<span id="L275"><span class="lineNum">     275</span>              : </span>
+<span id="L276"><span class="lineNum">     276</span>              :   // remove the -1 values while saving the relative order of elements (in place)</span>
+<span id="L277"><span class="lineNum">     277</span> <span class="tlaGNC">          61 :   const auto end = Kokkos::Experimental::remove(execSpace, allFaceId, -1);</span></span>
+<span id="L278"><span class="lineNum">     278</span> <span class="tlaGNC">          61 :   const int dist =</span></span>
+<span id="L279"><span class="lineNum">     279</span> <span class="tlaGNC">          61 :       Kokkos::Experimental::distance(Kokkos::Experimental::begin(allFaceId),</span></span>
+<span id="L280"><span class="lineNum">     280</span>              :                                      end); // number of not -1</span>
+<span id="L281"><span class="lineNum">     281</span>              : </span>
+<span id="L282"><span class="lineNum">     282</span> <span class="tlaGNC">          61 :   Kokkos::Profiling::popRegion();</span></span>
+<span id="L283"><span class="lineNum">     283</span>              : </span>
+<span id="L284"><span class="lineNum">     284</span> <span class="tlaGNC">          61 :   Kokkos::Profiling::pushRegion(&quot;Finalize: compute linear skin&quot;);</span></span>
+<span id="L285"><span class="lineNum">     285</span>              : </span>
+<span id="L286"><span class="lineNum">     286</span> <span class="tlaGNC">          61 :   auto skinFaces = Kokkos::View&lt;int_t **, ExecSpace&gt;(</span></span>
+<span id="L287"><span class="lineNum">     287</span> <span class="tlaGNC">         122 :       Kokkos::view_alloc(execSpace, Kokkos::WithoutInitializing, &quot;skinFaces&quot;),</span></span>
+<span id="L288"><span class="lineNum">     288</span>              :       nbTris, Dim);</span>
+<span id="L289"><span class="lineNum">     289</span> <span class="tlaGNC">          61 :   auto skinParents = Kokkos::View&lt;int_t *, ExecSpace&gt;(</span></span>
+<span id="L290"><span class="lineNum">     290</span> <span class="tlaGNC">         122 :       Kokkos::view_alloc(execSpace, Kokkos::WithoutInitializing, &quot;skinParents&quot;),</span></span>
+<span id="L291"><span class="lineNum">     291</span>              :       nbTris);</span>
+<span id="L292"><span class="lineNum">     292</span>              : </span>
+<span id="L293"><span class="lineNum">     293</span> <span class="tlaGNC">          61 :   Kokkos::parallel_scan(</span></span>
+<span id="L294"><span class="lineNum">     294</span> <span class="tlaGNC">          61 :       &quot;Fill Skin Faces &amp; Parents&quot;, Kokkos::RangePolicy(execSpace, 0, dist),</span></span>
+<span id="L295"><span class="lineNum">     295</span> <span class="tlaGNC">       22436 :       KOKKOS_LAMBDA(const index_t &amp;i, index_t &amp;partial_sum, bool is_final) {</span></span>
+<span id="L296"><span class="lineNum">     296</span> <span class="tlaGNC">       22314 :         auto index = allFaceId(i);</span></span>
+<span id="L297"><span class="lineNum">     297</span> <span class="tlaGNC">       22314 :         auto iParent = allParents(index);</span></span>
+<span id="L298"><span class="lineNum">     298</span> <span class="tlaGNC">       22314 :         auto ielType = static_cast&lt;cell_t&gt;(CellTypesPtr(iParent));</span></span>
+<span id="L299"><span class="lineNum">     299</span> <span class="tlaGNC">       66942 :         auto iTriFaces = Kokkos::subview(</span></span>
+<span id="L300"><span class="lineNum">     300</span> <span class="tlaGNC">       44628 :             TriFaces_val, Kokkos::make_pair(TriFaces_off(ielType),</span></span>
+<span id="L301"><span class="lineNum">     301</span> <span class="tlaGNC">       22314 :                                             TriFaces_off(ielType + 1)));</span></span>
+<span id="L302"><span class="lineNum">     302</span> <span class="tlaGNC">       66942 :         auto iTriLocFaces = Kokkos::subview(</span></span>
+<span id="L303"><span class="lineNum">     303</span> <span class="tlaGNC">       44628 :             TriLocFaces_val, Kokkos::make_pair(TriLocFaces_off(ielType),</span></span>
+<span id="L304"><span class="lineNum">     304</span> <span class="tlaGNC">       22314 :                                                TriLocFaces_off(ielType + 1)));</span></span>
+<span id="L305"><span class="lineNum">     305</span> <span class="tlaGNC">       22314 :         auto iloc = allFaceLocId(index);</span></span>
+<span id="L306"><span class="lineNum">     306</span> <span class="tlaGNC">       22314 :         auto localnbFaces = (iTriLocFaces(iloc + 1) - iTriLocFaces(iloc)) / Dim;</span></span>
+<span id="L307"><span class="lineNum">     307</span> <span class="tlaGNC">       22314 :         auto firstIndex = partial_sum;</span></span>
+<span id="L308"><span class="lineNum">     308</span> <span class="tlaGNC">       22314 :         partial_sum += localnbFaces;</span></span>
+<span id="L309"><span class="lineNum">     309</span> <span class="tlaGNC">       22314 :         if (is_final) {</span></span>
+<span id="L310"><span class="lineNum">     310</span> <span class="tlaGNC">       44607 :           auto localConnectivity = Kokkos::subview(</span></span>
+<span id="L311"><span class="lineNum">     311</span> <span class="tlaGNC">       14869 :               connValPtr,</span></span>
+<span id="L312"><span class="lineNum">     312</span> <span class="tlaGNC">       14869 :               Kokkos::make_pair(connOffPtr(iParent), connOffPtr(iParent + 1)));</span></span>
+<span id="L313"><span class="lineNum">     313</span> <span class="tlaGNC">       31674 :           for (index_t j = 0; j &lt; localnbFaces; j++) {</span></span>
+<span id="L314"><span class="lineNum">     314</span> <span class="tlaGNC">       16805 :             skinParents(firstIndex + j) = iParent;</span></span>
+<span id="L315"><span class="lineNum">     315</span> <span class="tlaGNC">       16805 :             auto pos = iTriLocFaces(iloc) + j * Dim;</span></span>
+<span id="L316"><span class="lineNum">     316</span> <span class="tlaGNC">       66975 :             for (int_t k = 0; k &lt; Dim; k++) {</span></span>
+<span id="L317"><span class="lineNum">     317</span> <span class="tlaGNC">       50170 :               const auto iconn = iTriFaces(pos + k);</span></span>
+<span id="L318"><span class="lineNum">     318</span> <span class="tlaGNC">       50170 :               skinFaces(firstIndex + j, k) = localConnectivity(iconn);</span></span>
+<span id="L319"><span class="lineNum">     319</span>              :             }</span>
+<span id="L320"><span class="lineNum">     320</span>              :           }</span>
+<span id="L321"><span class="lineNum">     321</span> <span class="tlaGNC">       14869 :         }</span></span>
+<span id="L322"><span class="lineNum">     322</span>              :       });</span>
+<span id="L323"><span class="lineNum">     323</span> <span class="tlaGNC">          61 :   transfer.skinFaces = skinFaces;</span></span>
+<span id="L324"><span class="lineNum">     324</span> <span class="tlaGNC">          61 :   transfer.skinParents = skinParents;</span></span>
+<span id="L325"><span class="lineNum">     325</span>              : </span>
+<span id="L326"><span class="lineNum">     326</span> <span class="tlaGNC">          61 :   Kokkos::Profiling::popRegion();</span></span>
+<span id="L327"><span class="lineNum">     327</span>              : </span>
+<span id="L328"><span class="lineNum">     328</span> <span class="tlaGNC">          61 :   Kokkos::Profiling::popRegion();</span></span>
+<span id="L329"><span class="lineNum">     329</span> <span class="tlaGNC">          61 : }</span></span>
+<span id="L330"><span class="lineNum">     330</span>              : </span>
+<span id="L331"><span class="lineNum">     331</span>              : } // namespace FiniteElements</span>
+<span id="L332"><span class="lineNum">     332</span>              : </span>
+<span id="L333"><span class="lineNum">     333</span>              : } // namespace PACMAN</span>
+        </pre>
+              </td>
+            </tr>
+          </table>
+          <br>
+
+          <table width="100%" border=0 cellspacing=0 cellpadding=0>
+            <tr><td class="ruler"><img src="../../../glass.png" width=3 height=3 alt=""></td></tr>
+            <tr><td class="versionInfo">Generated by: <a href="https://github.com//linux-test-project/lcov" target="_parent">LCOV version 2.0-1</a></td></tr>
+          </table>
+          <br>
+
+</body>
+</html>

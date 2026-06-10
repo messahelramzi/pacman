@@ -1,0 +1,278 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+
+<html lang="en">
+
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <title>LCOV - coverage.info - tests/test_cpp_rbf_interface.cpp</title>
+  <link rel="stylesheet" type="text/css" href="../gcov.css">
+</head>
+
+<body>
+
+          <table width="100%" border=0 cellspacing=0 cellpadding=0>
+            <tr><td class="title">LCOV - code coverage report</td></tr>
+            <tr><td class="ruler"><img src="../glass.png" width=3 height=3 alt=""></td></tr>
+
+            <tr>
+              <td width="100%">
+                <table cellpadding=1 border=0 width="100%">
+          <tr>
+            <td width="10%" class="headerItem">Current view:</td>
+            <td width="10%" class="headerValue"><a href="../index.html">top level</a> - <a href="index.html">tests</a> - test_cpp_rbf_interface.cpp<span style="font-size: 80%;"> (source / <a href="test_cpp_rbf_interface.cpp.func-c.html">functions</a>)</span></td>
+            <td width="5%"></td>
+            <td width="5%"></td>
+            <td width="5%" class="headerCovTableHead">Coverage</td>
+            <td width="5%" class="headerCovTableHead" title="Covered + Uncovered code">Total</td>
+            <td width="5%" class="headerCovTableHead" title="Exercised code only">Hit</td>
+          </tr>
+          <tr>
+            <td class="headerItem">Test:</td>
+            <td class="headerValue">coverage.info</td>
+            <td></td>
+            <td class="headerItem">Lines:</td>
+            <td class="headerCovTableEntryHi">97.1&nbsp;%</td>
+            <td class="headerCovTableEntry">68</td>
+            <td class="headerCovTableEntry">66</td>
+          </tr>
+          <tr>
+            <td class="headerItem">Test Date:</td>
+            <td class="headerValue">2026-06-10 14:03:48</td>
+            <td></td>
+            <td class="headerItem">Functions:</td>
+            <td class="headerCovTableEntryHi">100.0&nbsp;%</td>
+            <td class="headerCovTableEntry">5</td>
+            <td class="headerCovTableEntry">5</td>
+          </tr>
+                  <tr><td><img src="../glass.png" width=3 height=3 alt=""></td></tr>
+                </table>
+              </td>
+            </tr>
+
+            <tr><td class="ruler"><img src="../glass.png" width=3 height=3 alt=""></td></tr>
+          </table>
+
+          <table cellpadding=0 cellspacing=0 border=0>
+            <tr>
+              <td><br></td>
+            </tr>
+            <tr>
+              <td>
+<pre class="sourceHeading">            Line data    Source code</pre>
+<pre class="source">
+<span id="L1"><span class="lineNum">       1</span>              : //</span>
+<span id="L2"><span class="lineNum">       2</span>              : // This file is subject to the terms and conditions defined in</span>
+<span id="L3"><span class="lineNum">       3</span>              : // file 'LICENSE', which is part of this source code package.</span>
+<span id="L4"><span class="lineNum">       4</span>              : //</span>
+<span id="L5"><span class="lineNum">       5</span>              : </span>
+<span id="L6"><span class="lineNum">       6</span>              : /**</span>
+<span id="L7"><span class="lineNum">       7</span>              :  * @file test_cpp_rbf_interface.cpp</span>
+<span id="L8"><span class="lineNum">       8</span>              :  * @brief C++ equivalent of test_rbf-pum.py — OpenMP backend only.</span>
+<span id="L9"><span class="lineNum">       9</span>              :  *</span>
+<span id="L10"><span class="lineNum">      10</span>              :  * Generates 3-D regular-grid point clouds that replicate the coarse/fine mesh</span>
+<span id="L11"><span class="lineNum">      11</span>              :  * pair used in the Python RBF tests, evaluates the 3-D Franke reference</span>
+<span id="L12"><span class="lineNum">      12</span>              :  * function, calls `PACMAN::rbf_interpolate` for every Wendland basis</span>
+<span id="L13"><span class="lineNum">      13</span>              :  * (C0 / C2 / C4 / C6 / C8), and validates the relative L2 error against</span>
+<span id="L14"><span class="lineNum">      14</span>              :  * mesh-dependent tolerances (matching the thresholds in test_rbf-pum.py).</span>
+<span id="L15"><span class="lineNum">      15</span>              :  *</span>
+<span id="L16"><span class="lineNum">      16</span>              :  * Mesh correspondence:</span>
+<span id="L17"><span class="lineNum">      17</span>              :  *   &quot;coarse&quot; ~ 0.03.npz  (spacing ≈ 0.053, 20×20×20 = 8 000 pts)</span>
+<span id="L18"><span class="lineNum">      18</span>              :  *</span>
+<span id="L19"><span class="lineNum">      19</span>              :  * Three scenarios (same as the Python test):</span>
+<span id="L20"><span class="lineNum">      20</span>              :  *   same           : source = coarse , target = coarse , tol = 1.e-8</span>
+<span id="L21"><span class="lineNum">      21</span>              :  */</span>
+<span id="L22"><span class="lineNum">      22</span>              : </span>
+<span id="L23"><span class="lineNum">      23</span>              : #include &lt;Kokkos_Core.hpp&gt;</span>
+<span id="L24"><span class="lineNum">      24</span>              : #include &lt;cmath&gt;</span>
+<span id="L25"><span class="lineNum">      25</span>              : #include &lt;cstdlib&gt;</span>
+<span id="L26"><span class="lineNum">      26</span>              : #include &lt;iostream&gt;</span>
+<span id="L27"><span class="lineNum">      27</span>              : #include &lt;string&gt;</span>
+<span id="L28"><span class="lineNum">      28</span>              : #include &lt;vector&gt;</span>
+<span id="L29"><span class="lineNum">      29</span>              : </span>
+<span id="L30"><span class="lineNum">      30</span>              : #include &quot;interface.hpp&quot;</span>
+<span id="L31"><span class="lineNum">      31</span>              : </span>
+<span id="L32"><span class="lineNum">      32</span>              : // ---------------------------------------------------------------------------</span>
+<span id="L33"><span class="lineNum">      33</span>              : // Franke 3-D reference function (C++ port of franke_functions.py:franke_3d)</span>
+<span id="L34"><span class="lineNum">      34</span>              : // ---------------------------------------------------------------------------</span>
+<span id="L35"><span class="lineNum">      35</span> <span class="tlaGNC tlaBgGNC">        8000 : static double franke_3d(double x, double y, double z) {</span></span>
+<span id="L36"><span class="lineNum">      36</span> <span class="tlaGNC">        8000 :   return 0.75 * std::exp(-((9.0 * x - 2.0) * (9.0 * x - 2.0) +</span></span>
+<span id="L37"><span class="lineNum">      37</span> <span class="tlaGNC">        8000 :                            (9.0 * y - 2.0) * (9.0 * y - 2.0) +</span></span>
+<span id="L38"><span class="lineNum">      38</span> <span class="tlaGNC">        8000 :                            (9.0 * z - 2.0) * (9.0 * z - 2.0)) /</span></span>
+<span id="L39"><span class="lineNum">      39</span> <span class="tlaGNC">        8000 :                          4.0) +</span></span>
+<span id="L40"><span class="lineNum">      40</span> <span class="tlaGNC">        8000 :          0.75 * std::exp(-((9.0 * x + 1.0) * (9.0 * x + 1.0) / 49.0 +</span></span>
+<span id="L41"><span class="lineNum">      41</span> <span class="tlaGNC">        8000 :                            (9.0 * y + 1.0) / 10.0 + (9.0 * z + 1.0) / 10.0)) +</span></span>
+<span id="L42"><span class="lineNum">      42</span> <span class="tlaGNC">        8000 :          0.50 * std::exp(-((9.0 * x - 7.0) * (9.0 * x - 7.0) +</span></span>
+<span id="L43"><span class="lineNum">      43</span> <span class="tlaGNC">        8000 :                            (9.0 * y - 3.0) * (9.0 * y - 3.0) +</span></span>
+<span id="L44"><span class="lineNum">      44</span> <span class="tlaGNC">        8000 :                            (9.0 * z - 5.0) * (9.0 * z - 5.0)) /</span></span>
+<span id="L45"><span class="lineNum">      45</span>              :                          4.0) -</span>
+<span id="L46"><span class="lineNum">      46</span> <span class="tlaGNC">        8000 :          0.20 * std::exp(-((9.0 * x - 4.0) * (9.0 * x - 4.0) +</span></span>
+<span id="L47"><span class="lineNum">      47</span> <span class="tlaGNC">        8000 :                            (9.0 * y - 7.0) * (9.0 * y - 7.0) +</span></span>
+<span id="L48"><span class="lineNum">      48</span> <span class="tlaGNC">        8000 :                            (9.0 * z - 5.0) * (9.0 * z - 5.0)));</span></span>
+<span id="L49"><span class="lineNum">      49</span>              : }</span>
+<span id="L50"><span class="lineNum">      50</span>              : </span>
+<span id="L51"><span class="lineNum">      51</span>              : // ---------------------------------------------------------------------------</span>
+<span id="L52"><span class="lineNum">      52</span>              : // Regular-grid point cloud generator</span>
+<span id="L53"><span class="lineNum">      53</span>              : // ---------------------------------------------------------------------------</span>
+<span id="L54"><span class="lineNum">      54</span>              : </span>
+<span id="L55"><span class="lineNum">      55</span>              : struct PointCloud {</span>
+<span id="L56"><span class="lineNum">      56</span>              :   std::vector&lt;PACMAN::coordinates_t&gt; points; ///&lt; row-major [N × 3]</span>
+<span id="L57"><span class="lineNum">      57</span>              :   std::vector&lt;PACMAN::fp_t&gt; values;          ///&lt; franke_3d at each point</span>
+<span id="L58"><span class="lineNum">      58</span>              :   PACMAN::int_t n;</span>
+<span id="L59"><span class="lineNum">      59</span>              : };</span>
+<span id="L60"><span class="lineNum">      60</span>              : </span>
+<span id="L61"><span class="lineNum">      61</span>              : /// Build an N×N×N regular grid in [0,1]³ and evaluate Franke 3D.</span>
+<span id="L62"><span class="lineNum">      62</span> <span class="tlaGNC">           1 : static PointCloud make_grid(int N) {</span></span>
+<span id="L63"><span class="lineNum">      63</span> <span class="tlaGNC">           1 :   PointCloud pc;</span></span>
+<span id="L64"><span class="lineNum">      64</span> <span class="tlaGNC">           1 :   pc.n = static_cast&lt;PACMAN::int_t&gt;(N * N * N);</span></span>
+<span id="L65"><span class="lineNum">      65</span> <span class="tlaGNC">           1 :   pc.points.reserve(static_cast&lt;std::size_t&gt;(pc.n) * 3);</span></span>
+<span id="L66"><span class="lineNum">      66</span> <span class="tlaGNC">           1 :   pc.values.reserve(static_cast&lt;std::size_t&gt;(pc.n));</span></span>
+<span id="L67"><span class="lineNum">      67</span>              : </span>
+<span id="L68"><span class="lineNum">      68</span> <span class="tlaGNC">           1 :   const double step = 1.0 / static_cast&lt;double&gt;(N - 1);</span></span>
+<span id="L69"><span class="lineNum">      69</span> <span class="tlaGNC">          21 :   for (int i = 0; i &lt; N; ++i) {</span></span>
+<span id="L70"><span class="lineNum">      70</span> <span class="tlaGNC">          20 :     const double x = i * step;</span></span>
+<span id="L71"><span class="lineNum">      71</span> <span class="tlaGNC">         420 :     for (int j = 0; j &lt; N; ++j) {</span></span>
+<span id="L72"><span class="lineNum">      72</span> <span class="tlaGNC">         400 :       const double y = j * step;</span></span>
+<span id="L73"><span class="lineNum">      73</span> <span class="tlaGNC">        8400 :       for (int k = 0; k &lt; N; ++k) {</span></span>
+<span id="L74"><span class="lineNum">      74</span> <span class="tlaGNC">        8000 :         const double z = k * step;</span></span>
+<span id="L75"><span class="lineNum">      75</span> <span class="tlaGNC">        8000 :         pc.points.push_back(static_cast&lt;PACMAN::coordinates_t&gt;(x));</span></span>
+<span id="L76"><span class="lineNum">      76</span> <span class="tlaGNC">        8000 :         pc.points.push_back(static_cast&lt;PACMAN::coordinates_t&gt;(y));</span></span>
+<span id="L77"><span class="lineNum">      77</span> <span class="tlaGNC">        8000 :         pc.points.push_back(static_cast&lt;PACMAN::coordinates_t&gt;(z));</span></span>
+<span id="L78"><span class="lineNum">      78</span> <span class="tlaGNC">        8000 :         pc.values.push_back(static_cast&lt;PACMAN::fp_t&gt;(franke_3d(x, y, z)));</span></span>
+<span id="L79"><span class="lineNum">      79</span>              :       }</span>
+<span id="L80"><span class="lineNum">      80</span>              :     }</span>
+<span id="L81"><span class="lineNum">      81</span>              :   }</span>
+<span id="L82"><span class="lineNum">      82</span> <span class="tlaGNC">           1 :   return pc;</span></span>
+<span id="L83"><span class="lineNum">      83</span> <span class="tlaUNC tlaBgUNC">           0 : }</span></span>
+<span id="L84"><span class="lineNum">      84</span>              : </span>
+<span id="L85"><span class="lineNum">      85</span>              : // ---------------------------------------------------------------------------</span>
+<span id="L86"><span class="lineNum">      86</span>              : // Relative L2 error helper</span>
+<span id="L87"><span class="lineNum">      87</span>              : // ---------------------------------------------------------------------------</span>
+<span id="L88"><span class="lineNum">      88</span> <span class="tlaGNC tlaBgGNC">           5 : static double rel_l2(const std::vector&lt;PACMAN::fp_t&gt; &amp;computed,</span></span>
+<span id="L89"><span class="lineNum">      89</span>              :                      const std::vector&lt;PACMAN::fp_t&gt; &amp;reference) {</span>
+<span id="L90"><span class="lineNum">      90</span> <span class="tlaGNC">           5 :   double num = 0.0, den = 0.0;</span></span>
+<span id="L91"><span class="lineNum">      91</span> <span class="tlaGNC">       40005 :   for (std::size_t i = 0; i &lt; reference.size(); ++i) {</span></span>
+<span id="L92"><span class="lineNum">      92</span> <span class="tlaGNC">       40000 :     const double diff = computed[i] - reference[i];</span></span>
+<span id="L93"><span class="lineNum">      93</span> <span class="tlaGNC">       40000 :     num += diff * diff;</span></span>
+<span id="L94"><span class="lineNum">      94</span> <span class="tlaGNC">       40000 :     den += reference[i] * reference[i];</span></span>
+<span id="L95"><span class="lineNum">      95</span>              :   }</span>
+<span id="L96"><span class="lineNum">      96</span> <span class="tlaGNC">           5 :   return (den &gt; 0.0) ? std::sqrt(num / den) : std::sqrt(num);</span></span>
+<span id="L97"><span class="lineNum">      97</span>              : }</span>
+<span id="L98"><span class="lineNum">      98</span>              : </span>
+<span id="L99"><span class="lineNum">      99</span>              : // ---------------------------------------------------------------------------</span>
+<span id="L100"><span class="lineNum">     100</span>              : // One test case</span>
+<span id="L101"><span class="lineNum">     101</span>              : // ---------------------------------------------------------------------------</span>
+<span id="L102"><span class="lineNum">     102</span>              : struct TestCase {</span>
+<span id="L103"><span class="lineNum">     103</span>              :   const char *name;</span>
+<span id="L104"><span class="lineNum">     104</span>              :   const PointCloud *source;</span>
+<span id="L105"><span class="lineNum">     105</span>              :   const PointCloud *target;</span>
+<span id="L106"><span class="lineNum">     106</span>              :   double tol;</span>
+<span id="L107"><span class="lineNum">     107</span>              : };</span>
+<span id="L108"><span class="lineNum">     108</span>              : </span>
+<span id="L109"><span class="lineNum">     109</span> <span class="tlaGNC">           5 : static bool run_case(const TestCase &amp;tc, unsigned char rbfFunc,</span></span>
+<span id="L110"><span class="lineNum">     110</span>              :                      const char *rbfName, unsigned char execSpace) {</span>
+<span id="L111"><span class="lineNum">     111</span>              :   PACMAN::RbfInterpolateResult result = PACMAN::rbf_interpolate(</span>
+<span id="L112"><span class="lineNum">     112</span>              :       /*spaceDimension=*/3, execSpace, rbfFunc,</span>
+<span id="L113"><span class="lineNum">     113</span> <span class="tlaGNC">           5 :       const_cast&lt;PACMAN::coordinates_t *&gt;(tc.source-&gt;points.data()),</span></span>
+<span id="L114"><span class="lineNum">     114</span> <span class="tlaGNC">           5 :       tc.source-&gt;n, const_cast&lt;PACMAN::fp_t *&gt;(tc.source-&gt;values.data()),</span></span>
+<span id="L115"><span class="lineNum">     115</span> <span class="tlaGNC">           5 :       const_cast&lt;PACMAN::coordinates_t *&gt;(tc.target-&gt;points.data()),</span></span>
+<span id="L116"><span class="lineNum">     116</span> <span class="tlaGNC">          10 :       tc.target-&gt;n);</span></span>
+<span id="L117"><span class="lineNum">     117</span>              : </span>
+<span id="L118"><span class="lineNum">     118</span> <span class="tlaGNC">           5 :   const double err = rel_l2(result.targetValues, tc.target-&gt;values);</span></span>
+<span id="L119"><span class="lineNum">     119</span> <span class="tlaGNC">           5 :   const bool ok = (err &lt; tc.tol);</span></span>
+<span id="L120"><span class="lineNum">     120</span> <span class="tlaGNC">           5 :   std::cout &lt;&lt; (ok ? &quot;  PASS&quot; : &quot;  FAIL&quot;) &lt;&lt; &quot;  &quot; &lt;&lt; tc.name &lt;&lt; &quot;  &quot; &lt;&lt; rbfName</span></span>
+<span id="L121"><span class="lineNum">     121</span> <span class="tlaGNC">           5 :             &lt;&lt; &quot;  rel_l2=&quot; &lt;&lt; err &lt;&lt; &quot;  tol=&quot; &lt;&lt; tc.tol &lt;&lt; &quot;\n&quot;;</span></span>
+<span id="L122"><span class="lineNum">     122</span> <span class="tlaGNC">           5 :   return ok;</span></span>
+<span id="L123"><span class="lineNum">     123</span> <span class="tlaGNC">           5 : }</span></span>
+<span id="L124"><span class="lineNum">     124</span>              : </span>
+<span id="L125"><span class="lineNum">     125</span>              : // ---------------------------------------------------------------------------</span>
+<span id="L126"><span class="lineNum">     126</span>              : // main</span>
+<span id="L127"><span class="lineNum">     127</span>              : // ---------------------------------------------------------------------------</span>
+<span id="L128"><span class="lineNum">     128</span> <span class="tlaGNC">           1 : int main(int argc, char *argv[]) {</span></span>
+<span id="L129"><span class="lineNum">     129</span> <span class="tlaGNC">           1 :   Kokkos::initialize(argc, argv);</span></span>
+<span id="L130"><span class="lineNum">     130</span> <span class="tlaGNC">           1 :   int ret = EXIT_SUCCESS;</span></span>
+<span id="L131"><span class="lineNum">     131</span>              :   {</span>
+<span id="L132"><span class="lineNum">     132</span>              :     // ------------------------------------------------------------------</span>
+<span id="L133"><span class="lineNum">     133</span>              :     // Select execution space (HIP &gt; CUDA &gt; SYCL &gt; OpenMP &gt; Threads &gt; Serial)</span>
+<span id="L134"><span class="lineNum">     134</span>              :     // ------------------------------------------------------------------</span>
+<span id="L135"><span class="lineNum">     135</span> <span class="tlaGNC">           1 :     unsigned char execSpace = PACMAN::ExecSpaces::SERIAL;</span></span>
+<span id="L136"><span class="lineNum">     136</span> <span class="tlaGNC">           1 :     const char *execSpaceName = &quot;SERIAL&quot;;</span></span>
+<span id="L137"><span class="lineNum">     137</span>              : </span>
+<span id="L138"><span class="lineNum">     138</span>              : #if defined(KOKKOS_ENABLE_HIP)</span>
+<span id="L139"><span class="lineNum">     139</span>              :     execSpace = PACMAN::ExecSpaces::HIP;</span>
+<span id="L140"><span class="lineNum">     140</span>              :     execSpaceName = &quot;HIP&quot;;</span>
+<span id="L141"><span class="lineNum">     141</span>              : #elif defined(KOKKOS_ENABLE_CUDA)</span>
+<span id="L142"><span class="lineNum">     142</span>              :     execSpace = PACMAN::ExecSpaces::CUDA;</span>
+<span id="L143"><span class="lineNum">     143</span>              :     execSpaceName = &quot;CUDA&quot;;</span>
+<span id="L144"><span class="lineNum">     144</span>              : #elif defined(KOKKOS_ENABLE_SYCL)</span>
+<span id="L145"><span class="lineNum">     145</span>              :     execSpace = PACMAN::ExecSpaces::SYCL;</span>
+<span id="L146"><span class="lineNum">     146</span>              :     execSpaceName = &quot;SYCL&quot;;</span>
+<span id="L147"><span class="lineNum">     147</span>              : #elif defined(KOKKOS_ENABLE_OPENMP)</span>
+<span id="L148"><span class="lineNum">     148</span> <span class="tlaGNC">           1 :     execSpace = PACMAN::ExecSpaces::OPENMP;</span></span>
+<span id="L149"><span class="lineNum">     149</span> <span class="tlaGNC">           1 :     execSpaceName = &quot;OPENMP&quot;;</span></span>
+<span id="L150"><span class="lineNum">     150</span>              : #elif defined(KOKKOS_ENABLE_THREADS)</span>
+<span id="L151"><span class="lineNum">     151</span>              :     execSpace = PACMAN::ExecSpaces::THREADS;</span>
+<span id="L152"><span class="lineNum">     152</span>              :     execSpaceName = &quot;THREADS&quot;;</span>
+<span id="L153"><span class="lineNum">     153</span>              : #else</span>
+<span id="L154"><span class="lineNum">     154</span>              :     std::cout &lt;&lt; &quot;[SKIP] No execution space available.\n&quot;;</span>
+<span id="L155"><span class="lineNum">     155</span>              :     Kokkos::finalize();</span>
+<span id="L156"><span class="lineNum">     156</span>              :     return 77;</span>
+<span id="L157"><span class="lineNum">     157</span>              : #endif</span>
+<span id="L158"><span class="lineNum">     158</span>              : </span>
+<span id="L159"><span class="lineNum">     159</span> <span class="tlaGNC">           1 :     std::cout &lt;&lt; &quot;test_cpp_rbf_interface [&quot; &lt;&lt; execSpaceName &lt;&lt; &quot;]\n&quot;;</span></span>
+<span id="L160"><span class="lineNum">     160</span>              : </span>
+<span id="L161"><span class="lineNum">     161</span>              :     // ------------------------------------------------------------------</span>
+<span id="L162"><span class="lineNum">     162</span>              :     // Build coarse (~0.03 mesh spacing) point cloud.</span>
+<span id="L163"><span class="lineNum">     163</span>              :     //   coarse: 20^3 = 8 000 pts, spacing ≈ 0.053</span>
+<span id="L164"><span class="lineNum">     164</span>              :     // ------------------------------------------------------------------</span>
+<span id="L165"><span class="lineNum">     165</span> <span class="tlaGNC">           1 :     const PointCloud coarse = make_grid(20);</span></span>
+<span id="L166"><span class="lineNum">     166</span>              : </span>
+<span id="L167"><span class="lineNum">     167</span>              :     // ------------------------------------------------------------------</span>
+<span id="L168"><span class="lineNum">     168</span>              :     // Test scenarios (mirrors test_rbf-pum.py main())</span>
+<span id="L169"><span class="lineNum">     169</span>              :     // ------------------------------------------------------------------</span>
+<span id="L170"><span class="lineNum">     170</span>              :     //   same        : &quot;3&quot; in source name  → tol 1.e-8</span>
+<span id="L171"><span class="lineNum">     171</span> <span class="tlaGNC">           1 :     const TestCase cases[] = {</span></span>
+<span id="L172"><span class="lineNum">     172</span>              :         {&quot;same&quot;, &amp;coarse, &amp;coarse, 1.e-8},</span>
+<span id="L173"><span class="lineNum">     173</span> <span class="tlaGNC">           1 :     };</span></span>
+<span id="L174"><span class="lineNum">     174</span>              : </span>
+<span id="L175"><span class="lineNum">     175</span>              :     // ------------------------------------------------------------------</span>
+<span id="L176"><span class="lineNum">     176</span>              :     // Wendland basis functions</span>
+<span id="L177"><span class="lineNum">     177</span>              :     // ------------------------------------------------------------------</span>
+<span id="L178"><span class="lineNum">     178</span>              :     struct RbfEntry {</span>
+<span id="L179"><span class="lineNum">     179</span>              :       unsigned char id;</span>
+<span id="L180"><span class="lineNum">     180</span>              :       const char *name;</span>
+<span id="L181"><span class="lineNum">     181</span>              :     };</span>
+<span id="L182"><span class="lineNum">     182</span> <span class="tlaGNC">           1 :     const RbfEntry rbfs[] = {</span></span>
+<span id="L183"><span class="lineNum">     183</span>              :         {PACMAN::RbfFunctions::WENDLANDC0, &quot;WENDLANDC0&quot;},</span>
+<span id="L184"><span class="lineNum">     184</span>              :         {PACMAN::RbfFunctions::WENDLANDC2, &quot;WENDLANDC2&quot;},</span>
+<span id="L185"><span class="lineNum">     185</span>              :         {PACMAN::RbfFunctions::WENDLANDC4, &quot;WENDLANDC4&quot;},</span>
+<span id="L186"><span class="lineNum">     186</span>              :         {PACMAN::RbfFunctions::WENDLANDC6, &quot;WENDLANDC6&quot;},</span>
+<span id="L187"><span class="lineNum">     187</span>              :         {PACMAN::RbfFunctions::WENDLANDC8, &quot;WENDLANDC8&quot;},</span>
+<span id="L188"><span class="lineNum">     188</span>              :     };</span>
+<span id="L189"><span class="lineNum">     189</span>              : </span>
+<span id="L190"><span class="lineNum">     190</span>              :     // ------------------------------------------------------------------</span>
+<span id="L191"><span class="lineNum">     191</span>              :     // Run all combinations</span>
+<span id="L192"><span class="lineNum">     192</span>              :     // ------------------------------------------------------------------</span>
+<span id="L193"><span class="lineNum">     193</span> <span class="tlaGNC">           2 :     for (const auto &amp;tc : cases) {</span></span>
+<span id="L194"><span class="lineNum">     194</span> <span class="tlaGNC">           6 :       for (const auto &amp;rbf : rbfs) {</span></span>
+<span id="L195"><span class="lineNum">     195</span> <span class="tlaGNC">           5 :         if (!run_case(tc, rbf.id, rbf.name, execSpace))</span></span>
+<span id="L196"><span class="lineNum">     196</span> <span class="tlaUNC tlaBgUNC">           0 :           ret = EXIT_FAILURE;</span></span>
+<span id="L197"><span class="lineNum">     197</span>              :       }</span>
+<span id="L198"><span class="lineNum">     198</span>              :     }</span>
+<span id="L199"><span class="lineNum">     199</span> <span class="tlaGNC tlaBgGNC">           1 :   }</span></span>
+<span id="L200"><span class="lineNum">     200</span> <span class="tlaGNC">           1 :   Kokkos::finalize();</span></span>
+<span id="L201"><span class="lineNum">     201</span> <span class="tlaGNC">           1 :   return ret;</span></span>
+<span id="L202"><span class="lineNum">     202</span>              : }</span>
+        </pre>
+              </td>
+            </tr>
+          </table>
+          <br>
+
+          <table width="100%" border=0 cellspacing=0 cellpadding=0>
+            <tr><td class="ruler"><img src="../glass.png" width=3 height=3 alt=""></td></tr>
+            <tr><td class="versionInfo">Generated by: <a href="https://github.com//linux-test-project/lcov" target="_parent">LCOV version 2.0-1</a></td></tr>
+          </table>
+          <br>
+
+</body>
+</html>
