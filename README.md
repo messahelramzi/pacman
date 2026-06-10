@@ -16,7 +16,7 @@ PACMAN and its approach to code and performance portability were presented at [H
 
 | Resource | URL |
 |----------|-----|
-| API Documentation (Doxygen) | https://messahelramzi.github.io/pacman/ |
+| WIKI | https://messahelramzi.github.io/pacman/ |
 
 ## Get the source code
 
