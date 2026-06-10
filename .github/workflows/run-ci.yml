@@ -56,7 +56,7 @@ jobs:
 
         ctest --test-dir build-release
 
-        cmake --build build-release --target doc
+        doxygen Doxyfile
   
     - name: Debug build & test & coverage
       shell: spack-sh {0}
