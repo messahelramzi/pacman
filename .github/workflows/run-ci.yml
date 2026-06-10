@@ -93,6 +93,12 @@ jobs:
         cp -r docs deploy/docs
         cp -r build-debug/coverage deploy/coverage
 
+        echo "<h1>Project Documentation</h1>
+              <ul>
+                <li><a href='docs/index.html'>Doxygen Docs</a></li>
+                <li><a href='coverage/index.html'>Coverage Report</a></li>
+              </ul>" > deploy/index.html
+
     - name: Deploy Coverage & Documentation
       uses: peaceiris/actions-gh-pages@v4
       with:
