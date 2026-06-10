@@ -95,7 +95,7 @@ jobs:
 
         echo "<h1>Project Documentation</h1>
               <ul>
-                <li><a href='docs/index.html'>Doxygen Docs</a></li>
+                <li><a href='docs/doxygen/html/index.html'>Doxygen Docs</a></li>
                 <li><a href='coverage/index.html'>Coverage Report</a></li>
               </ul>" > deploy/index.html
 
