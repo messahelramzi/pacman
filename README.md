@@ -67,12 +67,12 @@ Note: For GPUs the architecture in ".yaml" files must be adapted to target appro
 
 List of available custom options:
 
-- `BUILD_MODULE`: BOOL = Enable the build of the Python bindings. Requires `pybind11`. Default value: `ON`.
+- `BUILD_PYTHON_INTERFACE`: BOOL = Enable the build of the Python bindings. Requires `pybind11`. Default value: `ON`.
 - `BUILD_TESTS`: BOOL = Enable the build of the test binary. Requires `vtk`. Default value: `OFF`.
 - `BUILD_FORTRAN_INTERFACE`: BOOL = Enable the build of the Fortran module and tests. Requires a Fortran compiler with `ISO_C_BINDING` support (e.g. gfortran ≥ 9). Default value: `OFF`.
 
 ```shell
-cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_MODULE=ON -DBUILD_TESTS=OFF -G Ninja -S . -B build
+cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_PYTHON_INTERFACE=ON -DBUILD_TESTS=OFF -G Ninja -S . -B build
 ```
 
 The provided build system overrides some CMake options, which should not be modified by the user:
@@ -103,7 +103,7 @@ cmake --build build --target install -- -j $(nproc)
 
 Configure your project enabling tests:
 ```shell
-cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_MODULE=ON -DBUILD_TESTS=ON -G Ninja -S . -B build
+cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_PYTHON_INTERFACE=ON -DBUILD_TESTS=ON -G Ninja -S . -B build
 ```
 Build your project:
 ```shell

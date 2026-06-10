@@ -106,7 +106,7 @@ endif()
 # -----------------------------------------------------
 # Build the Python Module if required
 # -----------------------------------------------------
-if (BUILD_MODULE)
+if (BUILD_PYTHON_INTERFACE)
     add_subdirectory(pybindings)
 endif()
 

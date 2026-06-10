@@ -1,0 +1,100 @@
+# This is a basic workflow to help you get started with Actions
+
+name: CI
+
+# Controls when the workflow will run
+on:
+  # Triggers the workflow on push or pull request events but only for the "main" branch
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  build-test-deploy:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      pages: write
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Set up Spack
+      uses: spack/setup-spack@v2
+
+    - name: Set buildcache
+      run: |
+        spack mirror add --unsigned pacman-buildcache-linux ci://ghcr.io/messahelramzi/pacman-ci-buildcache-linux:latest
+    
+    - name: Create and install Spack environment
+      shell: spack-sh {0}
+      run: |
+        spack env create pacman config/spack-ghci.yaml
+        spack env activate pacman
+        spack install
+
+    - name: Release build & test & documentation
+      shell: spack-sh {0}
+      run: |
+        spack env activate pacman
+        cmake -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_STANDARD="20" \
+            -DCMAKE_CXX_EXTENSIONS="OFF" \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS="ON" \
+            -DCMAKE_INSTALL_RPATH_USE_LINK_PATH="ON" \
+            -DBUILD_FORTRAN_INTERFACE=ON \
+            -DBUILD_PYTHON_INTERFACE=ON \
+            -DBUILD_TESTS=ON \
+            -B build-release -S .
+
+        cmake --build build-release -- -j$(nproc)
+
+        ctest --test-dir build-release
+
+        cmake --build build-release --target doc
+  
+    - name: Debug build & test & coverage
+      shell: spack-sh {0}
+      run: |
+        spack env activate pacman
+
+        cmake -DCMAKE_BUILD_TYPE=Debug \
+        cmake -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_STANDARD="20" \
+            -DCMAKE_CXX_EXTENSIONS="OFF" \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS="ON" \
+            -DCMAKE_INSTALL_RPATH_USE_LINK_PATH="ON" \
+            -DBUILD_FORTRAN_INTERFACE=ON \
+            -DBUILD_PYTHON_INTERFACE=ON \
+            -DBUILD_TESTS=ON \
+            -DENABLE_COVERAGE=ON \
+            -B build-debug -S .
+  
+        cmake --build build-debug -- -j$(nproc)
+
+        cd build-debug
+  
+        ctest        
+
+        lcov --ignore-errors mismatch --gcov-tool /usr/bin/gcov-14 --capture --directory . --output-file coverage.info
+        lcov --remove coverage.info '14/*' '/opt/view/*' --output-file coverage.info
+        genhtml coverage.info --synthesize-missing --output-directory coverage
+
+        cd ..
+
+    - name: Copy documentation and coverage to a combined folder
+      run: |
+        mkdir -p deploy
+        cp -r docs deploy/docs
+        cp -r build-debug/coverage deploy/coverage
+
+    - name: Deploy Coverage & Documentation
+      uses: peaceiris/actions-gh-pages@v4
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: deploy/

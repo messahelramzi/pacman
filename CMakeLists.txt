@@ -42,7 +42,7 @@ set(CMAKE_SKIP_BUILD_RPATH FALSE)
 set(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
 
 option(BUILD_SHARED_LIBS "Build shared libraries (.so/.dylib) instead of static (.a)" ON)
-option(BUILD_MODULE "Build the Python module" ON)
+option(BUILD_PYTHON_INTERFACE "Build the Python interface module and test" ON)
 option(BUILD_TESTS "Configure tests using ctest" ON)
 option(ENABLE_COVERAGE "Enable coverage tests (requires BUILD_TESTS=ON)" OFF)
 
