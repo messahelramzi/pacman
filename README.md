@@ -4,18 +4,6 @@
   <img src="docs/logo.png" alt="PACMAN logo" height="300" width="350"/>
 </p>
 
-<p align="center">
-  <a href="https://gitlab.com/drti/pacman/-/pipelines">
-    <img src="https://gitlab.com/drti/pacman/badges/main/pipeline.svg" alt="pipeline status"/>
-  </a>
-  <a href="https://drti.gitlab.io/pacman/coverage/">
-    <img src="https://gitlab.com/drti/pacman/badges/main/coverage.svg" alt="coverage"/>
-  </a>
-  <a href="https://drti.gitlab.io/pacman/">
-    <img src="https://img.shields.io/badge/docs-doxygen-blue" alt="documentation"/>
-  </a>
-</p>
-
 ## Description
 
 PACMAN is a C++ library with Python/Fortran bindings that provides portable algorithms for coupling, mapping, and adaptive interpolation of scientific data based on [ArborX library](https://github.com/arborx/ArborX). Code & Performance portability is leverage thanks to Kokkos and it supports multiple CPU (Serial, OpenMP, Threads) and GPU (CUDA, HIP, SYCL) execution spaces through Kokkos, and offers both [finite element](https://gitlab.com/drti/muscat.git) and [RBF-PUM](https://doi.org/10.1137/24M1663843) interpolation methods. The library is designed to be flexible and efficient, allowing users to easily integrate it into their workflows for data transfer between different meshes or point clouds.
@@ -28,13 +16,12 @@ PACMAN and its approach to code and performance portability were presented at [H
 
 | Resource | URL |
 |----------|-----|
-| API Documentation (Doxygen) | https://drti.gitlab.io/pacman/ |
-| Coverage Report | https://drti.gitlab.io/pacman/coverage/ |
+| API Documentation (Doxygen) | https://messahelramzi.github.io/pacman/ |
 
 ## Get the source code
 
 ```shell
-git clone https://gitlab.com/drti/pacman.git && cd PACMAN/
+git clone https://github.com/messahelramzi/pacman.git && cd pacman
 ```
 
 ## Get the requirements
