@@ -5,7 +5,7 @@
 </p>
 
 ![Pipeline](https://github.com/messahelramzi/pacman/actions/workflows/run-ci.yml/badge.svg)
-![Coverage](https://img.shields.io/badge/dynamic/json?url=https://messahelramzi.github.io/pacman/coverage/coverage-summary.json&label=coverage&query=$.total.lines.pct&suffix=%25&color=brightgreen)
+![Coverage](https://img.shields.io/badge/dynamic/json?url=https://messahelramzi.github.io/pacman/coverage/shields.json&label=coverage&query=$.total.lines.pct&suffix=%25&color=brightgreen)
 [![Docs](https://img.shields.io/badge/docs-doxygen-orange)](https://messahelramzi.github.io/pacman/docs/doxygen/html/index.html)
 
 ## Description
