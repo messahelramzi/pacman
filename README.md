@@ -4,6 +4,10 @@
   <img src="docs/logo.png" alt="PACMAN logo" height="300" width="350"/>
 </p>
 
+![Pipeline](https://github.com/messahelramzi/pacman/actions/workflows/run-ci.yml/badge.svg)
+![Coverage](https://img.shields.io/badge/dynamic/json?url=[overage](https://messahelramzi.github.io/pacman/coverage/coverage-summary.json&label=coverage&query=$.total.lines.pct&suffix=%25&color=brightgreen)
+[![Docs](https://img.shields.io/badge/docs-doxygen-orange)](https://messahelramzi.github.io/pacman/docs/doxygen/html/index.html)
+
 ## Description
 
 PACMAN is a C++ library with Python/Fortran bindings that provides portable algorithms for coupling, mapping, and adaptive interpolation of scientific data based on [ArborX library](https://github.com/arborx/ArborX). Code & Performance portability is leverage thanks to Kokkos and it supports multiple CPU (Serial, OpenMP, Threads) and GPU (CUDA, HIP, SYCL) execution spaces through Kokkos, and offers both [finite element](https://gitlab.com/drti/muscat.git) and [RBF-PUM](https://doi.org/10.1137/24M1663843) interpolation methods. The library is designed to be flexible and efficient, allowing users to easily integrate it into their workflows for data transfer between different meshes or point clouds.
