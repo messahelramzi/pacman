@@ -84,8 +84,9 @@ jobs:
         lcov --ignore-errors mismatch --gcov-tool /usr/bin/gcov-14 --capture --directory . --output-file coverage.info
         lcov --remove coverage.info '14/*' '/opt/view/*' '/opt/spack/*' --output-file coverage.info
         genhtml coverage.info --synthesize-missing --output-directory coverage
-        lcov --summary coverage.info --json > coverage/coverage-summary.json
-
+        COVERAGE=$(lcov --summary coverage.info 2>&1 | grep -i "lines" | grep -oE '[0-9]+\.[0-9]+%' | head -1 | tr -d '%')
+        echo "{\"schemaVersion\":1,\"label\":\"coverage\",\"message\":\"${COVERAGE}%\",\"color\":\"brightgreen\"}" > coverage/shields.json
+        
         cd ..
 
     - name: Copy documentation and coverage to a combined folder
