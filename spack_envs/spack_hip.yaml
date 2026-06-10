@@ -1,11 +1,30 @@
 spack:
-  concretizer:
-    unify: true
+  view: /opt/view
   specs:
     - gcc
     - cmake
+    - doxygen
+    - lcov@2.0
     - kokkos@5 +rocm amdgpu_target=gfx942 +openmp +serial
     - kokkos-kernels@5 +openmp +serial
     - arborx@2.1 ~mpi +rocm amdgpu_target=gfx942 +openmp +serial
     - py-pybind11
     - py-numpy
+
+  config:
+    install_tree:
+      root: /opt/spack
+      padded_length: 128
+
+  packages:
+    all:
+      require: 'target=x86_64_v3'
+
+  mirrors:
+    sphiros-ci-buildcache-linux:
+      url: oci://ghcr.io/messahelramzi/sphiros-ci-buildcache-linux:latest
+      binary: true
+      signed: false
+      access_pair:
+        id_variable: GITHUB_USER
+        secret_variable: GITHUB_TOKEN

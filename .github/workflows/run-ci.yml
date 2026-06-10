@@ -34,7 +34,7 @@ jobs:
     - name: Create and install Spack environment
       shell: spack-sh {0}
       run: |
-        spack env create pacman config/spack-ghci.yaml
+        spack env create pacman spack_envs/spack_ghci.yaml
         spack env activate pacman
         spack install
 
